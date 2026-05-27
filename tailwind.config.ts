@@ -11,6 +11,18 @@ const config: Config = {
       colors: {
         background: "var(--background)",
         foreground: "var(--foreground)",
+        brand: {
+          primary: "#2D6A4F",
+          light: "#52B788",
+          pale: "#E8F5E9",
+          deep: "#1B4332",
+          accent: "#F4A261",
+          dark: "#0D1B0F",
+        },
+      },
+      fontFamily: {
+        serif: ["var(--font-serif)", "serif"],
+        sans: ["var(--font-sans)", "sans-serif"],
       },
     },
   },
