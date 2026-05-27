@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Image from 'next/image';
+import Link from 'next/link';
 
 // ── Image constants ──────────────────────────────────────────────
 const HERO_IMG =
@@ -9,15 +10,10 @@ const HERO_IMG =
 const FACILITY_BG =
   'https://static.wixstatic.com/media/6db056_0df0ecfdeb2941f783adcd8d75a3f4d8~mv2.jpg/v1/fill/w_1920,h_800,al_c,q_85,enc_auto/6db056_0df0ecfdeb2941f783adcd8d75a3f4d8~mv2.jpg';
 
-// ── Wave divider ─────────────────────────────────────────────────
 function WaveDivider({ from, to }: { from: string; to: string }) {
   return (
     <div style={{ background: from }} className="overflow-hidden leading-[0] block">
-      <svg
-        viewBox="0 0 1440 72"
-        preserveAspectRatio="none"
-        className="w-full h-[48px] sm:h-[72px] block"
-      >
+      <svg viewBox="0 0 1440 72" preserveAspectRatio="none" className="w-full h-[48px] sm:h-[72px] block">
         <path
           d="M0,36 C120,72 240,0 360,36 C480,72 600,0 720,36 C840,72 960,0 1080,36 C1200,72 1320,0 1440,36 L1440,72 L0,72 Z"
           fill={to}
@@ -27,18 +23,6 @@ function WaveDivider({ from, to }: { from: string; to: string }) {
   );
 }
 
-// ── Nav links ────────────────────────────────────────────────────
-const NAV_LINKS = [
-  { label: '서비스 소개', href: '#about' },
-  { label: '식단 메뉴', href: '#menu' },
-  { label: '시설 안내', href: '#facility' },
-  { label: '이용 후기', href: '#reviews' },
-  { label: '자주 묻는 질문', href: '#faq' },
-  { label: '고객지원', href: '/board/login' },
-  { label: '문의하기', href: '#contact' },
-];
-
-// ── Trust bar items ──────────────────────────────────────────────
 const TRUST_ITEMS = [
   { icon: '⭐', title: '22년 운영 경력', desc: '업계 최장수 전문 기업' },
   { icon: '🌿', title: '친환경 식재료', desc: '국내산 친환경 재료 사용' },
@@ -46,59 +30,15 @@ const TRUST_ITEMS = [
   { icon: '🚛', title: '냉장 직배송', desc: '전용 냉장차 정시 납품' },
 ];
 
-// ── Menu items ───────────────────────────────────────────────────
 const MENU_ITEMS = [
-  {
-    emoji: '🥗',
-    title: '영양 균형 도시락',
-    desc: '영양사가 직접 설계한 5색 채소·단백질·탄수화물 균형 식단',
-    tag: '인기',
-    color: 'from-green-50 to-emerald-50',
-    border: 'border-emerald-100',
-  },
-  {
-    emoji: '🍱',
-    title: '한식 정통 급식',
-    desc: '국물류·나물·반찬이 어우러진 정성스러운 한식 정식 구성',
-    tag: '추천',
-    color: 'from-amber-50 to-orange-50',
-    border: 'border-orange-100',
-  },
-  {
-    emoji: '🥕',
-    title: '유아 맞춤 이유식',
-    desc: '월령별 식감·재료 조절, 알레르기 완전 배제 유아 전용 메뉴',
-    tag: '알레르기 FREE',
-    color: 'from-orange-50 to-red-50',
-    border: 'border-red-100',
-  },
-  {
-    emoji: '🍲',
-    title: '제철 식재료 특선',
-    desc: '국내산 제철 야채·과일을 활용한 계절 한정 특별 식단',
-    tag: '제철',
-    color: 'from-blue-50 to-cyan-50',
-    border: 'border-cyan-100',
-  },
-  {
-    emoji: '🥦',
-    title: '채식·비건 옵션',
-    desc: '동물성 재료 없이 완성된 영양 균형 채식 급식 메뉴',
-    tag: '비건',
-    color: 'from-lime-50 to-green-50',
-    border: 'border-lime-100',
-  },
-  {
-    emoji: '🎂',
-    title: '생일·행사 특식',
-    desc: '아이들이 좋아하는 파티 케이크·특별 간식 행사 패키지',
-    tag: '스페셜',
-    color: 'from-pink-50 to-rose-50',
-    border: 'border-pink-100',
-  },
+  { emoji: '🥗', title: '영양 균형 도시락', desc: '영양사가 직접 설계한 5색 채소·단백질·탄수화물 균형 식단', tag: '인기', color: 'from-green-50 to-emerald-50', border: 'border-emerald-100' },
+  { emoji: '🍱', title: '한식 정통 급식', desc: '국물류·나물·반찬이 어우러진 정성스러운 한식 정식 구성', tag: '추천', color: 'from-amber-50 to-orange-50', border: 'border-orange-100' },
+  { emoji: '🥕', title: '유아 맞춤 이유식', desc: '월령별 식감·재료 조절, 알레르기 완전 배제 유아 전용 메뉴', tag: '알레르기 FREE', color: 'from-orange-50 to-red-50', border: 'border-red-100' },
+  { emoji: '🍲', title: '제철 식재료 특선', desc: '국내산 제철 야채·과일을 활용한 계절 한정 특별 식단', tag: '제철', color: 'from-blue-50 to-cyan-50', border: 'border-cyan-100' },
+  { emoji: '🥦', title: '채식·비건 옵션', desc: '동물성 재료 없이 완성된 영양 균형 채식 급식 메뉴', tag: '비건', color: 'from-lime-50 to-green-50', border: 'border-lime-100' },
+  { emoji: '🎂', title: '생일·행사 특식', desc: '아이들이 좋아하는 파티 케이크·특별 간식 행사 패키지', tag: '스페셜', color: 'from-pink-50 to-rose-50', border: 'border-pink-100' },
 ];
 
-// ── Stats ────────────────────────────────────────────────────────
 const STATS = [
   { key: 'years' as const, value: 22, suffix: '년', label: '운영 경력' },
   { key: 'clients' as const, value: 340, suffix: '+', label: '계약 기관' },
@@ -106,87 +46,28 @@ const STATS = [
   { key: 'meals' as const, value: 2700000, suffix: '+', label: '누적 제공 식수' },
 ];
 
-// ── Process steps ────────────────────────────────────────────────
 const PROCESS_STEPS = [
-  {
-    num: '01',
-    title: '상담 신청',
-    desc: '전화 또는 온라인으로 기관 규모·인원·특이사항을 알려주세요.',
-    icon: '📞',
-  },
-  {
-    num: '02',
-    title: '현장 방문 컨설팅',
-    desc: '전담 영양사가 직접 방문해 시설 환경·식습관을 분석합니다.',
-    icon: '🏫',
-  },
-  {
-    num: '03',
-    title: '맞춤 식단 설계',
-    desc: '기관 특성에 맞는 월별 식단표·재료 계획을 수립합니다.',
-    icon: '📋',
-  },
-  {
-    num: '04',
-    title: '위생 검수·납품',
-    desc: '검증된 시설에서 정성껏 조리 후 냉장차량으로 안전하게 배송합니다.',
-    icon: '🚚',
-  },
+  { num: '01', title: '상담 신청', desc: '전화 또는 온라인으로 기관 규모·인원·특이사항을 알려주세요.', icon: '📞' },
+  { num: '02', title: '현장 방문 컨설팅', desc: '전담 영양사가 직접 방문해 시설 환경·식습관을 분석합니다.', icon: '🏫' },
+  { num: '03', title: '맞춤 식단 설계', desc: '기관 특성에 맞는 월별 식단표·재료 계획을 수립합니다.', icon: '📋' },
+  { num: '04', title: '위생 검수·납품', desc: '검증된 시설에서 정성껏 조리 후 냉장차량으로 안전하게 배송합니다.', icon: '🚚' },
 ];
 
-// ── Reviews ──────────────────────────────────────────────────────
 const REVIEWS = [
-  {
-    name: '김○○ 원장님',
-    org: '서울 서초구 어린이집',
-    stars: 5,
-    text: '아이들이 급식 시간을 가장 기다려요. 색깔도 예쁘고 맛도 좋아서 잔반이 거의 없어졌어요. 영양사 선생님도 매달 꼼꼼히 식단 설명해주셔서 부모님들도 만족하십니다.',
-    avatar: '👩‍💼',
-  },
-  {
-    name: '이○○ 원장님',
-    org: '경기 분당구 유치원',
-    stars: 5,
-    text: '식재료 원산지 공개부터 알레르기 관리까지 철저하게 해주셔서 믿고 맡기고 있습니다. 3년째 이용 중인데 단 한 번도 문제가 없었어요.',
-    avatar: '👨‍💼',
-  },
-  {
-    name: '박○○ 선생님',
-    org: '인천 연수구 어린이집',
-    stars: 5,
-    text: '갑자기 아이 수가 변경되거나 행사가 생겨도 유연하게 대처해주셔서 정말 든든합니다. 고객 응대도 항상 친절하고 빨라요.',
-    avatar: '👩‍🏫',
-  },
+  { name: '김○○ 원장님', org: '서울 서초구 어린이집', stars: 5, text: '아이들이 급식 시간을 가장 기다려요. 색깔도 예쁘고 맛도 좋아서 잔반이 거의 없어졌어요. 영양사 선생님도 매달 꼼꼼히 식단 설명해주셔서 부모님들도 만족하십니다.', avatar: '👩‍💼' },
+  { name: '이○○ 원장님', org: '경기 분당구 유치원', stars: 5, text: '식재료 원산지 공개부터 알레르기 관리까지 철저하게 해주셔서 믿고 맡기고 있습니다. 3년째 이용 중인데 단 한 번도 문제가 없었어요.', avatar: '👨‍💼' },
+  { name: '박○○ 선생님', org: '인천 연수구 어린이집', stars: 5, text: '갑자기 아이 수가 변경되거나 행사가 생겨도 유연하게 대처해주셔서 정말 든든합니다. 고객 응대도 항상 친절하고 빨라요.', avatar: '👩‍🏫' },
 ];
 
-// ── FAQs ─────────────────────────────────────────────────────────
 const FAQS = [
-  {
-    q: '최소 몇 명부터 계약이 가능한가요?',
-    a: '10인 이상부터 계약 가능합니다. 소규모 어린이집도 맞춤 식단을 제공해드립니다. 5인 이상의 경우 협의 후 진행 가능하니 먼저 문의해 주세요.',
-  },
-  {
-    q: '알레르기 아이도 안전하게 먹을 수 있나요?',
-    a: '네, 입소 시 보호자로부터 알레르기 정보를 제공받아 해당 식재료를 완전히 배제한 별도 식단을 구성합니다. 조리 시 교차오염 방지 프로세스도 철저히 준수합니다.',
-  },
-  {
-    q: '식단표를 미리 받아볼 수 있나요?',
-    a: '매월 말 다음 달 식단표를 제공하며, 전용 앱을 통해 실시간으로 확인하실 수 있습니다. 부모님들께도 공유하실 수 있도록 PDF 형태로 발송해드립니다.',
-  },
-  {
-    q: '납품 시간은 어떻게 되나요?',
-    a: '기관과 협의된 시간에 맞춰 냉장 차량으로 정시 납품합니다. 주요 납품 시간은 오전 10~11시이며, 특별한 사정이 있을 경우 조율 가능합니다.',
-  },
-  {
-    q: '계약 기간과 해지 조건은 어떻게 되나요?',
-    a: '기본 계약 기간은 6개월이며, 1개월 전 사전 통보 시 해지 가능합니다. 특수한 사정(원 폐원, 휴원 등)의 경우 협의 후 조기 해지를 진행합니다.',
-  },
+  { q: '최소 몇 명부터 계약이 가능한가요?', a: '10인 이상부터 계약 가능합니다. 소규모 어린이집도 맞춤 식단을 제공해드립니다. 5인 이상의 경우 협의 후 진행 가능하니 먼저 문의해 주세요.' },
+  { q: '알레르기 아이도 안전하게 먹을 수 있나요?', a: '네, 입소 시 보호자로부터 알레르기 정보를 제공받아 해당 식재료를 완전히 배제한 별도 식단을 구성합니다. 조리 시 교차오염 방지 프로세스도 철저히 준수합니다.' },
+  { q: '식단표를 미리 받아볼 수 있나요?', a: '매월 말 다음 달 식단표를 제공하며, 전용 앱을 통해 실시간으로 확인하실 수 있습니다. 부모님들께도 공유하실 수 있도록 PDF 형태로 발송해드립니다.' },
+  { q: '납품 시간은 어떻게 되나요?', a: '기관과 협의된 시간에 맞춰 냉장 차량으로 정시 납품합니다. 주요 납품 시간은 오전 10~11시이며, 특별한 사정이 있을 경우 조율 가능합니다.' },
+  { q: '계약 기간과 해지 조건은 어떻게 되나요?', a: '기본 계약 기간은 6개월이며, 1개월 전 사전 통보 시 해지 가능합니다. 특수한 사정(원 폐원, 휴원 등)의 경우 협의 후 조기 해지를 진행합니다.' },
 ];
 
-// ── Main component ───────────────────────────────────────────────
 export default function Home() {
-  const [isScrolled, setIsScrolled] = useState(false);
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [counts, setCounts] = useState({ years: 0, clients: 0, satisfaction: 0, meals: 0 });
@@ -214,10 +95,7 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    const onScroll = () => {
-      setIsScrolled(window.scrollY > 50);
-      setShowScrollTop(window.scrollY > 300);
-    };
+    const onScroll = () => setShowScrollTop(window.scrollY > 300);
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
@@ -241,69 +119,11 @@ export default function Home() {
     return () => io.disconnect();
   }, [animateCounters]);
 
-  const navBg = isScrolled
-    ? 'bg-white/95 backdrop-blur-md shadow-sm border-b border-gray-100'
-    : 'bg-transparent';
-  const navText = isScrolled ? 'text-[#0D1B0F]' : 'text-white';
-
   return (
     <main className="overflow-x-hidden">
 
-      {/* ── NAVBAR ──────────────────────────────────────── */}
-      <nav className={`fixed top-0 inset-x-0 z-50 transition-all duration-300 ${navBg}`}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-16">
-          <a href="#" className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-[#2D6A4F] flex items-center justify-center text-white font-bold text-lg font-serif">K</div>
-            <span className={`font-serif font-bold text-lg leading-none transition-colors ${navText}`}>키즈밀</span>
-          </a>
-
-          <ul className="hidden md:flex items-center gap-1">
-            {NAV_LINKS.map((l) => (
-              <li key={l.href}>
-                <a href={l.href} className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors hover:text-[#52B788] ${navText}`}>
-                  {l.label}
-                </a>
-              </li>
-            ))}
-          </ul>
-
-          <div className="flex items-center gap-3">
-            <a href="#contact" className="hidden md:inline-flex items-center gap-2 bg-[#2D6A4F] hover:bg-[#1B4332] text-white text-sm font-medium px-4 py-2 rounded-xl transition-colors btn-primary">
-              무료 상담 신청
-            </a>
-            <button
-              className={`md:hidden p-2 rounded-lg ${navText}`}
-              onClick={() => setIsMenuOpen((v) => !v)}
-              aria-label="메뉴"
-            >
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                {isMenuOpen
-                  ? <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                  : <><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" /></>
-                }
-              </svg>
-            </button>
-          </div>
-        </div>
-
-        {isMenuOpen && (
-          <div className="md:hidden bg-white border-t border-gray-100 px-4 py-4 shadow-lg">
-            {NAV_LINKS.map((l) => (
-              <a key={l.href} href={l.href} className="block py-3 text-[#0D1B0F] font-medium border-b border-gray-50 last:border-0" onClick={() => setIsMenuOpen(false)}>
-                {l.label}
-              </a>
-            ))}
-            <a href="#contact" className="mt-4 block text-center bg-[#2D6A4F] text-white py-3 rounded-xl font-medium" onClick={() => setIsMenuOpen(false)}>
-              무료 상담 신청
-            </a>
-          </div>
-        )}
-      </nav>
-
       {/* ── HERO ────────────────────────────────────────── */}
       <section className="relative flex items-center overflow-hidden" style={{ minHeight: '100vh' }}>
-
-        {/* Background: food photo positioned right so logo area is offscreen */}
         <div
           className="absolute inset-0 z-0"
           style={{
@@ -313,19 +133,16 @@ export default function Home() {
             backgroundRepeat: 'no-repeat',
           }}
         />
-
-        {/* Gradient overlay */}
         <div
           className="absolute inset-0 z-[1]"
           style={{
-            background: 'linear-gradient(to right, rgba(27,67,50,0.97) 0%, rgba(27,67,50,0.97) 35%, rgba(27,67,50,0.85) 55%, rgba(27,67,50,0.60) 75%, rgba(27,67,50,0.30) 100%)',
+            background:
+              'linear-gradient(to right, rgba(27,67,50,0.97) 0%, rgba(27,67,50,0.97) 35%, rgba(27,67,50,0.85) 55%, rgba(27,67,50,0.60) 75%, rgba(27,67,50,0.30) 100%)',
           }}
         />
 
-        {/* Content */}
         <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 pb-32 w-full">
           <div className="max-w-md">
-            {/* Badge */}
             <div className="inline-flex items-center border border-[#F4A261]/60 rounded-full px-4 py-1.5 mb-8">
               <span className="text-[#F4A261] text-xs font-semibold tracking-[0.2em] uppercase">
                 ECO-FRIENDLY TOTAL FOOD SERVICE
@@ -345,23 +162,22 @@ export default function Home() {
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4">
-              <a
-                href="#contact"
+              <Link
+                href="/contact"
                 className="inline-flex items-center justify-center gap-2 bg-[#F4A261] hover:bg-[#e8935a] text-white font-semibold px-7 py-4 rounded-2xl transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5"
               >
                 무료 상담 신청하기 →
-              </a>
-              <a
-                href="#about"
+              </Link>
+              <Link
+                href="/about"
                 className="inline-flex items-center justify-center gap-2 border border-white text-white hover:bg-white/10 font-semibold px-7 py-4 rounded-2xl transition-all"
               >
                 서비스 알아보기
-              </a>
+              </Link>
             </div>
           </div>
         </div>
 
-        {/* Mouse scroll indicator */}
         <div className="absolute bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 z-10">
           <svg width="28" height="46" viewBox="0 0 28 46" fill="none" xmlns="http://www.w3.org/2000/svg" className="opacity-70">
             <rect x="1" y="1" width="26" height="44" rx="13" stroke="white" strokeWidth="1.5" />
@@ -370,7 +186,6 @@ export default function Home() {
           <span className="text-white/50 text-xs tracking-widest uppercase">scroll</span>
         </div>
 
-        {/* Wave bottom */}
         <div className="absolute bottom-0 inset-x-0 z-[5] leading-[0]">
           <svg viewBox="0 0 1440 72" preserveAspectRatio="none" className="w-full h-[48px] sm:h-[72px] block">
             <path d="M0,36 C120,72 240,0 360,36 C480,72 600,0 720,36 C840,72 960,0 1080,36 C1200,72 1320,0 1440,36 L1440,72 L0,72 Z" fill="#1B4332" />
@@ -391,7 +206,6 @@ export default function Home() {
                 </div>
               </div>
             ))}
-            {/* 서비스 지역 뱃지 */}
             <div className="col-span-2 md:col-span-1 flex justify-center md:justify-end">
               <span className="inline-flex items-center gap-1.5 bg-white/10 border border-white/20 text-white/80 text-xs font-medium px-4 py-2 rounded-full whitespace-nowrap">
                 <span className="text-[#52B788]">📍</span>
@@ -405,7 +219,7 @@ export default function Home() {
       <WaveDivider from="#1B4332" to="#ffffff" />
 
       {/* ── ABOUT ───────────────────────────────────────── */}
-      <section id="about" className="py-24 bg-white">
+      <section className="py-24 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
             <div className="section-divider" />
@@ -418,24 +232,9 @@ export default function Home() {
 
           <div className="grid md:grid-cols-3 gap-8">
             {[
-              {
-                icon: '🥗',
-                title: '영양사 전담 식단 설계',
-                desc: '임상영양사 자격을 보유한 전담 영양사가 월별 식단을 설계하고 영양 분석 리포트를 제공합니다. 기관의 연령별 특성에 맞는 최적 식단을 구성합니다.',
-                delay: '',
-              },
-              {
-                icon: '🔬',
-                title: '철저한 위생 관리',
-                desc: '식재료 입고부터 조리·포장까지 모든 과정을 국가 기준 위생 매뉴얼로 기록 관리합니다. 매월 위생 검사 결과를 투명하게 공개합니다.',
-                delay: 'delay-200',
-              },
-              {
-                icon: '🚛',
-                title: '신선 냉장 직배송',
-                desc: '조리 후 2시간 이내 전용 냉장차로 배송합니다. GPS 실시간 추적과 온도 로깅으로 식품 안전을 끝까지 책임집니다.',
-                delay: 'delay-400',
-              },
+              { icon: '🥗', title: '영양사 전담 식단 설계', desc: '임상영양사 자격을 보유한 전담 영양사가 월별 식단을 설계하고 영양 분석 리포트를 제공합니다. 기관의 연령별 특성에 맞는 최적 식단을 구성합니다.', delay: '' },
+              { icon: '🔬', title: '철저한 위생 관리', desc: '식재료 입고부터 조리·포장까지 모든 과정을 국가 기준 위생 매뉴얼로 기록 관리합니다. 매월 위생 검사 결과를 투명하게 공개합니다.', delay: 'delay-200' },
+              { icon: '🚛', title: '신선 냉장 직배송', desc: '조리 후 2시간 이내 전용 냉장차로 배송합니다. GPS 실시간 추적과 온도 로깅으로 식품 안전을 끝까지 책임집니다.', delay: 'delay-400' },
             ].map((card, i) => (
               <div key={i} className={`group bg-[#F9FDF9] hover:bg-white border border-[#E8F5E9] hover:border-[#52B788]/40 rounded-2xl p-8 transition-all food-card anim anim-up ${card.delay}`}>
                 <div className="w-14 h-14 rounded-2xl bg-[#E8F5E9] flex items-center justify-center text-2xl mb-5 group-hover:scale-110 transition-transform">
@@ -471,7 +270,7 @@ export default function Home() {
       <WaveDivider from="#1B4332" to="#F8FDF8" />
 
       {/* ── MENU ────────────────────────────────────────── */}
-      <section id="menu" className="py-24 bg-[#F8FDF8]">
+      <section className="py-24 bg-[#F8FDF8]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
             <div className="section-divider" />
@@ -495,7 +294,6 @@ export default function Home() {
                 <h3 className="font-serif font-bold text-lg text-[#0D1B0F] mb-2">{item.title}</h3>
                 <p className="text-gray-500 text-sm leading-relaxed">{item.desc}</p>
 
-                {/* Hover slide-up overlay */}
                 <div className="absolute inset-x-0 bottom-0 bg-[#2D6A4F]/90 backdrop-blur-sm py-3 px-5 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-out">
                   <p className="text-white text-sm font-semibold text-center tracking-wide">
                     자세히 보기 →
@@ -506,16 +304,16 @@ export default function Home() {
           </div>
 
           <div className="text-center mt-10 anim anim-up delay-500">
-            <a href="#contact" className="inline-flex items-center gap-2 border-2 border-[#2D6A4F] text-[#2D6A4F] hover:bg-[#2D6A4F] hover:text-white font-semibold px-6 py-3 rounded-xl transition-all">
-              전체 식단표 요청하기
+            <Link href="/menu" className="inline-flex items-center gap-2 border-2 border-[#2D6A4F] text-[#2D6A4F] hover:bg-[#2D6A4F] hover:text-white font-semibold px-6 py-3 rounded-xl transition-all">
+              전체 식단 보기
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" /></svg>
-            </a>
+            </Link>
           </div>
         </div>
       </section>
 
       {/* ── FACILITY ────────────────────────────────────── */}
-      <section id="facility" className="relative py-32 overflow-hidden">
+      <section className="relative py-32 overflow-hidden">
         <Image src={FACILITY_BG} alt="키즈밀 조리 시설" fill className="object-cover" sizes="100vw" />
         <div className="absolute inset-0 bg-[#0D1B0F]/70" />
 
@@ -541,7 +339,6 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Wave bottom */}
         <div className="absolute bottom-0 inset-x-0 z-[5] leading-[0]">
           <svg viewBox="0 0 1440 72" preserveAspectRatio="none" className="w-full h-[48px] sm:h-[72px] block">
             <path d="M0,36 C120,72 240,0 360,36 C480,72 600,0 720,36 C840,72 960,0 1080,36 C1200,72 1320,0 1440,36 L1440,72 L0,72 Z" fill="#1B4332" />
@@ -553,7 +350,6 @@ export default function Home() {
       <section className="bg-[#1B4332] py-20 sm:py-28">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
-            {/* Left text */}
             <div>
               <div className="inline-flex items-center gap-2 bg-[#F4A261]/20 border border-[#F4A261]/40 text-[#F4A261] text-xs font-bold px-3 py-1.5 rounded-full mb-6 tracking-widest uppercase anim anim-left">
                 <span className="w-2 h-2 rounded-full bg-[#F4A261] animate-pulse" />
@@ -576,16 +372,15 @@ export default function Home() {
                   </span>
                 ))}
               </div>
-              <a
-                href="#contact"
+              <Link
+                href="/business/icanmeal"
                 className="inline-flex items-center gap-2 border-2 border-white/60 hover:border-white text-white hover:bg-white hover:text-[#1B4332] font-semibold px-6 py-3.5 rounded-xl transition-all anim anim-left delay-400"
               >
                 자세히 보기
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" /></svg>
-              </a>
+              </Link>
             </div>
 
-            {/* Right image */}
             <div className="relative anim anim-right delay-200">
               <div className="relative rounded-3xl overflow-hidden aspect-[4/3] shadow-2xl shadow-black/30">
                 <Image src={FACILITY_BG} alt="아이캔밀 쿠킹키트" fill className="object-cover" sizes="(max-width: 1024px) 100vw, 50vw" />
@@ -597,7 +392,6 @@ export default function Home() {
                   </div>
                 </div>
               </div>
-              {/* Decorative ring */}
               <div className="absolute -top-4 -right-4 w-28 h-28 rounded-full border-2 border-[#52B788]/30 animate-spin-slow" />
             </div>
           </div>
@@ -606,7 +400,7 @@ export default function Home() {
 
       <WaveDivider from="#1B4332" to="#ffffff" />
 
-      {/* ── 소통채널 소개 ─────────────────────────────────── */}
+      {/* ── 소통채널 ────────────────────────────────────── */}
       <section className="py-24 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-14">
@@ -638,13 +432,13 @@ export default function Home() {
           </div>
 
           <div className="text-center anim anim-up delay-400">
-            <a
-              href="/board/login"
+            <Link
+              href="/login"
               className="inline-flex items-center gap-2 bg-[#2D6A4F] hover:bg-[#1B4332] text-white font-semibold px-8 py-4 rounded-2xl transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5 btn-primary"
             >
-              1:1 소통 채널 시작하기
+              지금 시작하기
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" /></svg>
-            </a>
+            </Link>
           </div>
         </div>
       </section>
@@ -684,7 +478,7 @@ export default function Home() {
       <WaveDivider from="#ffffff" to="#F8FDF8" />
 
       {/* ── REVIEWS ─────────────────────────────────────── */}
-      <section id="reviews" className="py-24 bg-[#F8FDF8]">
+      <section className="py-24 bg-[#F8FDF8]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
             <div className="section-divider" />
@@ -709,13 +503,20 @@ export default function Home() {
               </div>
             ))}
           </div>
+
+          <div className="text-center mt-10 anim anim-up delay-400">
+            <Link href="/reviews" className="inline-flex items-center gap-2 border-2 border-[#2D6A4F] text-[#2D6A4F] hover:bg-[#2D6A4F] hover:text-white font-semibold px-6 py-3 rounded-xl transition-all">
+              전체 후기 보기
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" /></svg>
+            </Link>
+          </div>
         </div>
       </section>
 
       <WaveDivider from="#F8FDF8" to="#ffffff" />
 
       {/* ── FAQ ─────────────────────────────────────────── */}
-      <section id="faq" className="py-24 bg-white">
+      <section className="py-24 bg-white">
         <div className="max-w-3xl mx-auto px-4 sm:px-6">
           <div className="text-center mb-16">
             <div className="section-divider" />
@@ -741,13 +542,19 @@ export default function Home() {
               </div>
             ))}
           </div>
+
+          <div className="text-center mt-10 anim anim-up delay-400">
+            <Link href="/faq" className="inline-flex items-center gap-2 text-[#2D6A4F] hover:text-[#1B4332] font-semibold">
+              전체 FAQ 보기 →
+            </Link>
+          </div>
         </div>
       </section>
 
       <WaveDivider from="#ffffff" to="#1B4332" />
 
       {/* ── CONTACT ─────────────────────────────────────── */}
-      <section id="contact" className="py-24 bg-[#1B4332]">
+      <section className="py-24 bg-[#1B4332]">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid lg:grid-cols-2 gap-12 items-start">
             <div>
@@ -829,28 +636,62 @@ export default function Home() {
       <footer className="bg-[#0D1B0F] py-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid md:grid-cols-4 gap-8 mb-10">
-            <div className="md:col-span-2">
-              <div className="flex items-center gap-2.5 mb-4">
+            <div className="md:col-span-1">
+              <Link href="/" className="flex items-center gap-2.5 mb-4">
                 <div className="w-9 h-9 rounded-xl bg-[#2D6A4F] flex items-center justify-center text-white font-bold font-serif text-lg">K</div>
                 <span className="font-serif font-bold text-white text-lg">키즈밀</span>
-              </div>
+              </Link>
               <p className="text-white/40 text-sm leading-relaxed max-w-xs">
                 아이들의 건강한 미래를 위해 최고의 급식을 제공합니다. 22년의 경험과 신뢰로 함께합니다.
               </p>
             </div>
             <div>
-              <p className="text-white/70 font-medium text-sm mb-4">서비스</p>
+              <p className="text-white/70 font-medium text-sm mb-4">회사</p>
               <ul className="space-y-2">
-                {['단체급식', '이유식', '행사 특식', '아이캔밀 쿠킹키트'].map((v) => (
-                  <li key={v}><a href="#" className="text-white/40 hover:text-white/70 text-sm transition-colors">{v}</a></li>
+                {[
+                  { label: '브랜드 스토리', href: '/about/brand' },
+                  { label: '경쟁력', href: '/about/competitivity' },
+                  { label: 'CEO 인사말', href: '/about/ceo' },
+                ].map((l) => (
+                  <li key={l.href}>
+                    <Link href={l.href} className="text-white/40 hover:text-white/80 text-sm transition-colors">
+                      {l.label}
+                    </Link>
+                  </li>
                 ))}
               </ul>
             </div>
             <div>
-              <p className="text-white/70 font-medium text-sm mb-4">회사</p>
+              <p className="text-white/70 font-medium text-sm mb-4">서비스</p>
               <ul className="space-y-2">
-                {['회사 소개', '채용', '개인정보처리방침', '이용약관'].map((v) => (
-                  <li key={v}><a href="#" className="text-white/40 hover:text-white/70 text-sm transition-colors">{v}</a></li>
+                {[
+                  { label: 'KIZMEAL', href: '/business/kizmeal' },
+                  { label: 'ICANMEAL', href: '/business/icanmeal' },
+                  { label: '이번 주 식단', href: '/menu' },
+                  { label: '포토갤러리', href: '/gallery' },
+                ].map((l) => (
+                  <li key={l.href}>
+                    <Link href={l.href} className="text-white/40 hover:text-white/80 text-sm transition-colors">
+                      {l.label}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <p className="text-white/70 font-medium text-sm mb-4">고객지원</p>
+              <ul className="space-y-2">
+                {[
+                  { label: '공지사항', href: '/notice' },
+                  { label: '1:1 문의', href: '/login' },
+                  { label: '문의하기', href: '/contact' },
+                  { label: '개인정보처리방침', href: '/privacy' },
+                ].map((l) => (
+                  <li key={l.href}>
+                    <Link href={l.href} className="text-white/40 hover:text-white/80 text-sm transition-colors">
+                      {l.label}
+                    </Link>
+                  </li>
                 ))}
               </ul>
             </div>
@@ -862,7 +703,6 @@ export default function Home() {
         </div>
       </footer>
 
-      {/* ── SCROLL TO TOP ────────────────────────────────── */}
       {showScrollTop && (
         <button
           onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
