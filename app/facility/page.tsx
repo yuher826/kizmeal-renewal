@@ -727,6 +727,8 @@ export default function FacilityPage() {
               position: 'relative',
               zIndex: 1,
               filter: 'none',
+              border: '4px solid red',
+              background: 'blue',
             }}
             onError={(e) => {
               console.error('라이트박스 이미지 로드 실패:', photos[lightboxIndex]);
