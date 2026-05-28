@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import Image from 'next/image';
 import Link from 'next/link';
 
@@ -697,92 +698,97 @@ export default function FacilityPage() {
       </section>
 
       {/* ── LIGHTBOX ────────────────────────────────────── */}
-      {lightboxOpen && (
-        <div
-          className="fixed inset-0 bg-black/90 z-[9999] flex items-center justify-center"
-          onClick={() => setLightboxOpen(false)}
-          role="dialog"
-          aria-modal="true"
-        >
-          {/* Image — direct flex child, no wrapper. Forced min size + explicit visibility */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={photos[lightboxIndex]?.src || ''}
-            alt={photos[lightboxIndex]?.category || ''}
-            width={800}
-            height={600}
-            onClick={(e) => e.stopPropagation()}
+      {lightboxOpen && typeof window !== 'undefined' &&
+        createPortal(
+          <div
             style={{
-              display: 'block',
-              width: 'auto',
-              height: 'auto',
-              maxWidth: '88vw',
-              maxHeight: '82vh',
-              minWidth: '300px',
-              minHeight: '200px',
-              objectFit: 'contain',
-              borderRadius: '12px',
-              opacity: 1,
-              visibility: 'visible',
-              position: 'relative',
-              zIndex: 1,
-              filter: 'none',
-              border: '4px solid red',
-              background: 'blue',
+              position: 'fixed',
+              top: 0, left: 0, right: 0, bottom: 0,
+              backgroundColor: 'rgba(0,0,0,0.92)',
+              zIndex: 99999,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
             }}
-            onError={(e) => {
-              console.error('라이트박스 이미지 로드 실패:', photos[lightboxIndex]);
-              e.currentTarget.style.border = '2px solid red';
-            }}
-            onLoad={() => console.log('라이트박스 이미지 로드 성공!', photos[lightboxIndex]?.src)}
-          />
-
-          {/* Close */}
-          <button
-            type="button"
-            className="absolute top-4 right-4 text-white text-3xl z-10 bg-black/50 rounded-full w-10 h-10 flex items-center justify-center"
             onClick={() => setLightboxOpen(false)}
-            aria-label="닫기"
           >
-            ✕
-          </button>
-
-          {/* Prev */}
-          {photos.length > 1 && (
-            <button
-              type="button"
-              className="absolute left-4 top-1/2 -translate-y-1/2 text-white text-3xl bg-black/50 rounded-full w-12 h-12 flex items-center justify-center z-10"
-              onClick={(e) => {
-                e.stopPropagation();
-                setLightboxIndex((prev) => (prev === 0 ? photos.length - 1 : prev - 1));
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={photos[lightboxIndex]?.src || ''}
+              alt=""
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                maxWidth: '90vw',
+                maxHeight: '85vh',
+                width: 'auto',
+                height: 'auto',
+                display: 'block',
+                objectFit: 'contain',
+                borderRadius: '12px',
+                border: '3px solid white',
               }}
-              aria-label="이전"
-            >
-              ‹
-            </button>
-          )}
-
-          {/* Next */}
-          {photos.length > 1 && (
+            />
             <button
-              type="button"
-              className="absolute right-4 top-1/2 -translate-y-1/2 text-white text-3xl bg-black/50 rounded-full w-12 h-12 flex items-center justify-center z-10"
-              onClick={(e) => {
-                e.stopPropagation();
-                setLightboxIndex((prev) => (prev === photos.length - 1 ? 0 : prev + 1));
+              onClick={() => setLightboxOpen(false)}
+              style={{
+                position: 'fixed',
+                top: 20, right: 20,
+                color: 'white',
+                background: 'rgba(0,0,0,0.5)',
+                border: 'none',
+                borderRadius: '50%',
+                width: 40, height: 40,
+                fontSize: 20,
+                cursor: 'pointer',
+                zIndex: 100000,
               }}
-              aria-label="다음"
-            >
-              ›
-            </button>
-          )}
-
-          {/* Counter */}
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white text-sm bg-black/50 px-3 py-1 rounded-full">
-            {lightboxIndex + 1} / {photos.length}
-          </div>
-        </div>
-      )}
+            >✕</button>
+            {photos.length > 1 && (
+              <>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setLightboxIndex(lightboxIndex === 0 ? photos.length - 1 : lightboxIndex - 1);
+                  }}
+                  style={{
+                    position: 'fixed',
+                    left: 16, top: '50%',
+                    transform: 'translateY(-50%)',
+                    color: 'white',
+                    background: 'rgba(0,0,0,0.5)',
+                    border: 'none',
+                    borderRadius: '50%',
+                    width: 48, height: 48,
+                    fontSize: 24,
+                    cursor: 'pointer',
+                    zIndex: 100000,
+                  }}
+                >‹</button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setLightboxIndex(lightboxIndex === photos.length - 1 ? 0 : lightboxIndex + 1);
+                  }}
+                  style={{
+                    position: 'fixed',
+                    right: 16, top: '50%',
+                    transform: 'translateY(-50%)',
+                    color: 'white',
+                    background: 'rgba(0,0,0,0.5)',
+                    border: 'none',
+                    borderRadius: '50%',
+                    width: 48, height: 48,
+                    fontSize: 24,
+                    cursor: 'pointer',
+                    zIndex: 100000,
+                  }}
+                >›</button>
+              </>
+            )}
+          </div>,
+          document.body
+        )
+      }
     </main>
   );
 }
