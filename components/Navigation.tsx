@@ -18,11 +18,12 @@ const NAV: NavItem[] = [
   {
     key: 'about',
     label: '회사소개',
-    matchPrefixes: ['/about'],
+    matchPrefixes: ['/about', '/facility'],
     dropdown: [
       { icon: '🏢', label: '브랜드 스토리', href: '/about/brand' },
       { icon: '💪', label: '경쟁력', href: '/about/competitivity' },
       { icon: '👋', label: 'CEO 인사말', href: '/about/ceo' },
+      { icon: '🏭', label: '시설 안내', href: '/facility' },
     ],
   },
   {
