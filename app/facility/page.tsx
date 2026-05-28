@@ -652,13 +652,12 @@ export default function FacilityPage() {
                 onClick={() => setLightboxIndex(i)}
                 className="group relative aspect-[4/3] rounded-xl overflow-hidden bg-gray-100 shadow-sm hover:shadow-xl transition-shadow"
               >
-                <Image
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
                   src={g.src}
                   alt={g.category}
-                  fill
                   loading="lazy"
-                  className="object-cover transition-transform duration-500 group-hover:scale-[1.03]"
-                  sizes="(max-width: 640px) 50vw, (max-width: 1024px) 50vw, 33vw"
+                  className="block w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
                 />
                 <div className="absolute inset-0 bg-[#1B4332]/0 group-hover:bg-[#1B4332]/20 transition-colors" />
                 <span className="absolute top-3 left-3 bg-white/90 text-[#2D6A4F] text-xs font-medium px-2.5 py-1 rounded-full">
@@ -696,70 +695,80 @@ export default function FacilityPage() {
       {/* ── LIGHTBOX ────────────────────────────────────── */}
       {lightboxIndex !== null && (
         <div
-          className="fixed inset-0 bg-black/90 flex items-center justify-center p-4 sm:p-10"
-          style={{ zIndex: 9999 }}
+          className="fixed inset-0 z-[9999] bg-black/95 flex items-center justify-center"
           onClick={closeLightbox}
           role="dialog"
           aria-modal="true"
         >
+          {/* Close button */}
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation();
               closeLightbox();
             }}
-            className="absolute top-4 right-4 sm:top-6 sm:right-6 w-11 h-11 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors"
+            className="w-11 h-11 rounded-full bg-white/15 hover:bg-white/25 text-white flex items-center justify-center transition-colors"
+            style={{ position: 'absolute', top: 16, right: 16, zIndex: 10 }}
             aria-label="닫기"
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
+
+          {/* Prev */}
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation();
               prevLightbox();
             }}
-            className="absolute left-2 sm:left-6 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors"
+            className="w-12 h-12 rounded-full bg-white/15 hover:bg-white/25 text-white flex items-center justify-center transition-colors"
+            style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', zIndex: 10 }}
             aria-label="이전"
           >
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
             </svg>
           </button>
+
+          {/* Next */}
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation();
               nextLightbox();
             }}
-            className="absolute right-2 sm:right-6 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors"
+            className="w-12 h-12 rounded-full bg-white/15 hover:bg-white/25 text-white flex items-center justify-center transition-colors"
+            style={{ position: 'absolute', right: 16, top: '50%', transform: 'translateY(-50%)', zIndex: 10 }}
             aria-label="다음"
           >
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
             </svg>
           </button>
-          <div
-            className="relative inline-block"
+
+          {/* Image (direct child — click stops propagation so backdrop close is preserved) */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={filtered[lightboxIndex].src}
+            alt={filtered[lightboxIndex].category}
             onClick={(e) => e.stopPropagation()}
+            style={{
+              maxWidth: '90vw',
+              maxHeight: '85vh',
+              objectFit: 'contain',
+              borderRadius: '12px',
+              display: 'block',
+            }}
+          />
+
+          {/* Counter */}
+          <div
+            className="bg-white/90 text-[#2D6A4F] text-sm font-medium px-4 py-1.5 rounded-full whitespace-nowrap"
+            style={{ position: 'absolute', bottom: 24, left: '50%', transform: 'translateX(-50%)', zIndex: 10 }}
           >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={filtered[lightboxIndex].src}
-              alt={filtered[lightboxIndex].category}
-              style={{
-                maxWidth: '90vw',
-                maxHeight: '90vh',
-                objectFit: 'contain',
-                borderRadius: '12px',
-                display: 'block',
-              }}
-            />
-            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-white/90 text-[#2D6A4F] text-sm font-medium px-4 py-1.5 rounded-full whitespace-nowrap">
-              {filtered[lightboxIndex].category} · {lightboxIndex + 1} / {filtered.length}
-            </div>
+            {filtered[lightboxIndex].category} · {lightboxIndex + 1} / {filtered.length}
           </div>
         </div>
       )}
