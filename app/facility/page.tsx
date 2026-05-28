@@ -704,28 +704,28 @@ export default function FacilityPage() {
           role="dialog"
           aria-modal="true"
         >
-          {/* Image — click stops propagation so the image itself does not close */}
-          <div className="relative" onClick={(e) => e.stopPropagation()}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={photos[lightboxIndex]?.src || ''}
-              alt={photos[lightboxIndex]?.category || ''}
-              style={{
-                maxWidth: '90vw',
-                maxHeight: '85vh',
-                width: 'auto',
-                height: 'auto',
-                display: 'block',
-                objectFit: 'contain',
-                borderRadius: '8px',
-              }}
-              onError={(e) => {
-                console.error('라이트박스 이미지 로드 실패:', photos[lightboxIndex]);
-                e.currentTarget.style.border = '2px solid red';
-              }}
-              onLoad={() => console.log('라이트박스 이미지 로드 성공!', photos[lightboxIndex]?.src)}
-            />
-          </div>
+          {/* Image — direct flex child, no wrapper. stopPropagation on the img itself */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={photos[lightboxIndex]?.src || ''}
+            alt={photos[lightboxIndex]?.category || ''}
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              maxWidth: '90vw',
+              maxHeight: '85vh',
+              width: 'auto',
+              height: 'auto',
+              display: 'block',
+              objectFit: 'contain',
+              borderRadius: '12px',
+              cursor: 'default',
+            }}
+            onError={(e) => {
+              console.error('라이트박스 이미지 로드 실패:', photos[lightboxIndex]);
+              e.currentTarget.style.border = '2px solid red';
+            }}
+            onLoad={() => console.log('라이트박스 이미지 로드 성공!', photos[lightboxIndex]?.src)}
+          />
 
           {/* Close */}
           <button
