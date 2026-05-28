@@ -704,21 +704,29 @@ export default function FacilityPage() {
           role="dialog"
           aria-modal="true"
         >
-          {/* Image — direct flex child, no wrapper. stopPropagation on the img itself */}
+          {/* Image — direct flex child, no wrapper. Forced min size + explicit visibility */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={photos[lightboxIndex]?.src || ''}
             alt={photos[lightboxIndex]?.category || ''}
+            width={800}
+            height={600}
             onClick={(e) => e.stopPropagation()}
             style={{
-              maxWidth: '90vw',
-              maxHeight: '85vh',
+              display: 'block',
               width: 'auto',
               height: 'auto',
-              display: 'block',
+              maxWidth: '88vw',
+              maxHeight: '82vh',
+              minWidth: '300px',
+              minHeight: '200px',
               objectFit: 'contain',
               borderRadius: '12px',
-              cursor: 'default',
+              opacity: 1,
+              visibility: 'visible',
+              position: 'relative',
+              zIndex: 1,
+              filter: 'none',
             }}
             onError={(e) => {
               console.error('라이트박스 이미지 로드 실패:', photos[lightboxIndex]);
