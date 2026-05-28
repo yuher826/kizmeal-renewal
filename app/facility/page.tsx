@@ -231,7 +231,7 @@ export default function FacilityPage() {
   return (
     <main className="overflow-x-hidden">
       {/* ── SECTION 1: HERO ──────────────────────────────── */}
-      <section className="relative flex items-center overflow-hidden" style={{ minHeight: '100vh' }}>
+      <section className="relative flex items-center overflow-hidden min-h-[85vh]">
         <Image
           src={HERO_IMG}
           alt="키즈밀 조리실"
@@ -247,23 +247,21 @@ export default function FacilityPage() {
               'linear-gradient(to right, rgba(27,67,50,0.95) 0%, rgba(27,67,50,0.80) 50%, rgba(27,67,50,0.40) 100%)',
           }}
         />
-        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 pb-32 w-full">
+        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 pb-36 w-full">
           <div className="max-w-2xl">
-            <div className="inline-flex items-center border border-[#F4A261]/70 rounded-full px-4 py-1.5 mb-8">
+            <div className="inline-flex items-center border border-[#F4A261]/70 rounded-full px-4 py-1.5 mb-7">
               <span className="text-[#F4A261] text-xs font-semibold tracking-[0.2em] uppercase">
                 2025년 1월 새롭게 오픈
               </span>
             </div>
-            <h1 className="font-serif font-bold text-4xl lg:text-6xl text-white leading-[1.2] mb-8">
-              매일 새벽 3시,
-              <br />
-              아이들의 건강한 하루를 위해
-              <br />
-              키즈밀의 하루가 시작됩니다
+            <h1 className="font-serif font-bold text-white leading-tight mb-7 text-3xl md:text-5xl lg:text-6xl">
+              <span className="block">매일 새벽 3시,</span>
+              <span className="block">아이들의 건강한 하루를 위해</span>
+              <span className="block">키즈밀의 하루가 시작됩니다</span>
             </h1>
-            <p className="text-white/75 text-base sm:text-lg leading-relaxed max-w-xl">
-              2025년 1월, 더 넓고 더 깨끗한 공간에서
-              <br />더 정성스러운 급식을 약속드립니다
+            <p className="text-white/75 leading-relaxed max-w-xl text-lg md:text-xl">
+              <span className="block">2025년 1월, 더 넓고 더 깨끗한 공간에서</span>
+              <span className="block">더 정성스러운 급식을 약속드립니다</span>
             </p>
           </div>
         </div>
@@ -294,31 +292,35 @@ export default function FacilityPage() {
       {/* ── SECTION 3: KEY NUMBERS ──────────────────────── */}
       <section ref={statsRef} className="bg-[#1B4332] py-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-10 text-center">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-y-10 gap-x-6 text-center">
             <div className="anim anim-scale">
-              <div className="font-serif font-bold text-5xl sm:text-6xl text-white leading-none mb-3">
-                새벽 <CountUp target={3} suffix="시" start={statsVisible} />
+              <p className="text-white/55 text-xs font-medium tracking-[0.2em] uppercase mb-3">새벽 시작</p>
+              <div className="font-serif font-bold text-white leading-none mb-3 text-5xl sm:text-6xl">
+                <CountUp target={3} suffix="시" start={statsVisible} />
               </div>
               <p className="text-white/70 text-sm">매일 이 시간부터 시작합니다</p>
             </div>
             <div className="anim anim-scale">
-              <div className="font-serif font-bold text-5xl sm:text-6xl text-white leading-none mb-3">
-                <CountUp target={6} suffix="개" start={statsVisible} />
-                <span className="text-[#52B788]"> 구역</span>
+              <p className="text-white/55 text-xs font-medium tracking-[0.2em] uppercase mb-3">위생 구역</p>
+              <div className="font-serif font-bold text-white leading-none mb-3 text-5xl sm:text-6xl">
+                <CountUp target={6} suffix="" start={statsVisible} />
+                <span className="text-[#52B788]">개</span>
               </div>
-              <p className="text-white/70 text-sm">완전히 분리된 위생 시스템</p>
+              <p className="text-white/70 text-sm">완전히 분리된 시스템</p>
             </div>
             <div className="anim anim-scale">
-              <div className="font-serif font-bold text-5xl sm:text-6xl text-white leading-none mb-3">
-                냉동탑차 <CountUp target={18} suffix="대" start={statsVisible} />
+              <p className="text-white/55 text-xs font-medium tracking-[0.2em] uppercase mb-3">냉동탑차</p>
+              <div className="font-serif font-bold text-white leading-none mb-3 text-5xl sm:text-6xl">
+                <CountUp target={18} suffix="대" start={statsVisible} />
               </div>
               <p className="text-white/70 text-sm">전 차량 직영 온도 관리</p>
             </div>
             <div className="anim anim-scale">
-              <div className="font-serif font-bold text-5xl sm:text-6xl text-white leading-none mb-3">
-                <span className="text-[#F4A261]">전담</span> 영양사
+              <p className="text-white/55 text-xs font-medium tracking-[0.2em] uppercase mb-3">전담 영양사</p>
+              <div className="font-serif font-bold leading-none mb-3 text-5xl sm:text-6xl">
+                <span className="text-[#F4A261]">1:1</span>
               </div>
-              <p className="text-white/70 text-sm">알레르기 1:1 맞춤 케어</p>
+              <p className="text-white/70 text-sm">알레르기 맞춤 케어</p>
             </div>
           </div>
         </div>
