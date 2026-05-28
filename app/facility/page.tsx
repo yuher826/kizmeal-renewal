@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 
@@ -172,11 +172,17 @@ function CountUp({ target, suffix = '', start }: { target: number; suffix?: stri
 export default function FacilityPage() {
   const [openFaq, setOpenFaq] = useState<number | null>(0);
   const [activeTab, setActiveTab] = useState<'전체' | GalleryCategory>('전체');
-  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
   const [statsVisible, setStatsVisible] = useState(false);
   const statsRef = useRef<HTMLDivElement>(null);
 
-  const filtered = activeTab === '전체' ? GALLERY : GALLERY.filter((g) => g.category === activeTab);
+  const photos = activeTab === '전체' ? GALLERY : GALLERY.filter((g) => g.category === activeTab);
+
+  const openLightbox = (index: number) => {
+    setLightboxIndex(index);
+    setLightboxOpen(true);
+  };
 
   // Stats count up trigger
   useEffect(() => {
@@ -204,29 +210,24 @@ export default function FacilityPage() {
     return () => io.disconnect();
   }, []);
 
-  // Lightbox keyboard
-  const closeLightbox = useCallback(() => setLightboxIndex(null), []);
-  const nextLightbox = useCallback(() => {
-    setLightboxIndex((i) => (i === null ? null : (i + 1) % filtered.length));
-  }, [filtered.length]);
-  const prevLightbox = useCallback(() => {
-    setLightboxIndex((i) => (i === null ? null : (i - 1 + filtered.length) % filtered.length));
-  }, [filtered.length]);
-
+  // ESC to close lightbox
   useEffect(() => {
-    if (lightboxIndex === null) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') closeLightbox();
-      if (e.key === 'ArrowRight') nextLightbox();
-      if (e.key === 'ArrowLeft') prevLightbox();
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setLightboxOpen(false);
     };
-    window.addEventListener('keydown', onKey);
-    document.body.style.overflow = 'hidden';
-    return () => {
-      window.removeEventListener('keydown', onKey);
-      document.body.style.overflow = '';
-    };
-  }, [lightboxIndex, closeLightbox, nextLightbox, prevLightbox]);
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, []);
+
+  // Body scroll lock while open
+  useEffect(() => {
+    if (lightboxOpen) {
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = '';
+      };
+    }
+  }, [lightboxOpen]);
 
   return (
     <main className="overflow-x-hidden">
@@ -645,12 +646,12 @@ export default function FacilityPage() {
           </div>
 
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-            {filtered.map((g, i) => (
+            {photos.map((g, i) => (
               <button
                 key={`${g.src}-${i}`}
                 type="button"
-                onClick={() => setLightboxIndex(i)}
-                className="group relative aspect-[4/3] rounded-xl overflow-hidden bg-gray-100 shadow-sm hover:shadow-xl transition-shadow"
+                onClick={() => openLightbox(i)}
+                className="group relative aspect-[4/3] rounded-xl overflow-hidden bg-gray-100 shadow-sm hover:shadow-xl transition-shadow cursor-pointer"
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
@@ -693,82 +694,79 @@ export default function FacilityPage() {
       </section>
 
       {/* ── LIGHTBOX ────────────────────────────────────── */}
-      {lightboxIndex !== null && (
+      {lightboxOpen && (
         <div
-          className="fixed inset-0 z-[9999] bg-black/95 flex items-center justify-center"
-          onClick={closeLightbox}
+          className="fixed inset-0 bg-black/90 z-[9999] flex items-center justify-center"
+          onClick={() => setLightboxOpen(false)}
           role="dialog"
           aria-modal="true"
         >
-          {/* Close button */}
+          {/* Image — click stops propagation so the image itself does not close */}
+          <div className="relative" onClick={(e) => e.stopPropagation()}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={photos[lightboxIndex]?.src || ''}
+              alt={photos[lightboxIndex]?.category || ''}
+              style={{
+                maxWidth: '90vw',
+                maxHeight: '85vh',
+                width: 'auto',
+                height: 'auto',
+                display: 'block',
+                objectFit: 'contain',
+                borderRadius: '8px',
+              }}
+              onError={(e) => {
+                console.error('라이트박스 이미지 로드 실패:', photos[lightboxIndex]);
+                e.currentTarget.style.border = '2px solid red';
+              }}
+              onLoad={() => console.log('라이트박스 이미지 로드 성공!', photos[lightboxIndex]?.src)}
+            />
+          </div>
+
+          {/* Close */}
           <button
             type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              closeLightbox();
-            }}
-            className="w-11 h-11 rounded-full bg-white/15 hover:bg-white/25 text-white flex items-center justify-center transition-colors"
-            style={{ position: 'absolute', top: 16, right: 16, zIndex: 10 }}
+            className="absolute top-4 right-4 text-white text-3xl z-10 bg-black/50 rounded-full w-10 h-10 flex items-center justify-center"
+            onClick={() => setLightboxOpen(false)}
             aria-label="닫기"
           >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            ✕
           </button>
 
           {/* Prev */}
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              prevLightbox();
-            }}
-            className="w-12 h-12 rounded-full bg-white/15 hover:bg-white/25 text-white flex items-center justify-center transition-colors"
-            style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', zIndex: 10 }}
-            aria-label="이전"
-          >
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-            </svg>
-          </button>
+          {photos.length > 1 && (
+            <button
+              type="button"
+              className="absolute left-4 top-1/2 -translate-y-1/2 text-white text-3xl bg-black/50 rounded-full w-12 h-12 flex items-center justify-center z-10"
+              onClick={(e) => {
+                e.stopPropagation();
+                setLightboxIndex((prev) => (prev === 0 ? photos.length - 1 : prev - 1));
+              }}
+              aria-label="이전"
+            >
+              ‹
+            </button>
+          )}
 
           {/* Next */}
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              nextLightbox();
-            }}
-            className="w-12 h-12 rounded-full bg-white/15 hover:bg-white/25 text-white flex items-center justify-center transition-colors"
-            style={{ position: 'absolute', right: 16, top: '50%', transform: 'translateY(-50%)', zIndex: 10 }}
-            aria-label="다음"
-          >
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-            </svg>
-          </button>
-
-          {/* Image (direct child — click stops propagation so backdrop close is preserved) */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={filtered[lightboxIndex].src}
-            alt={filtered[lightboxIndex].category}
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              maxWidth: '90vw',
-              maxHeight: '85vh',
-              objectFit: 'contain',
-              borderRadius: '12px',
-              display: 'block',
-            }}
-          />
+          {photos.length > 1 && (
+            <button
+              type="button"
+              className="absolute right-4 top-1/2 -translate-y-1/2 text-white text-3xl bg-black/50 rounded-full w-12 h-12 flex items-center justify-center z-10"
+              onClick={(e) => {
+                e.stopPropagation();
+                setLightboxIndex((prev) => (prev === photos.length - 1 ? 0 : prev + 1));
+              }}
+              aria-label="다음"
+            >
+              ›
+            </button>
+          )}
 
           {/* Counter */}
-          <div
-            className="bg-white/90 text-[#2D6A4F] text-sm font-medium px-4 py-1.5 rounded-full whitespace-nowrap"
-            style={{ position: 'absolute', bottom: 24, left: '50%', transform: 'translateX(-50%)', zIndex: 10 }}
-          >
-            {filtered[lightboxIndex].category} · {lightboxIndex + 1} / {filtered.length}
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white text-sm bg-black/50 px-3 py-1 rounded-full">
+            {lightboxIndex + 1} / {photos.length}
           </div>
         </div>
       )}
