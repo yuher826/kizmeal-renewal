@@ -100,12 +100,12 @@ const ZONES = [
 ];
 
 const TIMELINE = [
-  { time: 'AM 03:00', icon: '🌙', title: '하루의 시작', desc: '식재료 입고 및 품질 검수 시작.' },
-  { time: 'AM 03:30', icon: '🧼', title: '위생 점검', desc: '전 직원 위생 복장 착용 완료. 에어커튼 가동, 6개 구역 점검 시작.' },
-  { time: 'AM 04:00', icon: '🔪', title: '전처리 시작', desc: '신선한 식재료를 위생적으로 세척하고 조리에 맞게 손질합니다.' },
-  { time: 'AM 05:00', icon: '🍳', title: '조리 · 포장 · 품질검사', desc: '전담 조리사가 영양사 레시피에 따라 건강한 한 끼를 만들고, 엄격한 품질 검사를 거칩니다.' },
-  { time: 'AM 06:00', icon: '🚚', title: '배송 출발', desc: '첫 차를 시작으로 18대의 냉동탑차가 순차적으로 출발합니다.' },
-  { time: 'AM 10:30', icon: '🍽️', title: '아이들의 밥상', desc: '새벽 3시에 시작된 정성이 오전 10시 30분, 아이들의 건강한 한 끼가 됩니다.' },
+  { time: 'AM 03:00', icon: '🌙', title: '식재료 입고 및 검수 시작', desc: '하루의 시작. 신선한 재료가 들어오고 품질을 검수합니다.' },
+  { time: 'AM 03:30', icon: '🧼', title: '위생 점검 + 전처리 시작', desc: '전 직원 위생 복장 착용 완료. 에어커튼 가동, 6개 구역 점검 후 식재료 손질을 시작합니다.' },
+  { time: 'AM 04:00', icon: '🔪', title: '조리 시작', desc: '전담 조리사가 영양사 레시피에 따라 건강한 한 끼를 만들기 시작합니다.' },
+  { time: 'AM 05:00', icon: '📦', title: '포장 + 품질 검사', desc: '엔터팩 시스템으로 위생 포장하고, 엄격한 품질 검사를 거칩니다.' },
+  { time: 'AM 06:00', icon: '🚚', title: '배송 출발', desc: '첫 차를 시작으로 18대의\n냉동탑차가 순차적으로 출발합니다.' },
+  { time: 'AM 10:30', icon: '🍽️', title: '아이들의 밥상', desc: '새벽 3시에 시작된 정성이\n오전 10시 30분,\n아이들의 건강한 한 끼가 됩니다.' },
 ];
 
 const PARTNERS = ['CJ', '동원', '푸드머스', '아워홈', '매일유업', '우리밀'];
@@ -254,10 +254,10 @@ export default function FacilityPage() {
                 2025년 1월 새롭게 오픈
               </span>
             </div>
-            <h1 className="font-serif font-bold text-white leading-tight mb-7 text-3xl md:text-5xl lg:text-6xl">
-              <span className="block">매일 새벽 3시,</span>
-              <span className="block">아이들의 건강한 하루를 위해</span>
-              <span className="block">키즈밀의 하루가 시작됩니다</span>
+            <h1 className="font-serif font-bold text-white leading-tight mb-7 text-3xl md:text-4xl lg:text-5xl">
+              <div>매일 새벽 3시,</div>
+              <div>아이들의 건강한 하루를 위해</div>
+              <div>키즈밀의 하루가 시작됩니다</div>
             </h1>
             <p className="text-white/75 leading-relaxed max-w-xl text-lg md:text-xl">
               <span className="block">2025년 1월, 더 넓고 더 깨끗한 공간에서</span>
@@ -269,6 +269,21 @@ export default function FacilityPage() {
           <WaveBottom fill="#ffffff" />
         </div>
       </section>
+
+      {/* ── BREADCRUMB ───────────────────────────────────── */}
+      <nav className="bg-white pt-8" aria-label="Breadcrumb">
+        <ol className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-wrap items-center gap-2 text-sm text-[#6B7B6E]">
+          <li>
+            <Link href="/" className="hover:text-[#2D6A4F] transition-colors">홈</Link>
+          </li>
+          <li className="text-[#9BAA9D]">/</li>
+          <li>
+            <Link href="/about" className="hover:text-[#2D6A4F] transition-colors">회사소개</Link>
+          </li>
+          <li className="text-[#9BAA9D]">/</li>
+          <li className="font-medium text-[#2D6A4F]">시설안내</li>
+        </ol>
+      </nav>
 
       {/* ── SECTION 2: TRANSPARENCY ──────────────────────── */}
       <section className="bg-white py-20">
@@ -383,17 +398,29 @@ export default function FacilityPage() {
             </h2>
           </div>
 
-          <div className="space-y-24">
+          <div className="space-y-20 sm:space-y-24">
             {ZONES.map((zone, i) => {
               const imgRight = i % 2 === 0;
               return (
                 <div
                   key={zone.num}
-                  className={`grid lg:grid-cols-2 gap-10 lg:gap-16 items-center ${
-                    imgRight ? '' : 'lg:[&>div:first-child]:order-2'
-                  }`}
+                  className="grid lg:grid-cols-2 gap-8 lg:gap-16 items-center"
                 >
-                  <div className="anim anim-up">
+                  {/* Image (mobile: top, desktop: alternating sides) */}
+                  <div className={`anim ${imgRight ? 'lg:order-2 anim-right' : 'lg:order-1 anim-left'} delay-200`}>
+                    <div className="relative aspect-[4/3] rounded-3xl overflow-hidden shadow-2xl shadow-[#1B4332]/15">
+                      <Image
+                        src={zone.img}
+                        alt={zone.name}
+                        fill
+                        loading="lazy"
+                        className="object-cover hover:scale-105 transition-transform duration-700"
+                        sizes="(max-width: 1024px) 100vw, 50vw"
+                      />
+                    </div>
+                  </div>
+                  {/* Text */}
+                  <div className={`anim anim-up ${imgRight ? 'lg:order-1' : 'lg:order-2'}`}>
                     <div className="text-[#F4A261] font-serif font-bold text-5xl mb-3">{zone.num}</div>
                     <p className="text-[#2D6A4F] font-semibold tracking-widest text-sm uppercase mb-4">
                       {zone.name}
@@ -412,18 +439,6 @@ export default function FacilityPage() {
                         </li>
                       ))}
                     </ul>
-                  </div>
-                  <div className={`anim ${imgRight ? 'anim-right' : 'anim-left'} delay-200`}>
-                    <div className="relative aspect-[4/3] rounded-3xl overflow-hidden shadow-2xl shadow-[#1B4332]/15">
-                      <Image
-                        src={zone.img}
-                        alt={zone.name}
-                        fill
-                        loading="lazy"
-                        className="object-cover hover:scale-105 transition-transform duration-700"
-                        sizes="(max-width: 1024px) 100vw, 50vw"
-                      />
-                    </div>
                   </div>
                 </div>
               );
@@ -681,7 +696,8 @@ export default function FacilityPage() {
       {/* ── LIGHTBOX ────────────────────────────────────── */}
       {lightboxIndex !== null && (
         <div
-          className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-4 sm:p-10"
+          className="fixed inset-0 bg-black/90 flex items-center justify-center p-4 sm:p-10"
+          style={{ zIndex: 9999 }}
           onClick={closeLightbox}
           role="dialog"
           aria-modal="true"
@@ -726,18 +742,22 @@ export default function FacilityPage() {
             </svg>
           </button>
           <div
-            className="relative w-full max-w-5xl aspect-[4/3]"
+            className="relative inline-block"
             onClick={(e) => e.stopPropagation()}
           >
-            <Image
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
               src={filtered[lightboxIndex].src}
               alt={filtered[lightboxIndex].category}
-              fill
-              className="object-contain"
-              sizes="100vw"
-              priority
+              style={{
+                maxWidth: '90vw',
+                maxHeight: '90vh',
+                objectFit: 'contain',
+                borderRadius: '12px',
+                display: 'block',
+              }}
             />
-            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-white/90 text-[#2D6A4F] text-sm font-medium px-4 py-1.5 rounded-full">
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-white/90 text-[#2D6A4F] text-sm font-medium px-4 py-1.5 rounded-full whitespace-nowrap">
               {filtered[lightboxIndex].category} · {lightboxIndex + 1} / {filtered.length}
             </div>
           </div>
