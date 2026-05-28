@@ -180,6 +180,9 @@ export default function FacilityPage() {
   const photos = activeTab === '전체' ? GALLERY : GALLERY.filter((g) => g.category === activeTab);
 
   const openLightbox = (index: number) => {
+    console.log('클릭된 사진:', photos[index]);
+    console.log('photos 배열 전체:', photos);
+    console.log('lightboxIndex:', index, '→ src:', photos[index]?.src);
     setLightboxIndex(index);
     setLightboxOpen(true);
   };
