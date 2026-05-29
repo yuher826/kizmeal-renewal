@@ -1,0 +1,120 @@
+import type { Message, MessageAttachment } from '@/lib/types'
+
+interface Props {
+  message: Message
+  branchName?: string
+  adminName?: string
+}
+
+function formatTime(isoString: string) {
+  return new Date(isoString).toLocaleString('ko-KR', {
+    month: 'numeric',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+function formatFileSize(bytes: number) {
+  if (bytes < 1024) return `${bytes}B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)}MB`
+}
+
+function FileIcon({ type }: { type: string }) {
+  if (type.includes('pdf')) return <span>📄</span>
+  if (type.includes('image')) return <span>🖼️</span>
+  if (type.includes('spreadsheet') || type.includes('excel')) return <span>📊</span>
+  if (type.includes('word') || type.includes('document')) return <span>📝</span>
+  return <span>📎</span>
+}
+
+function AttachmentList({ attachments }: { attachments: MessageAttachment[] }) {
+  if (!attachments?.length) return null
+  return (
+    <div className="mt-2 space-y-1">
+      {attachments.map((att) => (
+        <div
+          key={att.id}
+          className="flex items-center gap-2 bg-white/30 rounded-lg px-3 py-2 text-xs"
+        >
+          <FileIcon type={att.file_type} />
+          <span className="flex-1 truncate">{att.file_name}</span>
+          <span className="text-gray-500">{formatFileSize(att.file_size)}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+export default function MessageBubble({ message, branchName, adminName }: Props) {
+  const { sender_type, content, created_at, is_internal, message_attachments } = message
+
+  // System message — centered
+  if (sender_type === 'system') {
+    return (
+      <div className="flex justify-center my-3">
+        <span className="text-xs text-gray-400 italic bg-gray-100 rounded-full px-4 py-1.5">
+          {content}
+        </span>
+      </div>
+    )
+  }
+
+  // Internal admin note — yellow, full width
+  if (is_internal) {
+    return (
+      <div className="flex justify-center my-2">
+        <div className="max-w-[85%] bg-yellow-50 border border-yellow-200 rounded-2xl px-4 py-3 w-full">
+          <div className="flex items-center gap-1.5 mb-1.5">
+            <span className="text-xs">🔒</span>
+            <span className="text-xs font-semibold text-yellow-700">내부 메모 — 고객에게 보이지 않음</span>
+          </div>
+          <p className="text-sm text-yellow-900 whitespace-pre-wrap">{content}</p>
+          <div className="mt-1.5 text-right">
+            <span className="text-xs text-yellow-600">{adminName || '관리자'} · {formatTime(created_at)}</span>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Branch message — right aligned, green
+  if (sender_type === 'branch') {
+    return (
+      <div className="flex justify-end mb-3">
+        <div className="max-w-[75%]">
+          <div className="bg-[#2D6A4F] text-white rounded-2xl rounded-tr-sm px-4 py-3 shadow-sm">
+            <p className="text-sm whitespace-pre-wrap leading-relaxed">{content}</p>
+            <AttachmentList attachments={message_attachments || []} />
+          </div>
+          <div className="text-right mt-1">
+            <span className="text-xs text-gray-400">
+              {branchName || '지점'} · {formatTime(created_at)}
+            </span>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Admin message — left aligned, white
+  return (
+    <div className="flex justify-start mb-3 gap-2">
+      <div className="w-8 h-8 rounded-full bg-[#E8F5E9] flex items-center justify-center text-xs font-bold text-[#2D6A4F] flex-shrink-0 mt-1">
+        K
+      </div>
+      <div className="max-w-[75%]">
+        <div className="bg-white rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm border border-gray-100">
+          <p className="text-sm whitespace-pre-wrap leading-relaxed text-gray-800">{content}</p>
+          <AttachmentList attachments={message_attachments || []} />
+        </div>
+        <div className="mt-1">
+          <span className="text-xs text-gray-400">
+            {adminName || '키즈밀'} · {formatTime(created_at)}
+          </span>
+        </div>
+      </div>
+    </div>
+  )
+}
