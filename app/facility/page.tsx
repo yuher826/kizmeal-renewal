@@ -214,14 +214,16 @@ export default function FacilityPage() {
     return () => io.disconnect();
   }, []);
 
-  // ESC to close lightbox
+  // ESC / Arrow keys for lightbox
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setLightboxOpen(false);
+      if (e.key === 'ArrowLeft') setLightboxIndex((prev) => (prev === 0 ? photos.length - 1 : prev - 1));
+      if (e.key === 'ArrowRight') setLightboxIndex((prev) => (prev === photos.length - 1 ? 0 : prev + 1));
     };
-    window.addEventListener('keydown', handleKey);
+    if (lightboxOpen) window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
-  }, []);
+  }, [lightboxOpen, photos.length]);
 
   // Body scroll lock while open
   useEffect(() => {
@@ -704,7 +706,7 @@ export default function FacilityPage() {
             style={{
               position: 'fixed',
               top: 0, left: 0, right: 0, bottom: 0,
-              backgroundColor: 'rgba(0,0,0,0.92)',
+              backgroundColor: 'rgba(0,0,0,0.85)',
               zIndex: 99999,
               display: 'flex',
               alignItems: 'center',
@@ -724,8 +726,8 @@ export default function FacilityPage() {
                 height: 'auto',
                 display: 'block',
                 objectFit: 'contain',
-                borderRadius: '12px',
-                border: '3px solid white',
+                borderRadius: '16px',
+                boxShadow: '0 8px 40px rgba(0,0,0,0.5)',
               }}
             />
             <button
@@ -752,14 +754,14 @@ export default function FacilityPage() {
                   }}
                   style={{
                     position: 'fixed',
-                    left: 16, top: '50%',
+                    left: 24, top: '50%',
                     transform: 'translateY(-50%)',
                     color: 'white',
-                    background: 'rgba(0,0,0,0.5)',
-                    border: 'none',
+                    background: 'rgba(255,255,255,0.2)',
+                    border: '2px solid rgba(255,255,255,0.4)',
                     borderRadius: '50%',
-                    width: 48, height: 48,
-                    fontSize: 24,
+                    width: 56, height: 56,
+                    fontSize: 32,
                     cursor: 'pointer',
                     zIndex: 100000,
                   }}
@@ -771,20 +773,36 @@ export default function FacilityPage() {
                   }}
                   style={{
                     position: 'fixed',
-                    right: 16, top: '50%',
+                    right: 24, top: '50%',
                     transform: 'translateY(-50%)',
                     color: 'white',
-                    background: 'rgba(0,0,0,0.5)',
-                    border: 'none',
+                    background: 'rgba(255,255,255,0.2)',
+                    border: '2px solid rgba(255,255,255,0.4)',
                     borderRadius: '50%',
-                    width: 48, height: 48,
-                    fontSize: 24,
+                    width: 56, height: 56,
+                    fontSize: 32,
                     cursor: 'pointer',
                     zIndex: 100000,
                   }}
                 >›</button>
               </>
             )}
+            <div
+              style={{
+                position: 'fixed',
+                bottom: 24,
+                left: '50%',
+                transform: 'translateX(-50%)',
+                color: 'white',
+                background: 'rgba(0,0,0,0.5)',
+                padding: '6px 16px',
+                borderRadius: '20px',
+                fontSize: '14px',
+                zIndex: 100000,
+              }}
+            >
+              {lightboxIndex + 1} / {photos.length}
+            </div>
           </div>,
           document.body
         )
