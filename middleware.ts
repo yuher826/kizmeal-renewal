@@ -127,13 +127,9 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/board/:path*',
+    '/board/(.*)',
     '/parent/login',
-    '/parent/dashboard/:path*',
-    '/parent/menu/:path*',
-    '/parent/photos/:path*',
-    '/parent/recipes/:path*',
-    '/parent/mypage/:path*',
-    '/nutritionist/:path*',
+    '/parent/(dashboard|menu|photos|recipes|mypage)(.*)',
+    '/nutritionist/(.*)',
   ],
 }
