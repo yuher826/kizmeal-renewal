@@ -29,22 +29,40 @@ export async function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl
 
+  // Board routes
   const isCustomerRoute =
     pathname.startsWith('/board/dashboard') ||
     pathname.startsWith('/board/inquiries') ||
-    pathname.startsWith('/board/settings')
+    pathname.startsWith('/board/settings') ||
+    pathname.startsWith('/board/notifications')
   const isAdminRoute = pathname.startsWith('/board/admin')
-  const isLoginPage = pathname === '/board/login'
+  const isBoardLogin = pathname === '/board/login'
 
-  // Redirect unauthenticated users to login
+  // Parent portal routes
+  const isParentPortal = pathname.startsWith('/parent/dashboard') ||
+    pathname.startsWith('/parent/menu') ||
+    pathname.startsWith('/parent/photos') ||
+    pathname.startsWith('/parent/recipes') ||
+    pathname.startsWith('/parent/mypage')
+  const isParentLogin = pathname === '/parent/login'
+  const isParentPublic = pathname.startsWith('/parent/pending') ||
+    pathname.startsWith('/parent/rejected') ||
+    pathname.startsWith('/parent/forgot-password') ||
+    pathname.startsWith('/parent/reset-password') ||
+    pathname.startsWith('/parent/register')
+
+  // Nutritionist routes
+  const isNutritionistRoute = pathname.startsWith('/nutritionist/dashboard') ||
+    pathname.startsWith('/nutritionist/upload')
+
+  // ── Board auth ──────────────────────────────────────────────
   if (!user && (isCustomerRoute || isAdminRoute)) {
     const url = request.nextUrl.clone()
     url.pathname = '/board/login'
     return NextResponse.redirect(url)
   }
 
-  // Redirect authenticated users away from login
-  if (user && isLoginPage) {
+  if (user && isBoardLogin) {
     const { data: adminData } = await supabase
       .from('admins')
       .select('id')
@@ -56,7 +74,6 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  // Block non-admins from admin routes
   if (user && isAdminRoute) {
     const { data: adminData } = await supabase
       .from('admins')
@@ -71,9 +88,52 @@ export async function middleware(request: NextRequest) {
     }
   }
 
+  // ── Parent portal auth ──────────────────────────────────────
+  if (!user && isParentPortal) {
+    const url = request.nextUrl.clone()
+    url.pathname = '/parent/login'
+    return NextResponse.redirect(url)
+  }
+
+  if (user && isParentLogin) {
+    const { data: parent } = await supabase
+      .from('parents')
+      .select('status')
+      .eq('auth_id', user.id)
+      .maybeSingle()
+
+    const url = request.nextUrl.clone()
+    if (!parent) {
+      return supabaseResponse
+    } else if (parent.status === 'approved') {
+      url.pathname = '/parent/dashboard'
+    } else if (parent.status === 'pending') {
+      url.pathname = '/parent/pending'
+    } else {
+      url.pathname = '/parent/rejected'
+    }
+    return NextResponse.redirect(url)
+  }
+
+  // ── Nutritionist auth ───────────────────────────────────────
+  if (!user && isNutritionistRoute) {
+    const url = request.nextUrl.clone()
+    url.pathname = '/board/login'
+    return NextResponse.redirect(url)
+  }
+
   return supabaseResponse
 }
 
 export const config = {
-  matcher: ['/board/:path*'],
+  matcher: [
+    '/board/:path*',
+    '/parent/login',
+    '/parent/dashboard/:path*',
+    '/parent/menu/:path*',
+    '/parent/photos/:path*',
+    '/parent/recipes/:path*',
+    '/parent/mypage/:path*',
+    '/nutritionist/:path*',
+  ],
 }

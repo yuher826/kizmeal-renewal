@@ -68,15 +68,19 @@ export default function BoardLoginPage() {
         return
       }
 
-      // Check branch member
+      // Check branch member (nutritionist gets their own dashboard)
       const { data: memberData } = await supabase
         .from('branch_members')
-        .select('id')
+        .select('id, role')
         .eq('auth_id', data.user.id)
         .maybeSingle()
 
       if (memberData) {
-        router.push('/board/dashboard')
+        if (memberData.role === 'nutritionist') {
+          router.push('/nutritionist/dashboard')
+        } else {
+          router.push('/board/dashboard')
+        }
         router.refresh()
         return
       }

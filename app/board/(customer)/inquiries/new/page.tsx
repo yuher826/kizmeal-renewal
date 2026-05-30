@@ -12,7 +12,15 @@ import DynamicForm from '@/components/board/DynamicForm'
 import FileUpload from '@/components/board/FileUpload'
 
 const CATEGORIES: InquiryCategory[] = [
-  'MEAL_COUNT', 'ALLERGY', 'DELIVERY', 'MENU', 'SCHEDULE', 'PHOTO', 'CONTRACT', 'OTHER',
+  'DELIVERY', 'MENU', 'STAFF_MEAL', 'HYGIENE', 'CONTRACT', 'PHOTO', 'SCHEDULE', 'OTHER',
+]
+
+// KOS system links — require redirect instead of 1:1 board
+const KOS_SHORTCUTS = [
+  { label: '식수 변경', icon: '🍽️', desc: 'KOS 시스템에서 처리', url: 'https://kos.kizmeal.com/meal-count' },
+  { label: '소모품 주문', icon: '📦', desc: 'KOS 시스템에서 처리', url: 'https://kos.kizmeal.com/supplies' },
+  { label: '알러지 등록', icon: '🌿', desc: 'KOS 시스템에서 처리', url: 'https://kos.kizmeal.com/allergy' },
+  { label: '원생 출결', icon: '✅', desc: 'KOS 시스템에서 처리', url: 'https://kos.kizmeal.com/attendance' },
 ]
 
 export default function NewInquiryPage() {
@@ -25,6 +33,7 @@ export default function NewInquiryPage() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [toast, setToast] = useState('')
+  const [kosPopup, setKosPopup] = useState<typeof KOS_SHORTCUTS[0] | null>(null)
 
   const handleFormChange = useCallback((key: string, value: unknown) => {
     setFormData(prev => ({ ...prev, [key]: value }))
@@ -149,7 +158,46 @@ export default function NewInquiryPage() {
         <h1 className="font-bold text-[#1C2B1E]">새 문의 작성</h1>
       </header>
 
-      <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6">
+      {/* KOS 팝업 */}
+      {kosPopup && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={() => setKosPopup(null)}>
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm" onClick={e => e.stopPropagation()}>
+            <div className="text-3xl text-center mb-3">{kosPopup.icon}</div>
+            <h2 className="font-bold text-[#1C2B1E] text-center mb-2">{kosPopup.label}</h2>
+            <p className="text-sm text-gray-500 text-center mb-5">
+              {kosPopup.label}은 KOS 시스템에서 처리됩니다.<br />KOS로 이동하시겠습니까?
+            </p>
+            <div className="flex gap-3">
+              <button type="button" onClick={() => setKosPopup(null)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-600 font-semibold py-3 rounded-xl text-sm transition-colors">
+                취소
+              </button>
+              <a href={kosPopup.url} target="_blank" rel="noopener noreferrer" className="flex-1 bg-[#2D6A4F] hover:bg-[#1B4332] text-white font-semibold py-3 rounded-xl text-sm transition-colors text-center">
+                KOS 바로가기
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6 space-y-4">
+        {/* KOS 바로가기 */}
+        <div className="bg-white rounded-2xl border border-gray-100 p-5">
+          <p className="text-xs font-bold text-gray-500 mb-3">KOS 시스템 바로가기</p>
+          <div className="grid grid-cols-4 gap-2">
+            {KOS_SHORTCUTS.map(shortcut => (
+              <button
+                key={shortcut.label}
+                type="button"
+                onClick={() => setKosPopup(shortcut)}
+                className="flex flex-col items-center gap-1.5 p-3 rounded-xl bg-[#F6FAF6] hover:bg-[#E8F5E9] border border-gray-100 transition-colors"
+              >
+                <span className="text-xl">{shortcut.icon}</span>
+                <span className="text-[10px] text-gray-600 font-medium text-center leading-tight">{shortcut.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
         <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-gray-100 p-6 space-y-5">
           {/* 카테고리 선택 */}
           <div>
