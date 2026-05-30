@@ -1,106 +1,90 @@
-'use client';
+'use client'
 
-import { useState } from 'react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import Link from 'next/link'
 
-export default function LoginPage() {
-  const router = useRouter();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-
-  const onSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    if (!email || !password) {
-      setError('이메일과 비밀번호를 입력해주세요.');
-      return;
-    }
-    setLoading(true);
-    await new Promise((r) => setTimeout(r, 600));
-    router.push('/board');
-  };
-
+export default function LoginSelectPage() {
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 py-16 bg-gradient-to-br from-[#E8F5E9] to-white">
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-32 -right-32 w-96 h-96 rounded-full bg-[#2D6A4F]/10" />
-        <div className="absolute -bottom-32 -left-32 w-80 h-80 rounded-full bg-[#52B788]/15" />
+    <div className="min-h-screen bg-gradient-to-b from-[#F0F7F0] to-white flex flex-col items-center justify-center px-4 py-12">
+      {/* 배경 장식 */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden>
+        <div className="absolute -top-24 -right-24 w-80 h-80 rounded-full bg-[#2D6A4F]/8" />
+        <div className="absolute -bottom-24 -left-24 w-72 h-72 rounded-full bg-[#52B788]/10" />
       </div>
 
-      <div className="relative w-full max-w-md">
-        <div className="bg-white rounded-2xl shadow-xl p-8 sm:p-10">
-          <div className="text-center mb-8">
-            <Link href="/" className="inline-flex items-center justify-center w-14 h-14 bg-[#2D6A4F] rounded-2xl mb-4 shadow-lg shadow-green-900/20">
-              <span className="text-white font-bold text-2xl font-serif">K</span>
-            </Link>
-            <h1 className="font-serif font-bold text-xl text-[#1B4332] mb-1">
-              키즈밀에 오신 것을 환영합니다
-            </h1>
-            <p className="text-gray-500 text-sm">학부모 · 고객사 · 관리자 통합 로그인</p>
+      <div className="relative w-full max-w-sm">
+        {/* 로고 */}
+        <div className="text-center mb-10">
+          <Link href="/" className="inline-block">
+            <div className="w-16 h-16 bg-gradient-to-br from-[#2D6A4F] to-[#52B788] rounded-2xl flex items-center justify-center text-white font-bold text-2xl shadow-lg shadow-green-900/20 mx-auto">
+              K
+            </div>
+          </Link>
+          <h1 className="mt-4 text-2xl font-bold text-[#1C2B1E]">키즈밀</h1>
+          <p className="mt-1.5 text-gray-500 text-sm">어떤 분이세요?</p>
+        </div>
+
+        {/* 카드 영역 */}
+        <div className="space-y-4">
+          {/* 학부모 카드 */}
+          <div className="bg-white rounded-3xl border border-[#D1EAD8] p-6 shadow-sm">
+            <div className="flex items-start gap-4 mb-5">
+              <div className="w-12 h-12 rounded-2xl bg-[#E8F5E9] flex items-center justify-center text-2xl flex-shrink-0">
+                👨‍👩‍👧
+              </div>
+              <div>
+                <h2 className="font-bold text-[#1C2B1E] text-base">학부모님</h2>
+                <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">
+                  아이 급식사진 · 식단표 · 레시피
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2.5">
+              <Link
+                href="/parent/login"
+                className="flex-1 bg-[#2D6A4F] hover:bg-[#1B4332] text-white font-semibold py-3 rounded-xl text-sm text-center transition-colors"
+              >
+                로그인
+              </Link>
+              <Link
+                href="/parent/register"
+                className="flex-1 bg-[#E8F5E9] hover:bg-[#D1EAD8] text-[#2D6A4F] font-semibold py-3 rounded-xl text-sm text-center transition-colors"
+              >
+                회원가입
+              </Link>
+            </div>
           </div>
 
-          <div className="h-px bg-[#E8F5E9] mb-6" />
-
-          <form onSubmit={onSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">이메일</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="example@email.com"
-                className="w-full border border-gray-200 rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#2D6A4F] focus:border-[#2D6A4F] transition-all"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">비밀번호</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                className="w-full border border-gray-200 rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#2D6A4F] focus:border-[#2D6A4F] transition-all"
-              />
-            </div>
-
-            {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">
-                {error}
+          {/* 원 담당자 카드 */}
+          <div className="bg-white rounded-3xl border border-gray-100 p-6 shadow-sm">
+            <div className="flex items-start gap-4 mb-5">
+              <div className="w-12 h-12 rounded-2xl bg-orange-50 flex items-center justify-center text-2xl flex-shrink-0">
+                🏫
               </div>
-            )}
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-[#2D6A4F] hover:bg-[#1B4332] disabled:bg-gray-300 text-white py-3 rounded-xl font-semibold transition"
+              <div>
+                <h2 className="font-bold text-[#1C2B1E] text-base">원 담당자</h2>
+                <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">
+                  1:1 소통채널 · 문의 · 관리
+                </p>
+              </div>
+            </div>
+            <Link
+              href="/board/login"
+              className="block w-full bg-[#F97316] hover:bg-[#EA6C0A] text-white font-semibold py-3 rounded-xl text-sm text-center transition-colors"
             >
-              {loading ? '로그인 중…' : '로그인'}
-            </button>
-          </form>
-
-          <p className="text-xs text-gray-400 text-center mt-4">
-            데모용 — 이메일·비밀번호 입력 후 로그인
-          </p>
-
-          <div className="mt-6 text-center text-sm">
-            <p className="text-gray-500">
-              계정이 없으신가요?{' '}
-              <Link href="/contact" className="text-[#2D6A4F] font-semibold hover:underline">
-                담당자에게 문의하기
-              </Link>
+              로그인
+            </Link>
+            <p className="text-center text-xs text-gray-400 mt-3">
+              초대 링크로만 가입이 가능합니다
             </p>
           </div>
         </div>
 
-        <div className="text-center mt-6">
-          <Link href="/" className="text-[#2D6A4F]/70 text-sm hover:text-[#2D6A4F] transition-colors">
-            ← 홈으로
+        <div className="mt-6 text-center">
+          <Link href="/" className="text-xs text-gray-400 hover:text-[#2D6A4F] transition-colors">
+            ← 홈으로 돌아가기
           </Link>
         </div>
       </div>
     </div>
-  );
+  )
 }

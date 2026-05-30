@@ -1,16 +1,28 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
+
+const SAVE_EMAIL_KEY = 'board_saved_email'
 
 export default function BoardLoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [saveEmail, setSaveEmail] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [failCount, setFailCount] = useState(0)
   const router = useRouter()
+
+  useEffect(() => {
+    const saved = localStorage.getItem(SAVE_EMAIL_KEY)
+    if (saved) {
+      setEmail(saved)
+      setSaveEmail(true)
+    }
+  }, [])
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
@@ -18,6 +30,13 @@ export default function BoardLoginPage() {
       setError('로그인 시도가 5회 초과되었습니다. 잠시 후 다시 시도해주세요.')
       return
     }
+
+    if (saveEmail) {
+      localStorage.setItem(SAVE_EMAIL_KEY, email)
+    } else {
+      localStorage.removeItem(SAVE_EMAIL_KEY)
+    }
+
     setLoading(true)
     setError('')
 
@@ -42,7 +61,6 @@ export default function BoardLoginPage() {
         return
       }
 
-      // Check if admin
       const { data: adminData } = await supabase
         .from('admins')
         .select('id')
@@ -55,7 +73,6 @@ export default function BoardLoginPage() {
         return
       }
 
-      // Check branch master account
       const { data: branchData } = await supabase
         .from('branches')
         .select('id')
@@ -68,7 +85,6 @@ export default function BoardLoginPage() {
         return
       }
 
-      // Check branch member (nutritionist gets their own dashboard)
       const { data: memberData } = await supabase
         .from('branch_members')
         .select('id, role')
@@ -96,16 +112,16 @@ export default function BoardLoginPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#F6FAF6] to-[#E8F5E9] flex items-center justify-center px-4 font-sans">
       <div className="w-full max-w-sm">
-        {/* 로고 */}
         <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-gradient-to-br from-[#2D6A4F] to-[#52B788] rounded-2xl flex items-center justify-center text-white font-bold text-2xl mx-auto mb-4 shadow-lg">
-            K
-          </div>
+          <Link href="/login">
+            <div className="w-16 h-16 bg-gradient-to-br from-[#2D6A4F] to-[#52B788] rounded-2xl flex items-center justify-center text-white font-bold text-2xl mx-auto mb-4 shadow-lg">
+              K
+            </div>
+          </Link>
           <h1 className="text-2xl font-bold text-[#1C2B1E]">키즈밀 소통채널</h1>
           <p className="text-sm text-gray-500 mt-1.5">가맹점 1:1 문의 게시판</p>
         </div>
 
-        {/* 로그인 폼 */}
         <form onSubmit={handleLogin} className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">이메일</label>
@@ -118,6 +134,18 @@ export default function BoardLoginPage() {
               autoComplete="email"
               className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#2D6A4F] focus:border-transparent transition-shadow"
             />
+            <label className="flex items-center gap-2 mt-2 cursor-pointer w-fit">
+              <input
+                type="checkbox"
+                checked={saveEmail}
+                onChange={e => {
+                  setSaveEmail(e.target.checked)
+                  if (!e.target.checked) localStorage.removeItem(SAVE_EMAIL_KEY)
+                }}
+                className="w-3.5 h-3.5 rounded accent-[#2D6A4F]"
+              />
+              <span className="text-xs text-gray-500">아이디 저장</span>
+            </label>
           </div>
 
           <div>
@@ -163,9 +191,15 @@ export default function BoardLoginPage() {
           </div>
         </form>
 
-        <p className="text-center text-xs text-gray-400 mt-6">
+        <p className="text-center text-xs text-gray-400 mt-5">
           초대 링크로만 가입이 가능합니다.
         </p>
+
+        <div className="mt-4 text-center">
+          <Link href="/login" className="text-xs text-gray-400 hover:text-[#2D6A4F] transition-colors">
+            ← 로그인 선택으로
+          </Link>
+        </div>
       </div>
     </div>
   )
