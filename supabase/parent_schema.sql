@@ -80,7 +80,7 @@ ALTER TABLE contents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE parent_notifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE push_subscriptions ENABLE ROW LEVEL SECURITY;
 
--- parents: 본인 레코드만 읽기/수정, 관리자 전체 접근
+-- parents: 본인 레코드 읽기/수정
 CREATE POLICY "parents_select_own" ON parents
   FOR SELECT USING (auth_id = auth.uid());
 
@@ -89,6 +89,17 @@ CREATE POLICY "parents_insert_own" ON parents
 
 CREATE POLICY "parents_update_own" ON parents
   FOR UPDATE USING (auth_id = auth.uid());
+
+-- parents: 어드민 전체 조회 + 상태 변경
+CREATE POLICY "parents_select_admin" ON parents
+  FOR SELECT USING (
+    EXISTS (SELECT 1 FROM admins WHERE auth_id = auth.uid())
+  );
+
+CREATE POLICY "parents_update_admin" ON parents
+  FOR UPDATE USING (
+    EXISTS (SELECT 1 FROM admins WHERE auth_id = auth.uid())
+  );
 
 -- children: 본인 자녀만 접근
 CREATE POLICY "children_select_own" ON children
@@ -104,6 +115,12 @@ CREATE POLICY "children_insert_own" ON children
 CREATE POLICY "children_update_own" ON children
   FOR UPDATE USING (
     parent_id IN (SELECT id FROM parents WHERE auth_id = auth.uid())
+  );
+
+-- children: 어드민 전체 조회
+CREATE POLICY "children_select_admin" ON children
+  FOR SELECT USING (
+    EXISTS (SELECT 1 FROM admins WHERE auth_id = auth.uid())
   );
 
 -- contents: 가맹점 소속 학부모만 읽기
