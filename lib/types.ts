@@ -208,11 +208,14 @@ export interface ReplyTemplate {
 
 export interface Notification {
   id: string
-  recipient_auth_id: string
+  recipient_auth_id?: string
+  recipient_type?: string
+  recipient_id?: string
   inquiry_id?: string
   type: string
   title: string
-  body: string
+  body?: string
+  content?: string
   is_read: boolean
   created_at: string
 }

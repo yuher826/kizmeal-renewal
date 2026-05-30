@@ -24,6 +24,7 @@ export default function NewInquiryPage() {
   const [files, setFiles] = useState<File[]>([])
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
+  const [toast, setToast] = useState('')
 
   const handleFormChange = useCallback((key: string, value: unknown) => {
     setFormData(prev => ({ ...prev, [key]: value }))
@@ -123,7 +124,8 @@ export default function NewInquiryPage() {
         }
       }
 
-      router.push(`/board/inquiries/${inquiry.id}`)
+      setToast('문의가 접수되었습니다! 🎉')
+      setTimeout(() => router.push(`/board/inquiries/${inquiry.id}`), 1200)
     } catch (err) {
       setError(err instanceof Error ? err.message : '문의 등록에 실패했습니다.')
       setSubmitting(false)
@@ -132,6 +134,12 @@ export default function NewInquiryPage() {
 
   return (
     <div className="min-h-screen bg-[#F6FAF6] font-sans">
+      {/* 토스트 */}
+      {toast && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-[#2D6A4F] text-white px-6 py-3 rounded-2xl shadow-lg text-sm font-semibold animate-fade-in">
+          {toast}
+        </div>
+      )}
       <header className="bg-white border-b border-gray-100 px-4 sm:px-6 py-4 flex items-center gap-3 sticky top-0 z-10">
         <Link href="/board/inquiries" className="text-gray-400 hover:text-gray-600">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

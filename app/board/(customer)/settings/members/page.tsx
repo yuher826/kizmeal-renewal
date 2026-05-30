@@ -53,7 +53,9 @@ export default function CustomerMembersPage() {
     const { error } = await supabase.from('branch_invitations').insert({
       branch_id: branchId,
       email: inviteEmail.trim(),
-      invited_by: branchId,
+      token: crypto.randomUUID(),
+      role: 'staff',
+      created_by: branchId,
       expires_at: expiresAt.toISOString(),
     })
 

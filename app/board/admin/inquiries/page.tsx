@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import type { Inquiry, InquiryStatus, InquiryCategory, SlaRule, Admin } from '@/lib/types'
 import {
@@ -22,6 +23,9 @@ function timeAgo(iso: string) {
 }
 
 export default function AdminInquiriesPage() {
+  const searchParams = useSearchParams()
+  const branchFilter = searchParams.get('branch') || ''
+
   const [inquiries, setInquiries] = useState<Inquiry[]>([])
   const [admins, setAdmins] = useState<Admin[]>([])
   const [slaRules, setSlaRules] = useState<Record<string, SlaRule>>({})
@@ -72,6 +76,7 @@ export default function AdminInquiriesPage() {
   // Filtered + sorted list
   const filtered = inquiries
     .filter(i => {
+      if (branchFilter && i.branch_id !== branchFilter) return false
       if (filterStatus && i.status !== filterStatus) return false
       if (filterCategory && i.category !== filterCategory) return false
       if (filterAdmin && i.assigned_admin_id !== filterAdmin) return false
