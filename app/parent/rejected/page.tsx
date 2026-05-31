@@ -31,7 +31,7 @@ export default function ParentRejectedPage() {
         <h1 className="text-xl font-bold text-[#1C2B1E] mb-2">가입 신청이 거절되었습니다</h1>
         <p className="text-sm text-gray-500 leading-relaxed mb-6">
           가입 신청이 승인되지 않았습니다.<br />
-          문의사항은 해당 원에 직접 연락해주세요.
+          문의사항은 키즈밀 담당자에게 직접 연락해주세요.
         </p>
 
         {reason && (
