@@ -15,6 +15,18 @@ export default function AdminParentsPage() {
   const [loading, setLoading] = useState(true)
   const [rejectReason, setRejectReason] = useState('')
   const [rejectTarget, setRejectTarget] = useState<string | null>(null)
+  const [toast, setToast] = useState('')
+
+  function showToast(msg: string) {
+    setToast(msg)
+    setTimeout(() => setToast(''), 3500)
+  }
+
+  async function getToken(): Promise<string | null> {
+    const supabase = createClient()
+    const { data } = await supabase.auth.getSession()
+    return data.session?.access_token ?? null
+  }
 
   useEffect(() => { load() }, [])
 
@@ -50,6 +62,27 @@ export default function AdminParentsPage() {
     setParents(prev => prev.map(p =>
       p.id === parentId ? { ...p, status: 'approved' as const } : p
     ))
+
+    const parent = parents.find(p => p.id === parentId)
+    if (parent) {
+      const token = await getToken()
+      const firstChild = parent.children[0]
+      const res = await fetch('/api/send-approval-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          type: 'approved',
+          parentEmail: parent.email,
+          parentName: parent.name,
+          childName: firstChild?.name_ko ?? '',
+        }),
+      })
+      if (res.ok) {
+        showToast('승인 완료! 이메일 발송됐습니다 ✉️')
+      } else {
+        showToast('승인 완료, 이메일 발송 실패')
+      }
+    }
   }
 
   async function reject(parentId: string) {
@@ -59,11 +92,32 @@ export default function AdminParentsPage() {
       rejected_reason: rejectReason.trim() || null,
     }).eq('id', parentId)
 
+    const parent = parents.find(p => p.id === parentId)
     setParents(prev => prev.map(p =>
       p.id === parentId ? { ...p, status: 'rejected' as const, rejected_reason: rejectReason } : p
     ))
     setRejectTarget(null)
     setRejectReason('')
+
+    if (parent) {
+      const token = await getToken()
+      const res = await fetch('/api/send-approval-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          type: 'rejected',
+          parentEmail: parent.email,
+          parentName: parent.name,
+          childName: parent.children[0]?.name_ko ?? '',
+          reason: rejectReason.trim() || undefined,
+        }),
+      })
+      if (res.ok) {
+        showToast('거절 처리 완료, 이메일 발송됐습니다 ✉️')
+      } else {
+        showToast('거절 완료, 이메일 발송 실패')
+      }
+    }
   }
 
   const filtered = filter === 'all' ? parents : parents.filter(p => p.status === filter)
@@ -87,6 +141,11 @@ export default function AdminParentsPage() {
 
   return (
     <div className="min-h-screen bg-[#F6FAF6]">
+      {toast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-[#1C2B1E] text-white text-sm font-medium px-5 py-3 rounded-2xl shadow-xl animate-fade-in whitespace-nowrap">
+          {toast}
+        </div>
+      )}
       <header className="bg-white border-b border-gray-100 px-4 sm:px-6 py-4 flex items-center gap-3 sticky top-0 z-10">
         <Link href="/board/admin" className="text-gray-400 hover:text-gray-600">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

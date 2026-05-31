@@ -99,6 +99,18 @@ export default function ParentRegisterPage() {
 
     await supabase.from('children').insert(childRows)
 
+    const firstChild = validChildren[0]
+    const selectedBranch = branches.find(b => b.id === firstChild.branch_id)
+    fetch('/api/notify-admin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        parentName: name,
+        childName: firstChild.name_ko.trim(),
+        branchName: selectedBranch?.name ?? firstChild.branch_id,
+      }),
+    }).catch(() => {})
+
     router.replace('/parent/pending')
   }
 
