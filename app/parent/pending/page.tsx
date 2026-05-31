@@ -18,7 +18,7 @@ export default function ParentPendingPage() {
         <h1 className="text-xl font-bold text-[#1C2B1E] mb-2">승인 대기 중</h1>
         <p className="text-sm text-gray-500 leading-relaxed mb-8">
           회원가입 신청이 완료되었습니다.<br />
-          원장님의 승인 후 서비스를 이용하실 수 있습니다.<br />
+          키즈밀 담당자 확인 후 서비스를 이용하실 수 있습니다.<br />
           승인 완료 시 이메일로 안내해 드립니다.
         </p>
 
@@ -26,7 +26,7 @@ export default function ParentPendingPage() {
           <p className="text-xs font-bold text-gray-500">승인 절차 안내</p>
           {[
             '회원가입 신청 완료 ✅',
-            '원장님 검토 (1~3 영업일)',
+            '키즈밀 담당자 확인 (1~3 영업일)',
             '승인 완료 후 이메일 발송',
             '서비스 이용 시작',
           ].map((step, i) => (
