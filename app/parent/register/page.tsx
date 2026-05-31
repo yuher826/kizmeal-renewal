@@ -262,7 +262,7 @@ export default function ParentRegisterPage() {
           </button>
 
           <p className="text-center text-xs text-gray-400">
-            가입 신청 후 원장님 승인을 통해 서비스를 이용하실 수 있습니다.
+            가입 신청 후 키즈밀 담당자 확인을 통해 서비스를 이용하실 수 있습니다.
           </p>
 
           <p className="text-center text-sm">
