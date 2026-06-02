@@ -18,11 +18,21 @@ export default function BoardLoginPage() {
 
   useEffect(() => {
     const saved = localStorage.getItem(SAVE_EMAIL_KEY)
-    if (saved) {
-      setEmail(saved)
-      setSaveEmail(true)
-    }
-  }, [])
+    if (saved) { setEmail(saved); setSaveEmail(true) }
+
+    // 이미 로그인된 경우 역할에 따라 자동 리다이렉트
+    const supabase = createClient()
+    supabase.auth.getSession().then(async ({ data }) => {
+      if (!data.session) return
+      const uid = data.session.user.id
+      const { data: adminRow } = await supabase.from('admins').select('id').eq('auth_id', uid).maybeSingle()
+      if (adminRow) { router.replace('/board/admin'); return }
+      const { data: branchRow } = await supabase.from('branches').select('id').eq('auth_id', uid).maybeSingle()
+      if (branchRow) { router.replace('/board/dashboard'); return }
+      const { data: memberRow } = await supabase.from('branch_members').select('id').eq('auth_id', uid).maybeSingle()
+      if (memberRow) { router.replace('/board/dashboard'); return }
+    })
+  }, [router])
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()

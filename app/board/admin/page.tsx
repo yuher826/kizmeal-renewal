@@ -164,13 +164,13 @@ export default function AdminDashboard() {
   return (
     <div className="min-h-screen bg-[#F0F4F0] font-sans">
       <header className="bg-white border-b border-gray-100 px-6 py-4 flex items-center justify-between sticky top-0 z-10">
-        <div className="flex items-center gap-3">
+        <Link href="/board/admin" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
           <div className="w-8 h-8 bg-gradient-to-br from-[#2D6A4F] to-[#52B788] rounded-xl flex items-center justify-center text-white font-bold">K</div>
           <div>
             <h1 className="font-bold text-[#1C2B1E] text-sm">소통채널 관리자</h1>
             <p className="text-gray-400 text-xs">{adminName || '관리자'} · 대시보드</p>
           </div>
-        </div>
+        </Link>
         <div className="flex items-center gap-3">
           <Link href="/board/admin/inquiries" className="text-sm text-[#2D6A4F] font-medium hover:underline">문의 관리</Link>
           <Link href="/board/admin/branches" className="text-sm text-[#2D6A4F] font-medium hover:underline">가맹점 관리</Link>
@@ -196,14 +196,22 @@ export default function AdminDashboard() {
             ))
           ) : (
             <>
-              <StatsCard icon="📬" label="오늘 신규 문의" value={`${stats.today}건`}
-                sub={stats.today > 0 ? '빠른 응답이 필요합니다' : '오늘은 조용합니다'} />
-              <StatsCard icon="⚡" label="미처리 건수" value={`${stats.pending}건`}
-                sub="즉시 처리 필요" highlight={stats.pending > 0} />
-              <StatsCard icon="⏱️" label="평균 응답 시간" value={avgResponse}
-                sub="최근 7일 평균" />
-              <StatsCard icon="✅" label="오늘 처리 완료" value={`${stats.todayResolved}건`}
-                sub={`이번 달 총 ${monthTotal}건`} />
+              <Link href="/board/admin/inquiries" className="block">
+                <StatsCard icon="📬" label="오늘 신규 문의" value={`${stats.today}건`}
+                  sub={stats.today > 0 ? '빠른 응답이 필요합니다' : '오늘은 조용합니다'} />
+              </Link>
+              <Link href="/board/admin/inquiries" className="block">
+                <StatsCard icon="⚡" label="미처리 건수" value={`${stats.pending}건`}
+                  sub="즉시 처리 필요" highlight={stats.pending > 0} />
+              </Link>
+              <Link href="/board/admin/inquiries" className="block">
+                <StatsCard icon="⏱️" label="평균 응답 시간" value={avgResponse}
+                  sub="최근 7일 평균" />
+              </Link>
+              <Link href="/board/admin/inquiries" className="block">
+                <StatsCard icon="✅" label="오늘 처리 완료" value={`${stats.todayResolved}건`}
+                  sub={`이번 달 총 ${monthTotal}건`} />
+              </Link>
             </>
           )}
         </div>

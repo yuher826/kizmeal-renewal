@@ -26,12 +26,20 @@ export default function CustomerInquiryDetailPage({ params }: { params: { id: st
   const [sending, setSending] = useState(false)
   const [showAttach, setShowAttach] = useState(false)
   const [loading, setLoading] = useState(true)
-  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const [toast, setToast] = useState('')
+  const messagesContainerRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   const scrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight
+    }
   }, [])
+
+  function showToast(msg: string) {
+    setToast(msg)
+    setTimeout(() => setToast(''), 3000)
+  }
 
   useEffect(() => {
     const supabase = createClient()
@@ -45,8 +53,6 @@ export default function CustomerInquiryDetailPage({ params }: { params: { id: st
 
       if (inq) {
         setInquiry(inq as unknown as Inquiry)
-
-        // Load SLA rule
         const { data: rule } = await supabase
           .from('sla_rules')
           .select('*')
@@ -64,13 +70,9 @@ export default function CustomerInquiryDetailPage({ params }: { params: { id: st
 
       if (msgs) setMessages(msgs as unknown as Message[])
 
-      // Mark branch unread as 0
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
-        await supabase
-          .from('inquiries')
-          .update({ unread_count_branch: 0 })
-          .eq('id', id)
+        await supabase.from('inquiries').update({ unread_count_branch: 0 }).eq('id', id)
       }
 
       setLoading(false)
@@ -78,7 +80,6 @@ export default function CustomerInquiryDetailPage({ params }: { params: { id: st
 
     load()
 
-    // Realtime subscription
     const channel = supabase
       .channel(`chat-${id}`)
       .on('postgres_changes', {
@@ -86,13 +87,16 @@ export default function CustomerInquiryDetailPage({ params }: { params: { id: st
         schema: 'public',
         table: 'messages',
         filter: `inquiry_id=eq.${id}`,
-      }, (payload) => {
+      }, async (payload) => {
         const newMsg = payload.new as Message
-        if (!newMsg.is_internal) {
-          setMessages(prev => {
-            if (prev.find(m => m.id === newMsg.id)) return prev
-            return [...prev, newMsg]
-          })
+        if (newMsg.is_internal) return
+        const { data: full } = await supabase
+          .from('messages')
+          .select('*, message_attachments(*)')
+          .eq('id', newMsg.id)
+          .single()
+        if (full) {
+          setMessages(prev => prev.find(m => m.id === full.id) ? prev : [...prev, full as unknown as Message])
         }
       })
       .on('postgres_changes', {
@@ -110,7 +114,6 @@ export default function CustomerInquiryDetailPage({ params }: { params: { id: st
 
   useEffect(() => { scrollToBottom() }, [messages, scrollToBottom])
 
-  // Auto-resize textarea
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto'
@@ -125,50 +128,61 @@ export default function CustomerInquiryDetailPage({ params }: { params: { id: st
 
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+    if (!user) { setSending(false); return }
 
     try {
-      const { data: msg } = await supabase
+      // 1. 파일 먼저 업로드
+      const uploaded: { path: string; name: string; size: number; type: string }[] = []
+      for (const file of files) {
+        const storagePath = `${id}/${Date.now()}_${file.name}`
+        const { data: up, error: upErr } = await supabase.storage
+          .from('kizmeal-files')
+          .upload(storagePath, file, { upsert: true })
+        if (upErr) throw new Error(`파일 업로드 실패: ${file.name}`)
+        if (up) uploaded.push({ path: up.path, name: file.name, size: file.size, type: file.type })
+      }
+
+      // 2. 메시지 INSERT
+      const msgContent = content.trim() || (uploaded.length > 0 ? `[파일 ${uploaded.length}개 첨부]` : '')
+      const { data: msg, error: msgErr } = await supabase
         .from('messages')
         .insert({
           inquiry_id: id,
           sender_id: user.id,
           sender_type: 'branch',
-          content: content.trim() || '(파일 첨부)',
+          content: msgContent,
           is_internal: false,
         })
         .select()
         .single()
+      if (msgErr) throw msgErr
 
-      if (msg && files.length > 0) {
-        const branchId = inquiry?.branch_id
-        for (const file of files) {
-          const path = `${branchId}/${id}/${msg.id}/${file.name}`
-          const { data: uploaded } = await supabase.storage
-            .from('kizmeal-files')
-            .upload(path, file, { upsert: true })
-
-          if (uploaded) {
-            await supabase.from('message_attachments').insert({
-              message_id: msg.id,
-              file_name: file.name,
-              file_size: file.size,
-              file_type: file.type,
-              storage_path: uploaded.path,
-            })
-          }
-        }
+      // 3. 첨부파일 메타데이터 INSERT
+      for (const f of uploaded) {
+        await supabase.from('message_attachments').insert({
+          message_id: msg.id,
+          file_name: f.name,
+          file_size: f.size,
+          file_type: f.type,
+          storage_path: f.path,
+        })
       }
 
-      // Update inquiry last_message_at
-      await supabase
-        .from('inquiries')
-        .update({ last_message_at: new Date().toISOString(), unread_count_admin: (inquiry?.unread_count_admin ?? 0) + 1 })
-        .eq('id', id)
+      // 4. 문의 업데이트
+      await supabase.from('inquiries').update({
+        last_message_at: new Date().toISOString(),
+        unread_count_admin: (inquiry?.unread_count_admin ?? 0) + 1,
+      }).eq('id', id)
 
       setContent('')
       setFiles([])
       setShowAttach(false)
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message
+        : typeof err === 'object' && err !== null && 'message' in err
+        ? (err as { message: string }).message
+        : '전송에 실패했습니다.'
+      showToast(errMsg)
     } finally {
       setSending(false)
     }
@@ -188,6 +202,12 @@ export default function CustomerInquiryDetailPage({ params }: { params: { id: st
 
   return (
     <div className="h-screen flex flex-col bg-[#F6FAF6] font-sans">
+      {toast && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-red-500 text-white px-5 py-2.5 rounded-xl shadow-lg text-sm font-medium whitespace-nowrap">
+          {toast}
+        </div>
+      )}
+
       {/* 헤더 */}
       <header className="bg-white border-b border-gray-100 px-4 sm:px-6 py-3 flex-shrink-0">
         <div className="flex items-center gap-3">
@@ -208,9 +228,7 @@ export default function CustomerInquiryDetailPage({ params }: { params: { id: st
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
             {inquiry && <StatusBadge status={inquiry.status} />}
-            {inquiry && slaRule && (
-              <SlaBadge inquiry={inquiry} rule={slaRule} />
-            )}
+            {inquiry && slaRule && <SlaBadge inquiry={inquiry} rule={slaRule} />}
           </div>
         </div>
 
@@ -221,11 +239,9 @@ export default function CustomerInquiryDetailPage({ params }: { params: { id: st
               <div key={step.key} className={`flex items-center ${i < STATUS_STEPS.length - 1 ? 'flex-1' : ''}`}>
                 <div className="flex flex-col items-center">
                   <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                    i < stepIndex
-                      ? 'bg-[#2D6A4F] text-white'
-                      : i === stepIndex
-                        ? 'bg-[#2D6A4F] text-white ring-2 ring-[#B7E4C7]'
-                        : 'bg-gray-200 text-gray-400'
+                    i < stepIndex ? 'bg-[#2D6A4F] text-white'
+                    : i === stepIndex ? 'bg-[#2D6A4F] text-white ring-2 ring-[#B7E4C7]'
+                    : 'bg-gray-200 text-gray-400'
                   }`}>
                     {i < stepIndex ? '✓' : i + 1}
                   </div>
@@ -243,7 +259,7 @@ export default function CustomerInquiryDetailPage({ params }: { params: { id: st
       </header>
 
       {/* 메시지 영역 */}
-      <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4">
+      <div ref={messagesContainerRef} className="flex-1 overflow-y-auto px-4 sm:px-6 py-4">
         {loading ? (
           <div className="flex justify-center py-8">
             <span className="w-6 h-6 border-2 border-[#2D6A4F]/30 border-t-[#2D6A4F] rounded-full animate-spin" />
@@ -268,7 +284,6 @@ export default function CustomerInquiryDetailPage({ params }: { params: { id: st
                 adminName={inquiry?.admins?.name || '키즈밀'}
               />
             ))}
-            <div ref={messagesEndRef} />
           </>
         )}
       </div>

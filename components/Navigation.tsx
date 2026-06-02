@@ -54,7 +54,7 @@ const NAV: NavItem[] = [
     label: '고객지원',
     matchPrefixes: ['/notice'],
     dropdown: [
-      { icon: '💬', label: '1:1 문의', href: '/login' },
+      { icon: '💬', label: '1:1 문의', href: '/board/login' },
       { icon: '📢', label: '공지사항', href: '/notice' },
     ],
   },
@@ -76,6 +76,7 @@ export default function Navigation() {
   const [mobileExpanded, setMobileExpanded] = useState<string | null>(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [parentName, setParentName] = useState('');
+  const [dashboardUrl, setDashboardUrl] = useState('/parent/dashboard');
   const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const navRef = useRef<HTMLDivElement>(null);
   const isHome = pathname === '/';
@@ -90,21 +91,30 @@ export default function Navigation() {
   useEffect(() => {
     const supabase = createClient();
 
+    async function resolveUser(userId: string, email?: string) {
+      const { data: admin } = await supabase.from('admins').select('name').eq('auth_id', userId).maybeSingle();
+      if (admin) {
+        setParentName(admin.name || email?.split('@')[0] || '');
+        setDashboardUrl('/board/admin');
+        return;
+      }
+      const { data: parent } = await supabase.from('parents').select('name').eq('auth_id', userId).maybeSingle();
+      setParentName(parent?.name || email?.split('@')[0] || '');
+      setDashboardUrl('/parent/dashboard');
+    }
+
     supabase.auth.getSession().then(({ data }) => {
       setIsLoggedIn(!!data.session);
-      if (data.session) {
-        supabase.from('parents').select('name').eq('auth_id', data.session.user.id).maybeSingle()
-          .then(({ data: p }) => setParentName(p?.name || data.session!.user.email?.split('@')[0] || ''));
-      }
+      if (data.session) resolveUser(data.session.user.id, data.session.user.email ?? undefined);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setIsLoggedIn(!!session);
       if (session) {
-        supabase.from('parents').select('name').eq('auth_id', session.user.id).maybeSingle()
-          .then(({ data: p }) => setParentName(p?.name || session.user.email?.split('@')[0] || ''));
+        resolveUser(session.user.id, session.user.email ?? undefined);
       } else {
         setParentName('');
+        setDashboardUrl('/parent/dashboard');
       }
     });
 
@@ -244,7 +254,7 @@ export default function Navigation() {
           {isLoggedIn && (
             <div className="hidden lg:flex items-center gap-3">
               <Link
-                href="/parent/dashboard"
+                href={dashboardUrl}
                 className={`text-sm font-semibold hover:opacity-80 transition-opacity ${!solidBg ? 'text-white' : 'text-[#2D6A4F]'}`}
               >
                 {parentName} 님 👋
@@ -358,7 +368,7 @@ export default function Navigation() {
           {isLoggedIn && (
             <div className="mt-4 border-t border-gray-100 pt-4 space-y-1">
               <Link
-                href="/parent/dashboard"
+                href={dashboardUrl}
                 className={`block text-center font-semibold py-3 ${isHome ? 'text-white' : 'text-[#2D6A4F]'}`}
                 onClick={() => setIsMobileOpen(false)}
               >

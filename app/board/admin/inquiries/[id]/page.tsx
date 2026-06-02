@@ -34,6 +34,7 @@ export default function AdminInquiryDetailPage({ params }: { params: { id: strin
   const [files, setFiles] = useState<File[]>([])
   const [showAttach, setShowAttach] = useState(false)
   const [sending, setSending] = useState(false)
+  const [toast, setToast] = useState('')
 
   const [generatingAi, setGeneratingAi] = useState(false)
   const [showPhoneLog, setShowPhoneLog] = useState(false)
@@ -92,11 +93,16 @@ export default function AdminInquiryDetailPage({ params }: { params: { id: strin
       .on('postgres_changes', {
         event: 'INSERT', schema: 'public', table: 'messages',
         filter: `inquiry_id=eq.${id}`,
-      }, (payload) => {
-        setMessages(prev => {
-          if (prev.find(m => m.id === (payload.new as Message).id)) return prev
-          return [...prev, payload.new as Message]
-        })
+      }, async (payload) => {
+        const newMsg = payload.new as Message
+        const { data: full } = await supabase
+          .from('messages')
+          .select('*, message_attachments(*)')
+          .eq('id', newMsg.id)
+          .single()
+        if (full) {
+          setMessages(prev => prev.find(m => m.id === full.id) ? prev : [...prev, full as unknown as Message])
+        }
       })
       .on('postgres_changes', {
         event: 'UPDATE', schema: 'public', table: 'inquiries',
@@ -118,6 +124,11 @@ export default function AdminInquiryDetailPage({ params }: { params: { id: strin
     }
   }, [content])
 
+  function showToast(msg: string) {
+    setToast(msg)
+    setTimeout(() => setToast(''), 3000)
+  }
+
   async function sendMessage() {
     if (!content.trim() && files.length === 0) return
     if (sending || !currentAdmin) return
@@ -125,41 +136,47 @@ export default function AdminInquiryDetailPage({ params }: { params: { id: strin
 
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+    if (!user) { setSending(false); return }
 
     try {
-      const { data: msg } = await supabase
+      // 1. 파일 먼저 업로드
+      const uploaded: { path: string; name: string; size: number; type: string }[] = []
+      for (const file of files) {
+        const storagePath = `${id}/${Date.now()}_${file.name}`
+        const { data: up, error: upErr } = await supabase.storage
+          .from('kizmeal-files')
+          .upload(storagePath, file, { upsert: true })
+        if (upErr) throw new Error(`파일 업로드 실패: ${file.name}`)
+        if (up) uploaded.push({ path: up.path, name: file.name, size: file.size, type: file.type })
+      }
+
+      // 2. 메시지 INSERT
+      const msgContent = content.trim() || (uploaded.length > 0 ? `[파일 ${uploaded.length}개 첨부]` : '')
+      const { data: msg, error: msgErr } = await supabase
         .from('messages')
         .insert({
           inquiry_id: id,
           sender_id: user.id,
           sender_type: 'admin',
-          content: content.trim() || '(파일 첨부)',
+          content: msgContent,
           is_internal: isInternal,
         })
         .select()
         .single()
+      if (msgErr) throw msgErr
 
-      if (msg && files.length > 0) {
-        for (const file of files) {
-          const path = `admin/${id}/${msg.id}/${file.name}`
-          const { data: uploaded } = await supabase.storage
-            .from('kizmeal-files')
-            .upload(path, file, { upsert: true })
-          if (uploaded) {
-            await supabase.from('message_attachments').insert({
-              message_id: msg.id,
-              file_name: file.name,
-              file_size: file.size,
-              file_type: file.type,
-              storage_path: uploaded.path,
-            })
-          }
-        }
+      // 3. 첨부파일 메타데이터 INSERT
+      for (const f of uploaded) {
+        await supabase.from('message_attachments').insert({
+          message_id: msg.id,
+          file_name: f.name,
+          file_size: f.size,
+          file_type: f.type,
+          storage_path: f.path,
+        })
       }
 
       if (!isInternal) {
-        // Update inquiry status to in_progress if pending
         const updates: Partial<Inquiry> = {
           last_message_at: new Date().toISOString(),
           unread_count_branch: (inquiry?.unread_count_branch ?? 0) + 1,
@@ -171,11 +188,16 @@ export default function AdminInquiryDetailPage({ params }: { params: { id: strin
         await supabase.from('inquiries').update(updates).eq('id', id)
       }
 
-      // Increment template usage if selected from template
       setContent('')
       setFiles([])
       setShowAttach(false)
       setIsInternal(false)
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message
+        : typeof err === 'object' && err !== null && 'message' in err
+        ? (err as { message: string }).message
+        : '전송에 실패했습니다.'
+      showToast(errMsg)
     } finally {
       setSending(false)
     }
@@ -268,6 +290,11 @@ export default function AdminInquiryDetailPage({ params }: { params: { id: strin
 
   return (
     <div className="h-screen flex bg-[#F6FAF6] font-sans overflow-hidden">
+      {toast && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-red-500 text-white px-5 py-2.5 rounded-xl shadow-lg text-sm font-medium whitespace-nowrap">
+          {toast}
+        </div>
+      )}
       {/* 좌측: 채팅 영역 (70%) */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* 채팅 헤더 */}
