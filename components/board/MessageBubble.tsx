@@ -31,27 +31,62 @@ function FileIcon({ type }: { type: string }) {
 
 const STORAGE_BASE = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/kizmeal-files`
 
-function AttachmentList({ attachments }: { attachments: MessageAttachment[] }) {
+const IMAGE_EXTS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'heic']
+
+function isImageAttachment(att: MessageAttachment) {
+  if (att.file_type?.toLowerCase().startsWith('image/')) return true
+  const ext = att.file_name.split('.').pop()?.toLowerCase() || ''
+  return IMAGE_EXTS.includes(ext)
+}
+
+function AttachmentList({ attachments, variant }: { attachments: MessageAttachment[]; variant: 'dark' | 'light' }) {
   if (!attachments?.length) return null
+
+  // 말풍선 배경에 따라 가독성 확보 (dark = 초록 말풍선, light = 흰 말풍선)
+  const fileBox = variant === 'dark'
+    ? 'bg-white/20 hover:bg-white/30 text-white'
+    : 'bg-[#F0F4F0] hover:bg-[#E8F5E9] text-gray-700 border border-gray-100'
+  const subColor = variant === 'dark' ? 'text-white/70' : 'text-gray-400'
+
   return (
-    <div className="mt-2 space-y-1">
-      {attachments.map((att) => (
-        <a
-          key={att.id}
-          href={`${STORAGE_BASE}/${att.storage_path}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          download={att.file_name}
-          className="flex items-center gap-2 bg-white/20 hover:bg-white/40 rounded-lg px-3 py-2 text-xs transition-colors cursor-pointer"
-        >
-          <FileIcon type={att.file_type} />
-          <span className="flex-1 truncate">{att.file_name}</span>
-          <span className="opacity-70">{formatFileSize(att.file_size)}</span>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="flex-shrink-0 opacity-70">
-            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />
-          </svg>
-        </a>
-      ))}
+    <div className="mt-2 space-y-1.5">
+      {attachments.map((att) => {
+        const url = `${STORAGE_BASE}/${att.storage_path}`
+
+        // 이미지 — 썸네일로 표시, 클릭 시 새 탭에서 열기
+        if (isImageAttachment(att)) {
+          return (
+            <a key={att.id} href={url} target="_blank" rel="noopener noreferrer" className="block">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={url}
+                alt={att.file_name}
+                loading="lazy"
+                className="max-w-[220px] max-h-[220px] w-auto rounded-xl border border-black/5 object-cover hover:opacity-90 transition-opacity"
+              />
+            </a>
+          )
+        }
+
+        // 일반 파일 — 아이콘 + 파일명 + 크기, 클릭 시 다운로드/새 탭
+        return (
+          <a
+            key={att.id}
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            download={att.file_name}
+            className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs transition-colors cursor-pointer ${fileBox}`}
+          >
+            <FileIcon type={att.file_type} />
+            <span className="flex-1 truncate">{att.file_name}</span>
+            <span className={subColor}>{formatFileSize(att.file_size)}</span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className={`flex-shrink-0 ${subColor}`}>
+              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />
+            </svg>
+          </a>
+        )
+      })}
     </div>
   )
 }
@@ -95,7 +130,7 @@ export default function MessageBubble({ message, branchName, adminName }: Props)
         <div className="max-w-[75%]">
           <div className="bg-[#2D6A4F] text-white rounded-2xl rounded-tr-sm px-4 py-3 shadow-sm">
             <p className="text-sm whitespace-pre-wrap leading-relaxed">{content}</p>
-            <AttachmentList attachments={message_attachments || []} />
+            <AttachmentList attachments={message_attachments || []} variant="dark" />
           </div>
           <div className="text-right mt-1">
             <span className="text-xs text-gray-400">
@@ -116,7 +151,7 @@ export default function MessageBubble({ message, branchName, adminName }: Props)
       <div className="max-w-[75%]">
         <div className="bg-white rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm border border-gray-100">
           <p className="text-sm whitespace-pre-wrap leading-relaxed text-gray-800">{content}</p>
-          <AttachmentList attachments={message_attachments || []} />
+          <AttachmentList attachments={message_attachments || []} variant="light" />
         </div>
         <div className="mt-1">
           <span className="text-xs text-gray-400">
