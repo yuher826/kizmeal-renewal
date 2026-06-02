@@ -246,12 +246,20 @@ export default function Navigation() {
 
         <div className="flex items-center gap-3 flex-shrink-0">
           {!isLoggedIn && (
-            <Link
-              href="/login"
-              className="hidden lg:inline-flex items-center gap-2 bg-[#F4A261] hover:bg-[#e8935a] text-white text-sm font-semibold px-5 py-2 rounded-xl transition-colors"
-            >
-              로그인
-            </Link>
+            <>
+              <Link
+                href="/parent/login"
+                className="hidden lg:inline-flex border border-[#2D6A4F] text-[#2D6A4F] bg-transparent hover:bg-[#2D6A4F] hover:text-white rounded-full px-4 py-2 text-sm font-medium transition-colors"
+              >
+                학부모 포털
+              </Link>
+              <Link
+                href="/board/login"
+                className="hidden lg:inline-flex bg-[#2D6A4F] text-white hover:bg-[#1B4332] rounded-full px-4 py-2 text-sm font-medium transition-colors"
+              >
+                소통채널
+              </Link>
+            </>
           )}
           {isLoggedIn && (
             <div className="hidden lg:flex items-center gap-3">
@@ -359,13 +367,22 @@ export default function Navigation() {
             );
           })}
           {!isLoggedIn && (
-            <Link
-              href="/login"
-              className="mt-4 block text-center bg-[#F4A261] hover:bg-[#e8935a] text-white py-3 rounded-xl font-semibold"
-              onClick={() => setIsMobileOpen(false)}
-            >
-              로그인
-            </Link>
+            <div className="mt-4 flex flex-col gap-2">
+              <Link
+                href="/parent/login"
+                className="block text-center border border-[#2D6A4F] text-[#2D6A4F] bg-transparent hover:bg-[#2D6A4F] hover:text-white py-3 rounded-full font-medium text-sm transition-colors"
+                onClick={() => setIsMobileOpen(false)}
+              >
+                학부모 포털
+              </Link>
+              <Link
+                href="/board/login"
+                className="block text-center bg-[#2D6A4F] text-white hover:bg-[#1B4332] py-3 rounded-full font-medium text-sm transition-colors"
+                onClick={() => setIsMobileOpen(false)}
+              >
+                소통채널
+              </Link>
+            </div>
           )}
           {isLoggedIn && (
             <div className="mt-4 border-t border-gray-100 pt-4 space-y-1">
