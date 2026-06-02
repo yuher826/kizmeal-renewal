@@ -68,7 +68,9 @@ export default function ParentMypagePage() {
                         <p className="text-sm font-semibold text-[#1C2B1E]">{child.name_ko}</p>
                         {child.name_en && <p className="text-xs text-gray-400">{child.name_en}</p>}
                         {child.branches && (
-                          <p className="text-xs text-gray-400">{child.branches.name}</p>
+                          <p className="text-xs text-gray-400">
+                            {[child.branches.brands?.name, child.branches.name].filter(Boolean).join(' ')}
+                          </p>
                         )}
                       </div>
                     </li>

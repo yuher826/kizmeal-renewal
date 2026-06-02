@@ -29,7 +29,14 @@ export default function ChildTab({ items, selectedId, onSelect }: ChildTabProps)
             <span className="w-6 h-6 rounded-full bg-[#E8F5E9] flex items-center justify-center text-xs font-bold text-[#2D6A4F] flex-shrink-0">
               {child.name_ko[0]}
             </span>
-            <span>{child.name_ko}</span>
+            <span>
+              {child.name_ko}
+              {child.branches && (
+                <span className="opacity-70 font-normal">
+                  {' · '}{[child.branches.brands?.name, child.branches.name].filter(Boolean).join(' ')}
+                </span>
+              )}
+            </span>
           </button>
         )
       })}

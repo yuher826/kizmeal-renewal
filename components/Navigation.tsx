@@ -75,6 +75,7 @@ export default function Navigation() {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [mobileExpanded, setMobileExpanded] = useState<string | null>(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [parentName, setParentName] = useState('');
   const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const navRef = useRef<HTMLDivElement>(null);
   const isHome = pathname === '/';
@@ -88,10 +89,25 @@ export default function Navigation() {
 
   useEffect(() => {
     const supabase = createClient();
-    supabase.auth.getSession().then(({ data }) => setIsLoggedIn(!!data.session));
+
+    supabase.auth.getSession().then(({ data }) => {
+      setIsLoggedIn(!!data.session);
+      if (data.session) {
+        supabase.from('parents').select('name').eq('auth_id', data.session.user.id).maybeSingle()
+          .then(({ data: p }) => setParentName(p?.name || data.session!.user.email?.split('@')[0] || ''));
+      }
+    });
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setIsLoggedIn(!!session);
+      if (session) {
+        supabase.from('parents').select('name').eq('auth_id', session.user.id).maybeSingle()
+          .then(({ data: p }) => setParentName(p?.name || session.user.email?.split('@')[0] || ''));
+      } else {
+        setParentName('');
+      }
     });
+
     return () => subscription.unsubscribe();
   }, []);
 
@@ -108,6 +124,12 @@ export default function Navigation() {
     setMobileExpanded(null);
     setOpenMenu(null);
   }, [pathname]);
+
+  async function handleNavLogout() {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    window.location.href = '/';
+  }
 
   const handleEnter = (key: string) => {
     if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
@@ -219,6 +241,20 @@ export default function Navigation() {
               로그인
             </Link>
           )}
+          {isLoggedIn && (
+            <div className="hidden lg:flex items-center gap-3">
+              <Link href="/parent/dashboard" className="text-sm font-semibold text-[#2D6A4F] hover:opacity-80 transition-opacity">
+                {parentName} 님 👋
+              </Link>
+              <button
+                type="button"
+                onClick={handleNavLogout}
+                className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                로그아웃
+              </button>
+            </div>
+          )}
           <button
             className={`lg:hidden p-2 rounded-lg ${navText}`}
             onClick={() => setIsMobileOpen((v) => !v)}
@@ -315,6 +351,24 @@ export default function Navigation() {
             >
               로그인
             </Link>
+          )}
+          {isLoggedIn && (
+            <div className="mt-4 border-t border-gray-100 pt-4 space-y-1">
+              <Link
+                href="/parent/dashboard"
+                className="block text-center font-semibold text-[#2D6A4F] py-3"
+                onClick={() => setIsMobileOpen(false)}
+              >
+                {parentName} 님 👋
+              </Link>
+              <button
+                type="button"
+                onClick={handleNavLogout}
+                className="w-full text-center text-sm text-gray-400 py-2 hover:text-gray-600 transition-colors"
+              >
+                로그아웃
+              </button>
+            </div>
           )}
         </div>
       </div>
