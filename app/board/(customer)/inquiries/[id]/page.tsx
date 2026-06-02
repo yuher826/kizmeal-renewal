@@ -132,14 +132,22 @@ export default function CustomerInquiryDetailPage({ params }: { params: { id: st
 
     try {
       // 1. 파일 먼저 업로드
-      const uploaded: { path: string; name: string; size: number; type: string }[] = []
+      const uploaded: { path: string; url: string; name: string; size: number; type: string }[] = []
       for (const file of files) {
-        const storagePath = `${id}/${Date.now()}_${file.name}`
+        const ext = file.name.split('.').pop()?.toLowerCase() || 'bin'
+        const safeFileName = `${Date.now()}_${Math.random().toString(36).slice(2, 7)}.${ext}`
+        const storagePath = `${id}/${safeFileName}`
         const { data: up, error: upErr } = await supabase.storage
           .from('kizmeal-files')
           .upload(storagePath, file, { upsert: true })
-        if (upErr) throw new Error(`파일 업로드 실패: ${file.name}`)
-        if (up) uploaded.push({ path: up.path, name: file.name, size: file.size, type: file.type })
+        if (upErr) {
+          console.error('Storage 에러 전체:', upErr.message, upErr.statusCode, JSON.stringify(upErr))
+          throw new Error(upErr.message || '파일 업로드 실패')
+        }
+        if (up) {
+          const { data: urlData } = supabase.storage.from('kizmeal-files').getPublicUrl(storagePath)
+          uploaded.push({ path: storagePath, url: urlData?.publicUrl ?? '', name: file.name, size: file.size, type: file.type })
+        }
       }
 
       // 2. 메시지 INSERT
@@ -159,13 +167,16 @@ export default function CustomerInquiryDetailPage({ params }: { params: { id: st
 
       // 3. 첨부파일 메타데이터 INSERT
       for (const f of uploaded) {
-        await supabase.from('message_attachments').insert({
+        const { error: attErr } = await supabase.from('message_attachments').insert({
           message_id: msg.id,
           file_name: f.name,
           file_size: f.size,
           file_type: f.type,
           storage_path: f.path,
+          file_url: f.url || null,
+          mime_type: f.type,
         })
+        if (attErr) console.error('첨부파일 INSERT 에러:', JSON.stringify(attErr, null, 2))
       }
 
       // 4. 문의 업데이트
