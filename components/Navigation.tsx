@@ -243,13 +243,16 @@ export default function Navigation() {
           )}
           {isLoggedIn && (
             <div className="hidden lg:flex items-center gap-3">
-              <Link href="/parent/dashboard" className="text-sm font-semibold text-[#2D6A4F] hover:opacity-80 transition-opacity">
+              <Link
+                href="/parent/dashboard"
+                className={`text-sm font-semibold hover:opacity-80 transition-opacity ${!solidBg ? 'text-white' : 'text-[#2D6A4F]'}`}
+              >
                 {parentName} 님 👋
               </Link>
               <button
                 type="button"
                 onClick={handleNavLogout}
-                className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+                className={`text-xs transition-colors ${!solidBg ? 'text-white/70 hover:text-white' : 'text-gray-400 hover:text-gray-600'}`}
               >
                 로그아웃
               </button>
@@ -356,7 +359,7 @@ export default function Navigation() {
             <div className="mt-4 border-t border-gray-100 pt-4 space-y-1">
               <Link
                 href="/parent/dashboard"
-                className="block text-center font-semibold text-[#2D6A4F] py-3"
+                className={`block text-center font-semibold py-3 ${isHome ? 'text-white' : 'text-[#2D6A4F]'}`}
                 onClick={() => setIsMobileOpen(false)}
               >
                 {parentName} 님 👋
@@ -364,7 +367,7 @@ export default function Navigation() {
               <button
                 type="button"
                 onClick={handleNavLogout}
-                className="w-full text-center text-sm text-gray-400 py-2 hover:text-gray-600 transition-colors"
+                className={`w-full text-center text-sm py-2 transition-colors ${isHome ? 'text-white/70 hover:text-white' : 'text-gray-400 hover:text-gray-600'}`}
               >
                 로그아웃
               </button>
