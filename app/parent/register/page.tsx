@@ -14,6 +14,24 @@ interface ChildForm {
 
 const emptyChild = (): ChildForm => ({ name_ko: '', name_en: '', branch_id: '' })
 
+function toKoreanError(message: string): string {
+  if (/already registered|already been registered|already exists/i.test(message))
+    return '이미 가입된 이메일입니다.'
+  if (/invalid email/i.test(message))
+    return '올바른 이메일 형식이 아닙니다.'
+  if (/unable to validate email/i.test(message))
+    return '올바른 이메일 형식이 아닙니다.'
+  if (/password should be at least/i.test(message))
+    return '비밀번호는 6자 이상이어야 합니다.'
+  if (/rate limit/i.test(message))
+    return '요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.'
+  if (/signup.?disabled/i.test(message))
+    return '현재 회원가입이 비활성화되어 있습니다.'
+  if (/network/i.test(message))
+    return '네트워크 오류가 발생했습니다. 연결을 확인해 주세요.'
+  return '회원가입에 실패했습니다.'
+}
+
 export default function ParentRegisterPage() {
   const router = useRouter()
   const [branches, setBranches] = useState<Branch[]>([])
@@ -71,7 +89,7 @@ export default function ParentRegisterPage() {
     // Sign up
     const { data: authData, error: signUpError } = await supabase.auth.signUp({ email, password })
     if (signUpError || !authData.user) {
-      setError(signUpError?.message || '회원가입에 실패했습니다.')
+      setError(toKoreanError(signUpError?.message ?? ''))
       setLoading(false)
       return
     }
