@@ -10,6 +10,7 @@ import {
 } from '@/lib/types'
 import DynamicForm from '@/components/board/DynamicForm'
 import FileUpload from '@/components/board/FileUpload'
+import { KOS_URL } from '@/lib/config'
 
 const CATEGORIES: InquiryCategory[] = [
   'DELIVERY', 'MENU', 'STAFF_MEAL', 'HYGIENE', 'CONTRACT', 'PHOTO', 'SCHEDULE', 'OTHER',
@@ -17,10 +18,10 @@ const CATEGORIES: InquiryCategory[] = [
 
 // KOS system links — require redirect instead of 1:1 board
 const KOS_SHORTCUTS = [
-  { label: '식수 변경', icon: '🍽️', desc: 'KOS 시스템에서 처리', url: 'https://kos.kizmeal.com/meal-count' },
-  { label: '소모품 주문', icon: '📦', desc: 'KOS 시스템에서 처리', url: 'https://kos.kizmeal.com/supplies' },
-  { label: '알러지 등록', icon: '🌿', desc: 'KOS 시스템에서 처리', url: 'https://kos.kizmeal.com/allergy' },
-  { label: '원생 출결', icon: '✅', desc: 'KOS 시스템에서 처리', url: 'https://kos.kizmeal.com/attendance' },
+  { label: '식수 변경', icon: '🍽️', desc: 'KOS 시스템에서 처리' },
+  { label: '소모품 주문', icon: '📦', desc: 'KOS 시스템에서 처리' },
+  { label: '알러지 등록', icon: '🌿', desc: 'KOS 시스템에서 처리' },
+  { label: '원생 출결', icon: '✅', desc: 'KOS 시스템에서 처리' },
 ]
 
 export default function NewInquiryPage() {
@@ -33,7 +34,7 @@ export default function NewInquiryPage() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [toast, setToast] = useState('')
-  const [kosPopup, setKosPopup] = useState<typeof KOS_SHORTCUTS[0] | null>(null)
+  const [kosPopup, setKosPopup] = useState<(typeof KOS_SHORTCUTS)[0] | null>(null)
 
   const handleFormChange = useCallback((key: string, value: unknown) => {
     setFormData(prev => ({ ...prev, [key]: value }))
@@ -165,13 +166,13 @@ export default function NewInquiryPage() {
             <div className="text-3xl text-center mb-3">{kosPopup.icon}</div>
             <h2 className="font-bold text-[#1C2B1E] text-center mb-2">{kosPopup.label}</h2>
             <p className="text-sm text-gray-500 text-center mb-5">
-              {kosPopup.label}은 KOS 시스템에서 처리됩니다.<br />KOS로 이동하시겠습니까?
+              이 항목은 KOS에서 처리해 주세요 😊
             </p>
             <div className="flex gap-3">
               <button type="button" onClick={() => setKosPopup(null)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-600 font-semibold py-3 rounded-xl text-sm transition-colors">
-                취소
+                게시판으로 문의하기
               </button>
-              <a href={kosPopup.url} target="_blank" rel="noopener noreferrer" className="flex-1 bg-[#2D6A4F] hover:bg-[#1B4332] text-white font-semibold py-3 rounded-xl text-sm transition-colors text-center">
+              <a href={KOS_URL} target="_blank" rel="noopener noreferrer" className="flex-1 bg-[#2D6A4F] hover:bg-[#1B4332] text-white font-semibold py-3 rounded-xl text-sm transition-colors text-center">
                 KOS 바로가기
               </a>
             </div>

@@ -1,11 +1,14 @@
 import { Resend } from 'resend'
 
-const resend = new Resend(process.env.RESEND_API_KEY)
 const FROM = 'onboarding@resend.dev'
 const BASE_URL = 'https://kizmeal-renewal.vercel.app'
 
+function getResend() {
+  return new Resend(process.env.RESEND_API_KEY)
+}
+
 export async function sendApprovalEmail(parentEmail: string, parentName: string, childName: string) {
-  return resend.emails.send({
+  return getResend().emails.send({
     from: FROM,
     to: parentEmail,
     subject: '[키즈밀] 가입이 승인되었습니다! 🎉',
@@ -31,7 +34,7 @@ export async function sendApprovalEmail(parentEmail: string, parentName: string,
 }
 
 export async function sendRejectionEmail(parentEmail: string, parentName: string, reason?: string) {
-  return resend.emails.send({
+  return getResend().emails.send({
     from: FROM,
     to: parentEmail,
     subject: '[키즈밀] 가입 신청 결과 안내',
@@ -57,7 +60,7 @@ export async function sendRejectionEmail(parentEmail: string, parentName: string
 }
 
 export async function sendNewApplicationAlert(adminEmail: string, parentName: string, childName: string, branchName: string) {
-  return resend.emails.send({
+  return getResend().emails.send({
     from: FROM,
     to: adminEmail,
     subject: '[키즈밀] 새 학부모 가입 신청이 도착했습니다',

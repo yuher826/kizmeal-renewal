@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { createClient } from '@/lib/supabase';
 
 type DropdownItem = { icon: string; label: string; href: string };
 type NavItem = {
@@ -73,6 +74,7 @@ export default function Navigation() {
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [mobileExpanded, setMobileExpanded] = useState<string | null>(null);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const navRef = useRef<HTMLDivElement>(null);
   const isHome = pathname === '/';
@@ -82,6 +84,15 @@ export default function Navigation() {
     onScroll();
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getSession().then(({ data }) => setIsLoggedIn(!!data.session));
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setIsLoggedIn(!!session);
+    });
+    return () => subscription.unsubscribe();
   }, []);
 
   useEffect(() => {
@@ -200,12 +211,14 @@ export default function Navigation() {
         </ul>
 
         <div className="flex items-center gap-3 flex-shrink-0">
-          <Link
-            href="/login"
-            className="hidden lg:inline-flex items-center gap-2 bg-[#F4A261] hover:bg-[#e8935a] text-white text-sm font-semibold px-5 py-2 rounded-xl transition-colors"
-          >
-            로그인
-          </Link>
+          {!isLoggedIn && (
+            <Link
+              href="/login"
+              className="hidden lg:inline-flex items-center gap-2 bg-[#F4A261] hover:bg-[#e8935a] text-white text-sm font-semibold px-5 py-2 rounded-xl transition-colors"
+            >
+              로그인
+            </Link>
+          )}
           <button
             className={`lg:hidden p-2 rounded-lg ${navText}`}
             onClick={() => setIsMobileOpen((v) => !v)}
@@ -294,13 +307,15 @@ export default function Navigation() {
               </div>
             );
           })}
-          <Link
-            href="/login"
-            className="mt-4 block text-center bg-[#F4A261] hover:bg-[#e8935a] text-white py-3 rounded-xl font-semibold"
-            onClick={() => setIsMobileOpen(false)}
-          >
-            로그인
-          </Link>
+          {!isLoggedIn && (
+            <Link
+              href="/login"
+              className="mt-4 block text-center bg-[#F4A261] hover:bg-[#e8935a] text-white py-3 rounded-xl font-semibold"
+              onClick={() => setIsMobileOpen(false)}
+            >
+              로그인
+            </Link>
+          )}
         </div>
       </div>
     </nav>
