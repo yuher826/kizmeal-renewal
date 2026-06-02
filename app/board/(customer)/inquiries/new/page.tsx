@@ -102,6 +102,7 @@ export default function NewInquiryPage() {
           status: 'pending',
           priority: 'normal',
           created_by_type: 'branch',
+          created_by_id: user.id,
           form_data: Object.keys(formData).length > 0 ? formData : null,
           last_message_at: new Date().toISOString(),
         })
