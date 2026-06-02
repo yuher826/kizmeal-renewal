@@ -126,7 +126,7 @@ export default function AdminInquiryDetailPage({ params }: { params: { id: strin
 
   function showToast(msg: string) {
     setToast(msg)
-    setTimeout(() => setToast(''), 3000)
+    setTimeout(() => setToast(''), 10000)
   }
 
   async function sendMessage() {
@@ -140,14 +140,17 @@ export default function AdminInquiryDetailPage({ params }: { params: { id: strin
 
     try {
       // 1. 파일 먼저 업로드
-      const uploaded: { path: string; name: string; size: number; type: string }[] = []
+      const uploaded: { path: string; url: string; name: string; size: number; type: string }[] = []
       for (const file of files) {
         const storagePath = `${id}/${Date.now()}_${file.name}`
         const { data: up, error: upErr } = await supabase.storage
           .from('kizmeal-files')
           .upload(storagePath, file, { upsert: true })
         if (upErr) throw new Error(`파일 업로드 실패: ${file.name}`)
-        if (up) uploaded.push({ path: up.path, name: file.name, size: file.size, type: file.type })
+        if (up) {
+          const { data: urlData } = supabase.storage.from('kizmeal-files').getPublicUrl(up.path)
+          uploaded.push({ path: up.path, url: urlData?.publicUrl ?? '', name: file.name, size: file.size, type: file.type })
+        }
       }
 
       // 2. 메시지 INSERT
@@ -167,13 +170,15 @@ export default function AdminInquiryDetailPage({ params }: { params: { id: strin
 
       // 3. 첨부파일 메타데이터 INSERT
       for (const f of uploaded) {
-        await supabase.from('message_attachments').insert({
+        const { error: attErr } = await supabase.from('message_attachments').insert({
           message_id: msg.id,
           file_name: f.name,
           file_size: f.size,
           file_type: f.type,
           storage_path: f.path,
+          file_url: f.url || null,
         })
+        if (attErr) console.error('첨부파일 INSERT 에러:', JSON.stringify(attErr, null, 2))
       }
 
       if (!isInternal) {
@@ -193,6 +198,7 @@ export default function AdminInquiryDetailPage({ params }: { params: { id: strin
       setShowAttach(false)
       setIsInternal(false)
     } catch (err) {
+      console.error('전송 에러 상세:', JSON.stringify(err, null, 2))
       const errMsg = err instanceof Error ? err.message
         : typeof err === 'object' && err !== null && 'message' in err
         ? (err as { message: string }).message
