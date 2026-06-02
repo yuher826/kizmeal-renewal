@@ -107,6 +107,11 @@ export default function ParentDashboardPage() {
         <div className="bg-gradient-to-r from-[#2D6A4F] to-[#52B788] rounded-2xl px-5 py-4 text-white">
           <p className="text-sm opacity-80">안녕하세요!</p>
           <h2 className="text-lg font-bold mt-0.5">{selectedChild?.name_ko || '...'} 의 오늘 급식 🍽️</h2>
+          {selectedChild?.branches && (
+            <p className="text-xs opacity-80 mt-1">
+              📍 {[selectedChild.branches.brands?.name, selectedChild.branches.name].filter(Boolean).join(' ')}
+            </p>
+          )}
           <p className="text-xs opacity-70 mt-1">
             {today.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })}
           </p>
