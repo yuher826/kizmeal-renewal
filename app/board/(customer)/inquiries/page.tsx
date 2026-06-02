@@ -22,6 +22,14 @@ export default function CustomerInquiriesPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const status = params.get('status')
+    if (status === 'in_progress' || status === 'pending' || status === 'resolved' || status === 'closed') {
+      setActiveTab(status)
+    }
+  }, [])
+
+  useEffect(() => {
     const supabase = createClient()
 
     async function load() {

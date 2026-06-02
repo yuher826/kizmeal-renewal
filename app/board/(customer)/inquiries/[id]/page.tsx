@@ -245,26 +245,36 @@ export default function CustomerInquiryDetailPage({ params }: { params: { id: st
 
         {/* 진행 타임라인 */}
         {inquiry && (
-          <div className="flex items-center mt-3 px-2">
-            {STATUS_STEPS.map((step, i) => (
-              <div key={step.key} className={`flex items-center ${i < STATUS_STEPS.length - 1 ? 'flex-1' : ''}`}>
-                <div className="flex flex-col items-center">
-                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+          <div className="mt-3 pb-1">
+            {/* 점 + 연결선 행 */}
+            <div className="flex items-center px-1">
+              {STATUS_STEPS.map((step, i) => (
+                <div key={step.key} className={`flex items-center ${i < STATUS_STEPS.length - 1 ? 'flex-1' : ''}`}>
+                  <div className={`w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center text-xs font-bold ${
                     i < stepIndex ? 'bg-[#2D6A4F] text-white'
                     : i === stepIndex ? 'bg-[#2D6A4F] text-white ring-2 ring-[#B7E4C7]'
                     : 'bg-gray-200 text-gray-400'
                   }`}>
                     {i < stepIndex ? '✓' : i + 1}
                   </div>
-                  <span className={`text-[10px] mt-1 whitespace-nowrap ${i <= stepIndex ? 'text-[#2D6A4F] font-semibold' : 'text-gray-400'}`}>
+                  {i < STATUS_STEPS.length - 1 && (
+                    <div className={`flex-1 h-0.5 mx-1 ${i < stepIndex ? 'bg-[#2D6A4F]' : 'bg-gray-200'}`} />
+                  )}
+                </div>
+              ))}
+            </div>
+            {/* 라벨 행 */}
+            <div className="flex mt-1.5 px-1">
+              {STATUS_STEPS.map((step, i) => (
+                <div key={step.key} className={`${i < STATUS_STEPS.length - 1 ? 'flex-1' : ''} ${
+                  i === 0 ? 'text-left' : i === STATUS_STEPS.length - 1 ? 'text-right' : 'text-center'
+                }`}>
+                  <span className={`text-[10px] whitespace-nowrap font-medium ${i <= stepIndex ? 'text-[#2D6A4F]' : 'text-gray-400'}`}>
                     {step.label}
                   </span>
                 </div>
-                {i < STATUS_STEPS.length - 1 && (
-                  <div className={`flex-1 h-0.5 mb-4 mx-2 ${i < stepIndex ? 'bg-[#2D6A4F]' : 'bg-gray-200'}`} />
-                )}
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         )}
       </header>

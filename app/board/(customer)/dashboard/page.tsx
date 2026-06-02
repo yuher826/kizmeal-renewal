@@ -146,16 +146,16 @@ export default function CustomerDashboardPage() {
         {/* 통계 카드 */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[
-            { label: '전체 문의', value: loading ? '—' : String(stats.total), color: 'text-[#1C2B1E]', icon: '📋' },
-            { label: '처리 중', value: loading ? '—' : String(stats.inProgress), color: 'text-blue-600', icon: '⚡' },
-            { label: '해결 완료', value: loading ? '—' : String(stats.resolved), color: 'text-[#2D6A4F]', icon: '✅' },
-            { label: '미확인 알림', value: loading ? '—' : String(stats.unread), color: 'text-red-500', icon: '🔔', alert: stats.unread > 0 },
+            { label: '전체 문의', value: loading ? '—' : String(stats.total), color: 'text-[#1C2B1E]', icon: '📋', href: '/board/inquiries' },
+            { label: '처리 중', value: loading ? '—' : String(stats.inProgress), color: 'text-blue-600', icon: '⚡', href: '/board/inquiries?status=in_progress' },
+            { label: '해결 완료', value: loading ? '—' : String(stats.resolved), color: 'text-[#2D6A4F]', icon: '✅', href: '/board/inquiries?status=resolved' },
+            { label: '미확인 알림', value: loading ? '—' : String(stats.unread), color: 'text-red-500', icon: '🔔', href: '/board/inquiries', alert: stats.unread > 0 },
           ].map(card => (
-            <div key={card.label} className={`bg-white rounded-2xl border p-4 ${card.alert ? 'border-red-200' : 'border-gray-100'}`}>
+            <Link key={card.label} href={card.href} className={`block bg-white rounded-2xl border p-4 hover:shadow-sm transition-shadow ${card.alert ? 'border-red-200' : 'border-gray-100'}`}>
               <div className="text-xl mb-1">{card.icon}</div>
               <div className={`text-2xl font-bold ${card.color}`}>{card.value}</div>
               <div className="text-xs text-gray-400 mt-0.5">{card.label}</div>
-            </div>
+            </Link>
           ))}
         </div>
 
