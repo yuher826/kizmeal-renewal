@@ -118,6 +118,7 @@ export default function AdminBranchesPage() {
         </div>
         <div className="flex items-center gap-3">
           <Link href="/board/admin" className="text-sm text-[#2D6A4F] font-medium hover:underline">대시보드</Link>
+          <Link href="/board/admin/branches/qr" className="text-sm text-[#2D6A4F] font-medium hover:underline">QR코드 생성</Link>
           <Link href="/board/admin/inquiries" className="text-sm text-[#2D6A4F] font-medium hover:underline">문의 관리</Link>
           <button onClick={handleLogout} className="text-xs text-gray-400 hover:text-gray-600">로그아웃</button>
         </div>

@@ -34,7 +34,8 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/board/dashboard') ||
     pathname.startsWith('/board/inquiries') ||
     pathname.startsWith('/board/settings') ||
-    pathname.startsWith('/board/notifications')
+    pathname.startsWith('/board/notifications') ||
+    pathname.startsWith('/board/customer')
   const isAdminRoute = pathname.startsWith('/board/admin')
   const isBoardLogin = pathname === '/board/login'
 
