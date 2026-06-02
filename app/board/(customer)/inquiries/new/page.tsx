@@ -79,7 +79,17 @@ export default function NewInquiryPage() {
         }
       }
 
-      if (!branchId || !brandId) throw new Error('지점 정보를 찾을 수 없습니다.')
+      if (!branchId) throw new Error('지점 정보를 찾을 수 없습니다. 관리자에게 문의하세요.')
+
+      // brand_id가 누락된 경우 branches에서 직접 조회
+      if (!brandId) {
+        const { data: b } = await supabase
+          .from('branches')
+          .select('brand_id')
+          .eq('id', branchId)
+          .maybeSingle()
+        brandId = b?.brand_id || null
+      }
 
       // Create inquiry
       const { data: inquiry, error: inqError } = await supabase
@@ -137,7 +147,13 @@ export default function NewInquiryPage() {
       setToast('문의가 접수되었습니다! 🎉')
       setTimeout(() => router.push(`/board/inquiries/${inquiry.id}`), 1200)
     } catch (err) {
-      setError(err instanceof Error ? err.message : '문의 등록에 실패했습니다.')
+      const msg =
+        err instanceof Error
+          ? err.message
+          : typeof err === 'object' && err !== null && 'message' in err
+          ? (err as { message: string }).message
+          : '문의 등록에 실패했습니다.'
+      setError(msg)
       setSubmitting(false)
     }
   }
