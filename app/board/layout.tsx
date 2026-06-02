@@ -1,10 +1,9 @@
-import type { Metadata } from 'next';
-
-export const metadata: Metadata = {
-  title: '키즈밀 소통채널',
-  description: '키즈밀 1:1 게시판',
-};
+'use client'
 
 export default function BoardLayout({ children }: { children: React.ReactNode }) {
-  return <>{children}</>;
+  return (
+    <div className="min-h-screen bg-[#F0F4F0]">
+      {children}
+    </div>
+  )
 }

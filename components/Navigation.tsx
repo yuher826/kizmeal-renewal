@@ -54,7 +54,6 @@ const NAV: NavItem[] = [
     label: '고객지원',
     matchPrefixes: ['/notice'],
     dropdown: [
-      { icon: '💬', label: '1:1 문의', href: '/board/login' },
       { icon: '📢', label: '공지사항', href: '/notice' },
     ],
   },
@@ -149,6 +148,9 @@ export default function Navigation() {
     if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
     hoverTimeoutRef.current = setTimeout(() => setOpenMenu(null), 150);
   };
+
+  // board/* 경로에서는 홈페이지 Navigation 숨김 (각 페이지 자체 헤더 사용)
+  if (pathname.startsWith('/board')) return null;
 
   const solidBg = !isHome || isScrolled;
   const navBg = solidBg

@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 
@@ -10,6 +9,7 @@ const SAVE_EMAIL_KEY = 'board_saved_email'
 export default function BoardLoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [saveEmail, setSaveEmail] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -20,7 +20,6 @@ export default function BoardLoginPage() {
     const saved = localStorage.getItem(SAVE_EMAIL_KEY)
     if (saved) { setEmail(saved); setSaveEmail(true) }
 
-    // 이미 로그인된 경우 역할에 따라 자동 리다이렉트
     const supabase = createClient()
     supabase.auth.getSession().then(async ({ data }) => {
       if (!data.session) return
@@ -71,42 +70,15 @@ export default function BoardLoginPage() {
         return
       }
 
-      const { data: adminData } = await supabase
-        .from('admins')
-        .select('id')
-        .eq('auth_id', data.user.id)
-        .maybeSingle()
+      const { data: adminData } = await supabase.from('admins').select('id').eq('auth_id', data.user.id).maybeSingle()
+      if (adminData) { router.push('/board/admin'); router.refresh(); return }
 
-      if (adminData) {
-        router.push('/board/admin')
-        router.refresh()
-        return
-      }
+      const { data: branchData } = await supabase.from('branches').select('id').eq('auth_id', data.user.id).maybeSingle()
+      if (branchData) { router.push('/board/dashboard'); router.refresh(); return }
 
-      const { data: branchData } = await supabase
-        .from('branches')
-        .select('id')
-        .eq('auth_id', data.user.id)
-        .maybeSingle()
-
-      if (branchData) {
-        router.push('/board/dashboard')
-        router.refresh()
-        return
-      }
-
-      const { data: memberData } = await supabase
-        .from('branch_members')
-        .select('id, role')
-        .eq('auth_id', data.user.id)
-        .maybeSingle()
-
+      const { data: memberData } = await supabase.from('branch_members').select('id, role').eq('auth_id', data.user.id).maybeSingle()
       if (memberData) {
-        if (memberData.role === 'nutritionist') {
-          router.push('/nutritionist/dashboard')
-        } else {
-          router.push('/board/dashboard')
-        }
+        router.push(memberData.role === 'nutritionist' ? '/nutritionist/dashboard' : '/board/dashboard')
         router.refresh()
         return
       }
@@ -120,95 +92,156 @@ export default function BoardLoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#F6FAF6] to-[#E8F5E9] flex items-center justify-center px-4 font-sans">
-      <div className="w-full max-w-sm">
-        <div className="text-center mb-8">
-          <Link href="/login">
-            <div className="w-16 h-16 bg-gradient-to-br from-[#2D6A4F] to-[#52B788] rounded-2xl flex items-center justify-center text-white font-bold text-2xl mx-auto mb-4 shadow-lg">
-              K
-            </div>
-          </Link>
-          <h1 className="text-2xl font-bold text-[#1C2B1E]">키즈밀 소통채널</h1>
-          <p className="text-sm text-gray-500 mt-1.5">가맹점 1:1 문의 게시판</p>
+    <div className="min-h-screen flex">
+      {/* ── 왼쪽: 브랜드 패널 (데스크탑만) ── */}
+      <div
+        className="hidden lg:flex lg:w-1/2 flex-col justify-between p-14"
+        style={{ background: 'linear-gradient(135deg, #1B4332 0%, #2D6A4F 100%)' }}
+      >
+        <div>
+          <div className="w-14 h-14 rounded-2xl bg-white/15 flex items-center justify-center text-white font-bold text-2xl font-serif mb-10">
+            K
+          </div>
+          <h1 className="text-[28px] font-bold text-white leading-tight mb-2">
+            키즈밀 소통채널
+          </h1>
+          <p className="text-white/70 text-base">고객사 전용 커뮤니케이션 플랫폼</p>
+
+          <div className="mt-12 pt-10 border-t border-white/20 space-y-4">
+            <p className="text-white text-2xl font-bold leading-snug">&ldquo;새벽 3시의 약속&rdquo;</p>
+            <p className="text-white text-2xl font-bold leading-snug">&ldquo;22년의 신뢰&rdquo;</p>
+          </div>
         </div>
 
-        <form onSubmit={handleLogin} className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">이메일</label>
-            <input
-              type="email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              placeholder="example@email.com"
-              required
-              autoComplete="email"
-              className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#2D6A4F] focus:border-transparent transition-shadow"
-            />
-            <label className="flex items-center gap-2 mt-2 cursor-pointer w-fit">
-              <input
-                type="checkbox"
-                checked={saveEmail}
-                onChange={e => {
-                  setSaveEmail(e.target.checked)
-                  if (!e.target.checked) localStorage.removeItem(SAVE_EMAIL_KEY)
-                }}
-                className="w-3.5 h-3.5 rounded accent-[#2D6A4F]"
-              />
-              <span className="text-xs text-gray-500">아이디 저장</span>
-            </label>
+        <div className="pt-8 border-t border-white/20">
+          <div className="flex gap-10">
+            {[
+              { label: '경력', value: '22년' },
+              { label: '냉장차량', value: '18대' },
+              { label: '출발 시간', value: '새벽 3시' },
+            ].map(item => (
+              <div key={item.label}>
+                <p className="text-white font-bold text-xl">{item.value}</p>
+                <p className="text-white/50 text-xs mt-0.5">{item.label}</p>
+              </div>
+            ))}
           </div>
+        </div>
+      </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">비밀번호</label>
-            <input
-              type="password"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              placeholder="비밀번호를 입력하세요"
-              required
-              autoComplete="current-password"
-              className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#2D6A4F] focus:border-transparent transition-shadow"
-            />
-          </div>
-
-          {error && (
-            <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700">
-              {error}
+      {/* ── 오른쪽: 로그인 폼 ── */}
+      <div className="w-full lg:w-1/2 flex items-center justify-center bg-white px-6 py-12 min-h-screen">
+        <div className="w-full max-w-sm">
+          {/* 모바일 전용 로고 */}
+          <div className="lg:hidden flex justify-center mb-10">
+            <div
+              className="w-16 h-16 rounded-2xl flex items-center justify-center text-white font-bold text-2xl font-serif"
+              style={{ background: 'linear-gradient(135deg, #1B4332, #2D6A4F)' }}
+            >
+              K
             </div>
-          )}
+          </div>
 
-          <button
-            type="submit"
-            disabled={loading || !email || !password}
-            className="w-full bg-[#2D6A4F] hover:bg-[#1B4332] disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold py-2.5 rounded-xl transition-colors text-sm flex items-center justify-center gap-2"
-          >
-            {loading ? (
-              <>
-                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                로그인 중...
-              </>
-            ) : '로그인'}
-          </button>
+          <h2 className="text-2xl font-bold text-[#1C2B1E] mb-1">안녕하세요 👋</h2>
+          <p className="text-gray-400 text-sm mb-8">로그인</p>
 
-          <div className="text-center">
+          <form onSubmit={handleLogin} className="space-y-4">
+            {/* 이메일 */}
+            <div>
+              <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-2">
+                이메일
+              </label>
+              <input
+                type="email"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                placeholder="example@email.com"
+                required
+                autoComplete="email"
+                className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 text-sm focus:outline-none focus:ring-2 focus:ring-[#2D6A4F] focus:border-transparent focus:bg-white transition-all"
+              />
+              <label className="flex items-center gap-2 mt-2 cursor-pointer w-fit">
+                <input
+                  type="checkbox"
+                  checked={saveEmail}
+                  onChange={e => {
+                    setSaveEmail(e.target.checked)
+                    if (!e.target.checked) localStorage.removeItem(SAVE_EMAIL_KEY)
+                  }}
+                  className="w-3.5 h-3.5 rounded accent-[#2D6A4F]"
+                />
+                <span className="text-xs text-gray-400">아이디 저장</span>
+              </label>
+            </div>
+
+            {/* 비밀번호 */}
+            <div>
+              <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-2">
+                비밀번호
+              </label>
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  placeholder="비밀번호를 입력하세요"
+                  required
+                  autoComplete="current-password"
+                  className="w-full px-4 py-3 pr-12 rounded-xl border border-gray-200 bg-gray-50 text-sm focus:outline-none focus:ring-2 focus:ring-[#2D6A4F] focus:border-transparent focus:bg-white transition-all"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(v => !v)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                  aria-label={showPassword ? '비밀번호 숨기기' : '비밀번호 보기'}
+                >
+                  {showPassword ? (
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
+                      <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
+                      <line x1="1" y1="1" x2="23" y2="23" />
+                    </svg>
+                  ) : (
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                      <circle cx="12" cy="12" r="3" />
+                    </svg>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {error && (
+              <div className="bg-red-50 border border-red-100 rounded-xl px-4 py-3 text-sm text-red-600">
+                {error}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading || !email || !password}
+              className="w-full bg-[#2D6A4F] hover:bg-[#1B4332] disabled:bg-gray-200 disabled:cursor-not-allowed text-white font-semibold py-3.5 rounded-xl transition-colors text-sm flex items-center justify-center gap-2 mt-2"
+            >
+              {loading ? (
+                <>
+                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  로그인 중...
+                </>
+              ) : '로그인'}
+            </button>
+          </form>
+
+          <div className="mt-8 space-y-2 text-center">
             <button
               type="button"
-              className="text-xs text-gray-400 hover:text-[#2D6A4F] transition-colors"
+              className="text-xs text-gray-400 hover:text-[#2D6A4F] transition-colors block w-full"
               onClick={() => alert('비밀번호 재설정은 관리자에게 문의해주세요.')}
             >
               비밀번호를 잊으셨나요?
             </button>
+            <p className="text-xs text-gray-300">계정 문의: 031-388-3501</p>
+            <p className="text-xs text-gray-400">초대받은 계정으로만 이용 가능합니다</p>
           </div>
-        </form>
-
-        <p className="text-center text-xs text-gray-400 mt-5">
-          초대 링크로만 가입이 가능합니다.
-        </p>
-
-        <div className="mt-4 text-center">
-          <Link href="/login" className="text-xs text-gray-400 hover:text-[#2D6A4F] transition-colors">
-            ← 로그인 선택으로
-          </Link>
         </div>
       </div>
     </div>
