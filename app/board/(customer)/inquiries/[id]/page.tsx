@@ -181,8 +181,9 @@ export default function CustomerInquiryDetailPage({ params }: { params: { id: st
     }
   }
 
-  const stepIndex = inquiry
-    ? STATUS_STEPS.findIndex(s => s.key === inquiry.status)
+  const stepIndex = !inquiry ? 0
+    : (inquiry.status === 'resolved' || inquiry.status === 'closed') ? 2
+    : inquiry.status === 'in_progress' ? 1
     : 0
 
   return (
@@ -217,13 +218,8 @@ export default function CustomerInquiryDetailPage({ params }: { params: { id: st
         {inquiry && (
           <div className="flex items-center mt-3 px-2">
             {STATUS_STEPS.map((step, i) => (
-              <div key={step.key} className="flex items-center flex-1">
-                <div className={`flex flex-col items-center flex-shrink-0 ${i === 0 ? '' : 'flex-1'}`}>
-                  {i > 0 && (
-                    <div className={`h-0.5 w-full mb-2 ${i <= stepIndex ? 'bg-[#2D6A4F]' : 'bg-gray-200'}`} />
-                  )}
-                </div>
-                <div className={`flex flex-col items-center ${i > 0 ? '' : ''}`}>
+              <div key={step.key} className={`flex items-center ${i < STATUS_STEPS.length - 1 ? 'flex-1' : ''}`}>
+                <div className="flex flex-col items-center">
                   <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
                     i < stepIndex
                       ? 'bg-[#2D6A4F] text-white'
@@ -233,12 +229,12 @@ export default function CustomerInquiryDetailPage({ params }: { params: { id: st
                   }`}>
                     {i < stepIndex ? '✓' : i + 1}
                   </div>
-                  <span className={`text-[10px] mt-1 ${i <= stepIndex ? 'text-[#2D6A4F] font-semibold' : 'text-gray-400'}`}>
+                  <span className={`text-[10px] mt-1 whitespace-nowrap ${i <= stepIndex ? 'text-[#2D6A4F] font-semibold' : 'text-gray-400'}`}>
                     {step.label}
                   </span>
                 </div>
                 {i < STATUS_STEPS.length - 1 && (
-                  <div className={`flex-1 h-0.5 mb-4 mx-1 ${i < stepIndex ? 'bg-[#2D6A4F]' : 'bg-gray-200'}`} />
+                  <div className={`flex-1 h-0.5 mb-4 mx-2 ${i < stepIndex ? 'bg-[#2D6A4F]' : 'bg-gray-200'}`} />
                 )}
               </div>
             ))}

@@ -29,19 +29,28 @@ function FileIcon({ type }: { type: string }) {
   return <span>📎</span>
 }
 
+const STORAGE_BASE = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/kizmeal-files`
+
 function AttachmentList({ attachments }: { attachments: MessageAttachment[] }) {
   if (!attachments?.length) return null
   return (
     <div className="mt-2 space-y-1">
       {attachments.map((att) => (
-        <div
+        <a
           key={att.id}
-          className="flex items-center gap-2 bg-white/30 rounded-lg px-3 py-2 text-xs"
+          href={`${STORAGE_BASE}/${att.storage_path}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          download={att.file_name}
+          className="flex items-center gap-2 bg-white/20 hover:bg-white/40 rounded-lg px-3 py-2 text-xs transition-colors cursor-pointer"
         >
           <FileIcon type={att.file_type} />
           <span className="flex-1 truncate">{att.file_name}</span>
-          <span className="text-gray-500">{formatFileSize(att.file_size)}</span>
-        </div>
+          <span className="opacity-70">{formatFileSize(att.file_size)}</span>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="flex-shrink-0 opacity-70">
+            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />
+          </svg>
+        </a>
       ))}
     </div>
   )
