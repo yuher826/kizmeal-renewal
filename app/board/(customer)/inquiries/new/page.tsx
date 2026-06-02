@@ -100,7 +100,7 @@ export default function NewInquiryPage() {
           title: title.trim(),
           category,
           status: 'pending',
-          priority: 'normal',
+          priority: 'medium',
           created_by_type: 'branch',
           created_by_id: user.id,
           form_data: Object.keys(formData).length > 0 ? formData : null,

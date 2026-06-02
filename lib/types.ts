@@ -1,7 +1,7 @@
 export type InquiryStatus = 'pending' | 'in_progress' | 'resolved' | 'closed'
 export type InquiryCategory = 'MEAL_COUNT' | 'ALLERGY' | 'DELIVERY' | 'MENU' | 'SCHEDULE' | 'PHOTO' | 'CONTRACT' | 'OTHER' | 'STAFF_MEAL' | 'HYGIENE'
 export type SenderType = 'branch' | 'admin' | 'system'
-export type Priority = 'low' | 'normal' | 'high' | 'urgent'
+export type Priority = 'low' | 'medium' | 'high' | 'urgent'
 export type SlaStatus = 'ok' | 'warning' | 'exceeded'
 
 export const CATEGORY_LABELS: Record<InquiryCategory, string> = {
@@ -59,14 +59,14 @@ export const STATUS_COLORS: Record<InquiryStatus, string> = {
 
 export const PRIORITY_LABELS: Record<Priority, string> = {
   low: '낮음',
-  normal: '보통',
+  medium: '보통',
   high: '높음',
   urgent: '긴급',
 }
 
 export const PRIORITY_COLORS: Record<Priority, string> = {
   low: 'bg-gray-100 text-gray-600',
-  normal: 'bg-blue-50 text-blue-700',
+  medium: 'bg-blue-50 text-blue-700',
   high: 'bg-orange-100 text-orange-700',
   urgent: 'bg-red-100 text-red-700',
 }
