@@ -7,7 +7,7 @@
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 -- ============================================================
--- [1] 관리자 계정 — admin@kizmeal.com / Admin1234!
+-- [1] 관리자 계정 — admin@kizmeal.com / Kizmeal2024!
 -- ============================================================
 DO $$
 DECLARE
@@ -38,7 +38,7 @@ BEGIN
     '00000000-0000-0000-0000-000000000000',
     'authenticated', 'authenticated',
     'admin@kizmeal.com',
-    crypt('Admin1234!', gen_salt('bf')),
+    crypt('Kizmeal2024!', gen_salt('bf')),
     NOW(),
     '{"provider":"email","providers":["email"]}',
     '{"name":"키즈밀 관리자"}',
@@ -163,7 +163,7 @@ END $$;
 
 
 -- ============================================================
--- [3] 테스트 가맹점 계정2 — branch1@kizmeal.com / Branch1234!
+-- [3] 테스트 가맹점 계정2 — branch1@kizmeal.com / Kizmeal2024!
 --     → branches 테이블 첫 번째 지점에 연결
 --     → 첫 번째 지점이 없으면 새로 생성
 -- ============================================================
@@ -195,7 +195,7 @@ BEGIN
       '00000000-0000-0000-0000-000000000000',
       'authenticated', 'authenticated',
       'branch1@kizmeal.com',
-      crypt('Branch1234!', gen_salt('bf')),
+      crypt('Kizmeal2024!', gen_salt('bf')),
       NOW(),
       '{"provider":"email","providers":["email"]}',
       '{"name":"키즈밀 1지점"}',
@@ -263,6 +263,15 @@ BEGIN
 
 END $$;
 
+
+-- ============================================================
+-- [4] 비밀번호 통일 — 이미 존재하던 계정도 Kizmeal2024! 로 강제 갱신
+--     (위 블록은 "이미 존재하면 스킵"이라 재실행 시 비밀번호가 안 바뀜)
+-- ============================================================
+UPDATE auth.users
+SET encrypted_password = crypt('Kizmeal2024!', gen_salt('bf')),
+    updated_at = NOW()
+WHERE email IN ('admin@kizmeal.com', 'branch1@kizmeal.com');
 
 -- ============================================================
 -- 생성 결과 확인
