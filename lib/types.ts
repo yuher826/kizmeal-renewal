@@ -20,14 +20,14 @@ export const CATEGORY_LABELS: Record<InquiryCategory, string> = {
 export const CATEGORY_ICONS: Record<InquiryCategory, string> = {
   MEAL_COUNT: '🍽️',
   ALLERGY: '🌿',
-  DELIVERY: '🚛',
-  MENU: '🥗',
+  DELIVERY: '📦',
+  MENU: '🍽️',
   SCHEDULE: '📅',
   PHOTO: '📸',
   CONTRACT: '📄',
   OTHER: '💬',
   STAFF_MEAL: '👨‍🍳',
-  HYGIENE: '🧼',
+  HYGIENE: '🧹',
 }
 
 export const CATEGORY_COLORS: Record<InquiryCategory, string> = {

@@ -6,17 +6,9 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 import { CATEGORY_ICONS, CATEGORY_LABELS, type InquiryCategory } from '@/lib/types'
 import FileUpload from '@/components/board/FileUpload'
-import { KOS_URL } from '@/lib/config'
 
 const FORM_CATEGORIES: InquiryCategory[] = [
   'DELIVERY', 'MENU', 'STAFF_MEAL', 'HYGIENE', 'CONTRACT', 'OTHER',
-]
-
-const KOS_SHORTCUTS = [
-  { label: '식수 변경', icon: '🍽️', desc: 'KOS 시스템에서 처리' },
-  { label: '소모품 주문', icon: '📦', desc: 'KOS 시스템에서 처리' },
-  { label: '알러지 등록', icon: '🌿', desc: 'KOS 시스템에서 처리' },
-  { label: '원생 출결', icon: '✅', desc: 'KOS 시스템에서 처리' },
 ]
 
 interface CatConfig {
@@ -70,7 +62,6 @@ export default function NewInquiryPage() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [toast, setToast] = useState('')
-  const [kosPopup, setKosPopup] = useState<(typeof KOS_SHORTCUTS)[0] | null>(null)
 
   useEffect(() => {
     const supabase = createClient()
@@ -240,46 +231,7 @@ export default function NewInquiryPage() {
         <h1 className="font-bold text-[#1C2B1E]">새 문의 작성</h1>
       </header>
 
-      {/* KOS 팝업 */}
-      {kosPopup && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={() => setKosPopup(null)}>
-          <div className="bg-white rounded-2xl p-6 w-full max-w-sm" onClick={e => e.stopPropagation()}>
-            <div className="text-3xl text-center mb-3">{kosPopup.icon}</div>
-            <h2 className="font-bold text-[#1C2B1E] text-center mb-2">{kosPopup.label}</h2>
-            <p className="text-sm text-gray-500 text-center mb-5">이 항목은 KOS에서 처리해 주세요 😊</p>
-            <div className="flex gap-3">
-              <button type="button" onClick={() => setKosPopup(null)}
-                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-600 font-semibold py-3 rounded-xl text-sm transition-colors">
-                게시판으로 문의하기
-              </button>
-              <a href={KOS_URL} target="_blank" rel="noopener noreferrer"
-                className="flex-1 bg-[#2D6A4F] hover:bg-[#1B4332] text-white font-semibold py-3 rounded-xl text-sm transition-colors text-center">
-                KOS 바로가기
-              </a>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6 space-y-4">
-        {/* KOS 바로가기 */}
-        <div className="bg-white rounded-2xl border border-gray-100 p-5">
-          <p className="text-xs font-bold text-gray-500 mb-3">KOS 시스템 바로가기</p>
-          <div className="grid grid-cols-4 gap-2">
-            {KOS_SHORTCUTS.map(shortcut => (
-              <button
-                key={shortcut.label}
-                type="button"
-                onClick={() => setKosPopup(shortcut)}
-                className="flex flex-col items-center gap-1.5 p-3 rounded-xl bg-[#F6FAF6] hover:bg-[#E8F5E9] border border-gray-100 transition-colors"
-              >
-                <span className="text-xl">{shortcut.icon}</span>
-                <span className="text-[10px] text-gray-600 font-medium text-center leading-tight">{shortcut.label}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-
+      <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6">
         <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-gray-100 p-6 space-y-5">
           {/* 지점명 (read-only) */}
           {branchName && (
@@ -293,9 +245,10 @@ export default function NewInquiryPage() {
 
           {/* 카테고리 선택 */}
           <div>
-            <label className="block text-sm font-bold text-gray-700 mb-3">
+            <label className="block text-sm font-bold text-gray-700 mb-1">
               문의 분류 <span className="text-red-500">*</span>
             </label>
+            <p className="text-xs text-gray-400 mb-3">분류를 선택하면 입력 항목이 나타납니다</p>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               {FORM_CATEGORIES.map(cat => (
                 <button
