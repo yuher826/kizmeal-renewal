@@ -192,8 +192,8 @@ export default function AdminInquiriesPage() {
             <select value={filterCategory} onChange={e => setFilterCategory(e.target.value as InquiryCategory | '')}
               className="px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#2D6A4F]">
               <option value="">전체 분류</option>
-              {(Object.entries(CATEGORY_LABELS) as [InquiryCategory, string][]).map(([k, v]) => (
-                <option key={k} value={k}>{CATEGORY_ICONS[k]} {v}</option>
+              {(['DELIVERY', 'MENU', 'STAFF_MEAL', 'HYGIENE', 'CONTRACT', 'OTHER'] as InquiryCategory[]).map(k => (
+                <option key={k} value={k}>{CATEGORY_ICONS[k]} {CATEGORY_LABELS[k]}</option>
               ))}
             </select>
             <select value={filterAdmin} onChange={e => setFilterAdmin(e.target.value)}
