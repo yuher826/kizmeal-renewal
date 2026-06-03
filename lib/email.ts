@@ -59,6 +59,74 @@ export async function sendRejectionEmail(parentEmail: string, parentName: string
   })
 }
 
+export async function sendBranchAccountEmail(
+  branchEmail: string,
+  branchName: string,
+  managerName: string,
+  tempPassword: string
+) {
+  return getResend().emails.send({
+    from: FROM,
+    to: branchEmail,
+    subject: '[키즈밀] 소통채널 계정이 발급되었습니다',
+    html: `
+<div style="font-family:'Apple SD Gothic Neo',sans-serif;max-width:480px;margin:0 auto;background:#F6FAF6;padding:24px 16px;">
+  <div style="background:white;border-radius:24px;padding:40px 32px;text-align:center;">
+    <div style="width:64px;height:64px;background:linear-gradient(135deg,#2D6A4F,#52B788);border-radius:18px;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;">
+      <span style="color:white;font-size:28px;font-weight:bold;">K</span>
+    </div>
+    <h1 style="color:#1C2B1E;font-size:20px;font-weight:bold;margin:0 0 8px;">소통채널 계정이 발급되었습니다</h1>
+    <p style="color:#6B7280;font-size:14px;line-height:1.6;margin:0 0 16px;">
+      안녕하세요, <strong>${managerName}</strong>님!<br>
+      <strong>${branchName}</strong> 소통채널 계정이 발급되었습니다.
+    </p>
+    <div style="background:#F0F7F4;border-radius:12px;padding:16px;text-align:left;margin-bottom:24px;">
+      <p style="margin:0 0 8px;font-size:14px;color:#1C2B1E;"><strong>아이디(이메일):</strong> ${branchEmail}</p>
+      <p style="margin:0;font-size:14px;color:#1C2B1E;"><strong>임시 비밀번호:</strong> ${tempPassword}</p>
+    </div>
+    <p style="color:#EF4444;font-size:13px;margin:0 0 16px;">첫 로그인 후 반드시 비밀번호를 변경해 주세요.</p>
+    <a href="${BASE_URL}/board/login" style="display:inline-block;background:#2D6A4F;color:white;text-decoration:none;font-size:15px;font-weight:bold;padding:14px 40px;border-radius:14px;">
+      로그인 바로가기
+    </a>
+  </div>
+  <p style="text-align:center;color:#9CA3AF;font-size:11px;margin-top:16px;">키즈밀 · 건강한 급식 솔루션</p>
+</div>`,
+  })
+}
+
+export async function sendBranchPasswordResetEmail(
+  branchEmail: string,
+  branchName: string,
+  newPassword: string
+) {
+  return getResend().emails.send({
+    from: FROM,
+    to: branchEmail,
+    subject: '[키즈밀] 임시 비밀번호가 발급되었습니다',
+    html: `
+<div style="font-family:'Apple SD Gothic Neo',sans-serif;max-width:480px;margin:0 auto;background:#F6FAF6;padding:24px 16px;">
+  <div style="background:white;border-radius:24px;padding:40px 32px;text-align:center;">
+    <div style="width:64px;height:64px;background:linear-gradient(135deg,#2D6A4F,#52B788);border-radius:18px;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;">
+      <span style="color:white;font-size:28px;font-weight:bold;">K</span>
+    </div>
+    <h1 style="color:#1C2B1E;font-size:20px;font-weight:bold;margin:0 0 8px;">임시 비밀번호가 발급되었습니다</h1>
+    <p style="color:#6B7280;font-size:14px;line-height:1.6;margin:0 0 16px;">
+      <strong>${branchName}</strong> 계정의 비밀번호가 초기화되었습니다.
+    </p>
+    <div style="background:#F0F7F4;border-radius:12px;padding:16px;text-align:left;margin-bottom:24px;">
+      <p style="margin:0 0 8px;font-size:14px;color:#1C2B1E;"><strong>아이디(이메일):</strong> ${branchEmail}</p>
+      <p style="margin:0;font-size:14px;color:#1C2B1E;"><strong>임시 비밀번호:</strong> ${newPassword}</p>
+    </div>
+    <p style="color:#EF4444;font-size:13px;margin:0 0 16px;">로그인 후 반드시 비밀번호를 변경해 주세요.</p>
+    <a href="${BASE_URL}/board/login" style="display:inline-block;background:#2D6A4F;color:white;text-decoration:none;font-size:15px;font-weight:bold;padding:14px 40px;border-radius:14px;">
+      로그인 바로가기
+    </a>
+  </div>
+  <p style="text-align:center;color:#9CA3AF;font-size:11px;margin-top:16px;">키즈밀 · 건강한 급식 솔루션</p>
+</div>`,
+  })
+}
+
 export async function sendNewApplicationAlert(adminEmail: string, parentName: string, childName: string, branchName: string) {
   return getResend().emails.send({
     from: FROM,

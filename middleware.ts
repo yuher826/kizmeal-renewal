@@ -38,6 +38,7 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/board/customer')
   const isAdminRoute = pathname.startsWith('/board/admin')
   const isBoardLogin = pathname === '/board/login'
+  const isChangePassword = pathname === '/board/change-password'
 
   // Parent portal routes
   const isParentPortal = pathname.startsWith('/parent/dashboard') ||
@@ -57,10 +58,25 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/nutritionist/upload')
 
   // ── Board auth ──────────────────────────────────────────────
-  if (!user && (isCustomerRoute || isAdminRoute)) {
+  if (!user && (isCustomerRoute || isAdminRoute || isChangePassword)) {
     const url = request.nextUrl.clone()
     url.pathname = '/board/login'
     return NextResponse.redirect(url)
+  }
+
+  // must_change_password 체크 (고객 라우트에서만)
+  if (user && isCustomerRoute) {
+    const { data: branchData } = await supabase
+      .from('branches')
+      .select('must_change_password')
+      .eq('auth_id', user.id)
+      .maybeSingle()
+
+    if (branchData?.must_change_password) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/board/change-password'
+      return NextResponse.redirect(url)
+    }
   }
 
   if (user && isBoardLogin) {
@@ -132,5 +148,6 @@ export const config = {
     '/parent/login',
     '/parent/(dashboard|menu|photos|recipes|mypage)(.*)',
     '/nutritionist/(.*)',
+    '/api/check-contract-expiry',
   ],
 }

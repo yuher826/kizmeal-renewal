@@ -81,6 +81,9 @@ export interface Brand {
   updated_at: string
 }
 
+export type BranchStatus = 'new' | 'active' | 'vacation' | 'expired' | 'inactive'
+export type BranchType = 'franchise' | 'independent'
+
 export interface Branch {
   id: string
   brand_id: string
@@ -100,6 +103,13 @@ export interface Branch {
   created_at: string
   updated_at: string
   brands?: Brand
+  // Extended columns (added via branch_management.sql migration)
+  branch_type?: BranchType
+  status?: BranchStatus
+  diet_type?: 'ck' | 'catering'
+  meal_config?: Record<string, boolean>
+  must_change_password?: boolean
+  assigned_admin_id?: string
 }
 
 export interface BranchMember {
