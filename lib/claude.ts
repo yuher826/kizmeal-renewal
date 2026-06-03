@@ -44,5 +44,16 @@ ${inquiryContent}
   })
 
   const block = response.content[0]
-  return block.type === 'text' ? block.text : ''
+  const raw = block.type === 'text' ? block.text : ''
+  return stripMarkdown(raw)
+}
+
+function stripMarkdown(text: string): string {
+  return text
+    .replace(/^#{1,6}\s+.*$/gm, '')       // # 헤더 제거
+    .replace(/\*\*(.+?)\*\*/g, '$1')       // **bold** → 일반
+    .replace(/\*(.+?)\*/g, '$1')           // *italic* → 일반
+    .replace(/`(.+?)`/g, '$1')             // `code` → 일반
+    .replace(/\n{3,}/g, '\n\n')            // 연속 빈줄 정리
+    .trim()
 }

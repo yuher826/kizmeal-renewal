@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 import type {
   Inquiry, Message, Admin, SlaRule,
-  InquiryNote, ReplyTemplate, InquiryStatus,
+  InquiryNote, ReplyTemplate, InquiryStatus, PhoneLog,
 } from '@/lib/types'
 import {
   CATEGORY_COLORS, CATEGORY_ICONS, CATEGORY_LABELS,
@@ -25,6 +25,7 @@ export default function AdminInquiryDetailPage({ params }: { params: { id: strin
   const [admins, setAdmins] = useState<Admin[]>([])
   const [slaRule, setSlaRule] = useState<SlaRule | undefined>()
   const [notes, setNotes] = useState<InquiryNote[]>([])
+  const [phoneLogs, setPhoneLogs] = useState<PhoneLog[]>([])
   const [templates, setTemplates] = useState<ReplyTemplate[]>([])
   const [currentAdmin, setCurrentAdmin] = useState<Admin | null>(null)
   const [loading, setLoading] = useState(true)
@@ -55,12 +56,13 @@ export default function AdminInquiryDetailPage({ params }: { params: { id: strin
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      const [inqRes, msgsRes, adminsRes, slaRes, notesRes, templatesRes, myAdminRes] = await Promise.all([
+      const [inqRes, msgsRes, adminsRes, slaRes, notesRes, phoneLogsRes, templatesRes, myAdminRes] = await Promise.all([
         supabase.from('inquiries').select('*, branches(*, brands(*)), admins(*)').eq('id', id).single(),
         supabase.from('messages').select('*, message_attachments(*)').eq('inquiry_id', id).order('created_at', { ascending: true }),
         supabase.from('admins').select('*').eq('is_active', true),
         supabase.from('sla_rules').select('*'),
         supabase.from('inquiry_notes').select('*, admins(name)').eq('inquiry_id', id).order('created_at', { ascending: false }),
+        supabase.from('phone_logs').select('*, admins(name)').eq('inquiry_id', id).order('created_at', { ascending: false }),
         supabase.from('reply_templates').select('*').order('usage_count', { ascending: false }),
         supabase.from('admins').select('*').eq('auth_id', user.id).maybeSingle(),
       ])
@@ -76,6 +78,7 @@ export default function AdminInquiryDetailPage({ params }: { params: { id: strin
         }
       }
       if (notesRes.data) setNotes(notesRes.data as unknown as InquiryNote[])
+      if (phoneLogsRes.data) setPhoneLogs(phoneLogsRes.data as unknown as PhoneLog[])
       if (templatesRes.data) setTemplates(templatesRes.data as unknown as ReplyTemplate[])
       if (myAdminRes.data) setCurrentAdmin(myAdminRes.data as Admin)
 
@@ -243,29 +246,46 @@ export default function AdminInquiryDetailPage({ params }: { params: { id: strin
   async function addNote(noteContent: string) {
     if (!currentAdmin) return
     const supabase = createClient()
-    const { data } = await supabase
-      .from('inquiry_notes')
-      .insert({ inquiry_id: id, admin_id: currentAdmin.id, content: noteContent })
-      .select('*, admins(name)')
-      .single()
-    if (data) setNotes(prev => [data as unknown as InquiryNote, ...prev])
+    const [noteRes, { data: { user } }] = await Promise.all([
+      supabase
+        .from('inquiry_notes')
+        .insert({ inquiry_id: id, admin_id: currentAdmin.id, content: noteContent })
+        .select('*, admins(name)')
+        .single(),
+      supabase.auth.getUser(),
+    ])
+    if (noteRes.data) setNotes(prev => [noteRes.data as unknown as InquiryNote, ...prev])
+    if (user) {
+      await supabase.from('messages').insert({
+        inquiry_id: id,
+        sender_id: user.id,
+        sender_type: 'admin',
+        content: noteContent,
+        is_internal: true,
+      })
+    }
   }
 
   async function savePhoneLog() {
     if (!currentAdmin || !phoneMemo.trim()) return
     const supabase = createClient()
-    await supabase.from('phone_logs').insert({
+    const { data: logData } = await supabase.from('phone_logs').insert({
       inquiry_id: id,
       admin_id: currentAdmin.id,
       memo: phoneMemo.trim(),
       duration_minutes: phoneDuration ? parseInt(phoneDuration) : null,
-    })
+    }).select('*, admins(name)').single()
 
-    // System message
+    if (logData) setPhoneLogs(prev => [logData as unknown as PhoneLog, ...prev])
+
+    const chatContent = phoneDuration
+      ? `📞 전화 처리 — ${phoneDuration}분 통화 | ${phoneMemo.trim()}`
+      : `📞 전화 처리 | ${phoneMemo.trim()}`
+
     await supabase.from('messages').insert({
       inquiry_id: id,
       sender_type: 'system',
-      content: `전화 처리 기록됨 — ${phoneDuration ? `${phoneDuration}분` : ''}`,
+      content: chatContent,
       is_internal: false,
     })
 
@@ -369,13 +389,17 @@ export default function AdminInquiryDetailPage({ params }: { params: { id: strin
           <div className="bg-blue-50 border-t border-blue-200 px-4 py-3 flex-shrink-0 space-y-2">
             <p className="text-xs font-bold text-blue-700">📞 전화 처리 기록</p>
             <div className="flex gap-2">
-              <input
-                type="number"
-                value={phoneDuration}
-                onChange={e => setPhoneDuration(e.target.value)}
-                placeholder="통화 시간(분)"
-                className="w-28 px-3 py-2 rounded-xl border border-blue-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
-              />
+              <div className="flex items-center gap-1">
+                <input
+                  type="number"
+                  min="0"
+                  value={phoneDuration}
+                  onChange={e => setPhoneDuration(e.target.value.replace(/\D/g, ''))}
+                  placeholder="통화 시간 (분)"
+                  className="w-28 px-3 py-2 rounded-xl border border-blue-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                />
+                <span className="text-sm text-blue-700 font-medium flex-shrink-0">분</span>
+              </div>
               <input
                 type="text"
                 value={phoneMemo}
@@ -575,6 +599,30 @@ export default function AdminInquiryDetailPage({ params }: { params: { id: strin
                 </div>
               ))}
             </div>
+          </div>
+
+          {/* 전화 처리 이력 */}
+          <div>
+            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-2">📞 전화 처리 이력</h3>
+            {phoneLogs.length === 0 ? (
+              <p className="text-xs text-gray-400">전화 처리 기록 없음</p>
+            ) : (
+              <div className="space-y-2">
+                {phoneLogs.map(log => (
+                  <div key={log.id} className="bg-blue-50 border border-blue-100 rounded-xl px-3 py-2">
+                    <div className="flex items-center justify-between mb-0.5">
+                      <span className="text-xs text-blue-700 font-semibold">
+                        {log.duration_minutes ? `${log.duration_minutes}분 통화` : '통화'}
+                      </span>
+                      <span className="text-xs text-gray-400">
+                        {new Date(log.created_at).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                    {log.memo && <p className="text-xs text-gray-700 whitespace-pre-wrap">{log.memo}</p>}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* 계약 정보 */}
