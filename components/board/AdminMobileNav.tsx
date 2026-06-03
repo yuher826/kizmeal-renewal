@@ -152,7 +152,7 @@ export default function AdminMobileNav() {
         </div>
 
         {/* 그룹 네비게이션 */}
-        <nav className="flex-1 px-3 py-3 overflow-y-auto space-y-1">
+        <nav className="flex-1 min-h-0 px-3 py-3 overflow-y-auto space-y-1 max-h-[calc(100vh-140px)]">
           {NAV_GROUPS.map((group, gi) => (
             <div key={group.title} className={gi > 0 ? 'pt-2 border-t border-gray-100' : ''}>
               {/* 그룹 타이틀 */}
