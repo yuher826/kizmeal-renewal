@@ -88,7 +88,7 @@ export interface Branch {
   id: string
   brand_id: string
   auth_id?: string
-  kos_id: string
+  kos_id: string // 키즈밀 자체 원코드 (KZM-001 형식)
   name: string
   owner_name?: string
   phone?: string

@@ -84,6 +84,22 @@ function generateBrandCode(name: string): string {
   return c + Math.floor(Math.random() * 90 + 10)
 }
 
+async function generateKzmCode(): Promise<string> {
+  const supabase = createClient()
+  const { data } = await supabase
+    .from('branches')
+    .select('kos_id')
+    .like('kos_id', 'KZM-%')
+    .order('kos_id', { ascending: false })
+    .limit(1)
+  let nextNum = 1
+  if (data && data.length > 0) {
+    const match = (data[0].kos_id || '').match(/KZM-(\d+)/)
+    if (match) nextNum = parseInt(match[1]) + 1
+  }
+  return `KZM-${String(nextNum).padStart(3, '0')}`
+}
+
 const STATUS_CFG: Record<BranchStatus, { label: string; cls: string }> = {
   new: { label: '신규', cls: 'bg-blue-100 text-blue-700' },
   active: { label: '활성', cls: 'bg-green-100 text-green-700' },
@@ -271,6 +287,15 @@ export default function AdminBranchesPage() {
       setCreateMsg('오류: 네트워크 문제')
     }
     setCreating(false)
+  }
+
+  // ── 새 지점 모달 열기 (원코드 자동생성) ──────────────────────
+  async function openNewBranchModal() {
+    const nextCode = await generateKzmCode()
+    setShowNewBranch(true)
+    setStep(1)
+    setForm({ ...defaultForm(), kos_id: nextCode })
+    setCreateMsg('')
   }
 
   // ── 새 브랜드 생성 ───────────────────────────────────────────
@@ -526,7 +551,7 @@ export default function AdminBranchesPage() {
                     type="text"
                     value={search}
                     onChange={e => setSearch(e.target.value)}
-                    placeholder="지점명, KOS ID, 대표자..."
+                    placeholder="지점명, 원코드, 대표자..."
                     className="flex-1 min-w-[160px] px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#2D6A4F]"
                   />
                   <select
@@ -565,7 +590,7 @@ export default function AdminBranchesPage() {
                     엑셀 Import
                   </button>
                   <button
-                    onClick={() => { setShowNewBranch(true); setStep(1); setForm(defaultForm()); setCreateMsg('') }}
+                    onClick={openNewBranchModal}
                     className="px-4 py-2 rounded-xl bg-[#2D6A4F] hover:bg-[#1B4332] text-white text-sm font-semibold transition-colors"
                   >
                     + 새 지점
@@ -735,7 +760,7 @@ export default function AdminBranchesPage() {
                         ['원 이름', selectedBranch.name],
                         ['브랜드', selectedBranch.brands?.name || '—'],
                         ['타입', selectedBranch.branch_type === 'independent' ? '독립원' : '프랜차이즈'],
-                        ['KOS ID', selectedBranch.kos_id || '—'],
+                        ['원코드', selectedBranch.kos_id || '—'],
                         ['주소', selectedBranch.address || '—'],
                         ['연락처', selectedBranch.phone || '—'],
                         ['대표자', selectedBranch.owner_name || '—'],
@@ -1047,17 +1072,25 @@ export default function AdminBranchesPage() {
                       </select>
                     </div>
                   )}
-                  {(['name', 'kos_id', 'address', 'phone'] as const).map(field => (
+                  {/* 원코드 — 읽기전용 자동생성 */}
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1.5">원코드 (자동생성)</label>
+                    <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-gray-200 bg-gray-50">
+                      <span className="text-sm font-mono font-semibold text-[#2D6A4F]">{form.kos_id}</span>
+                      <span className="text-xs text-gray-400 ml-auto">자동생성</span>
+                    </div>
+                  </div>
+                  {(['name', 'address', 'phone'] as const).map(field => (
                     <div key={field}>
                       <label className="block text-xs font-semibold text-gray-600 mb-1.5">
-                        {field === 'name' ? '원 이름 *' : field === 'kos_id' ? 'KOS ID' : field === 'address' ? '주소' : '연락처'}
+                        {field === 'name' ? '원 이름 *' : field === 'address' ? '주소' : '연락처'}
                       </label>
                       <input
                         type="text"
                         value={form[field]}
                         onChange={e => setForm(f => ({ ...f, [field]: e.target.value }))}
                         className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#2D6A4F]"
-                        placeholder={field === 'name' ? '원 이름' : field === 'kos_id' ? 'KOS ID' : field === 'address' ? '주소' : '연락처'}
+                        placeholder={field === 'name' ? '원 이름' : field === 'address' ? '주소' : '연락처'}
                       />
                     </div>
                   ))}
@@ -1388,7 +1421,7 @@ export default function AdminBranchesPage() {
             <div className="flex-1 overflow-y-auto p-5">
               {slideTab === 'info' && (
                 <div className="space-y-3">
-                  {[['원 이름', selectedBranch.name], ['KOS ID', selectedBranch.kos_id || '—'], ['연락처', selectedBranch.phone || '—'], ['주소', selectedBranch.address || '—']].map(([l, v]) => (
+                  {[['원 이름', selectedBranch.name], ['원코드', selectedBranch.kos_id || '—'], ['연락처', selectedBranch.phone || '—'], ['주소', selectedBranch.address || '—']].map(([l, v]) => (
                     <div key={l} className="flex justify-between text-sm"><span className="text-gray-400">{l}</span><span className="font-medium text-right max-w-[60%]">{v}</span></div>
                   ))}
                   <Link href={`/board/admin/inquiries?branch=${selectedBranch.id}`} className="mt-4 block w-full text-center bg-[#2D6A4F] text-white text-sm font-semibold py-2.5 rounded-xl">문의 보기</Link>
