@@ -7,20 +7,20 @@ export type SlaStatus = 'ok' | 'warning' | 'exceeded'
 export const CATEGORY_LABELS: Record<InquiryCategory, string> = {
   MEAL_COUNT: '식수 변경',
   ALLERGY: '알레르기',
-  DELIVERY: '배송/납품',
-  MENU: '메뉴',
+  DELIVERY: '배송/납품 문제',
+  MENU: '메뉴 컴플레인/요청',
   SCHEDULE: '일정 변경',
   PHOTO: '급식 사진',
   CONTRACT: '계약/서류',
-  OTHER: '기타',
-  STAFF_MEAL: '직원 식수',
-  HYGIENE: '위생/안전',
+  OTHER: '기타 문의',
+  STAFF_MEAL: '교직원 급식 컴플레인',
+  HYGIENE: '위생 민원',
 }
 
 export const CATEGORY_ICONS: Record<InquiryCategory, string> = {
   MEAL_COUNT: '🍽️',
   ALLERGY: '🌿',
-  DELIVERY: '📦',
+  DELIVERY: '🚛',
   MENU: '🥗',
   SCHEDULE: '📅',
   PHOTO: '📸',
@@ -40,7 +40,7 @@ export const CATEGORY_COLORS: Record<InquiryCategory, string> = {
   CONTRACT: 'bg-orange-100 text-orange-800',
   OTHER: 'bg-gray-100 text-gray-700',
   STAFF_MEAL: 'bg-amber-100 text-amber-800',
-  HYGIENE: 'bg-cyan-100 text-cyan-800',
+  HYGIENE: 'bg-red-100 text-red-800',
 }
 
 export const STATUS_LABELS: Record<InquiryStatus, string> = {

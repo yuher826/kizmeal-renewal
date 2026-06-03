@@ -1,22 +1,17 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
-import {
-  CATEGORY_ICONS, CATEGORY_LABELS,
-  type InquiryCategory,
-} from '@/lib/types'
-import DynamicForm from '@/components/board/DynamicForm'
+import { CATEGORY_ICONS, CATEGORY_LABELS, type InquiryCategory } from '@/lib/types'
 import FileUpload from '@/components/board/FileUpload'
 import { KOS_URL } from '@/lib/config'
 
-const CATEGORIES: InquiryCategory[] = [
-  'DELIVERY', 'MENU', 'STAFF_MEAL', 'HYGIENE', 'CONTRACT', 'PHOTO', 'SCHEDULE', 'OTHER',
+const FORM_CATEGORIES: InquiryCategory[] = [
+  'DELIVERY', 'MENU', 'STAFF_MEAL', 'HYGIENE', 'CONTRACT', 'OTHER',
 ]
 
-// KOS system links — require redirect instead of 1:1 board
 const KOS_SHORTCUTS = [
   { label: '식수 변경', icon: '🍽️', desc: 'KOS 시스템에서 처리' },
   { label: '소모품 주문', icon: '📦', desc: 'KOS 시스템에서 처리' },
@@ -24,23 +19,95 @@ const KOS_SHORTCUTS = [
   { label: '원생 출결', icon: '✅', desc: 'KOS 시스템에서 처리' },
 ]
 
+interface CatConfig {
+  showItemName?: boolean
+  showDate?: boolean
+  dateLabel?: string
+  showStaffCount?: boolean
+  showContent: boolean
+  contentLabel: string
+  showFile?: boolean
+  fileHint?: string
+}
+
+const CAT_CONFIG: Record<string, CatConfig> = {
+  DELIVERY: {
+    showItemName: true,
+    showDate: true, dateLabel: '발생일',
+    showContent: true, contentLabel: '구체적 내용',
+    showFile: true, fileHint: '📸 불량 사진을 첨부하면 더 빠르게 처리됩니다',
+  },
+  MENU: {
+    showDate: true, dateLabel: '해당 날짜',
+    showContent: true, contentLabel: '구체적 요청사항',
+  },
+  STAFF_MEAL: {
+    showDate: true, dateLabel: '해당 날짜',
+    showStaffCount: true,
+    showContent: true, contentLabel: '컴플레인 내용',
+    showFile: true,
+  },
+  HYGIENE: {
+    showDate: true, dateLabel: '발생일',
+    showContent: true, contentLabel: '구체적 내용',
+    showFile: true, fileHint: '📸 이물질·위생 관련 사진을 첨부하면 더 빠르게 처리됩니다',
+  },
+  CONTRACT: {
+    showContent: true, contentLabel: '문의 내용',
+  },
+  OTHER: {
+    showContent: true, contentLabel: '문의 내용',
+  },
+}
+
 export default function NewInquiryPage() {
   const router = useRouter()
+  const [branchName, setBranchName] = useState('')
   const [category, setCategory] = useState<InquiryCategory | null>(null)
-  const [title, setTitle] = useState('')
+  const [formData, setFormData] = useState<Record<string, string>>({})
   const [content, setContent] = useState('')
-  const [formData, setFormData] = useState<Record<string, unknown>>({})
   const [files, setFiles] = useState<File[]>([])
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [toast, setToast] = useState('')
   const [kosPopup, setKosPopup] = useState<(typeof KOS_SHORTCUTS)[0] | null>(null)
 
-  const handleFormChange = useCallback((key: string, value: unknown) => {
+  useEffect(() => {
+    const supabase = createClient()
+    async function fetchBranch() {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      const { data: branchRow } = await supabase
+        .from('branches')
+        .select('name')
+        .eq('auth_id', user.id)
+        .maybeSingle()
+      if (branchRow?.name) { setBranchName(branchRow.name); return }
+      const { data: memberRow } = await supabase
+        .from('branch_members')
+        .select('branches(name)')
+        .eq('auth_id', user.id)
+        .maybeSingle()
+      if (memberRow?.branches) {
+        const b = memberRow.branches as unknown as { name: string }
+        setBranchName(b.name)
+      }
+    }
+    fetchBranch()
+  }, [])
+
+  const handleFieldChange = useCallback((key: string, value: string) => {
     setFormData(prev => ({ ...prev, [key]: value }))
   }, [])
 
-  const canSubmit = category && title.trim() && content.trim() && !submitting
+  const cfg = category ? CAT_CONFIG[category as string] : null
+
+  const canSubmit = !!cfg
+    && (!cfg.showItemName || !!formData.item_name?.trim())
+    && (!cfg.showDate || !!formData.incident_date)
+    && (!cfg.showStaffCount || !!formData.staff_count?.trim())
+    && content.trim().length > 0
+    && !submitting
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -54,7 +121,6 @@ export default function NewInquiryPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('로그인이 필요합니다.')
 
-      // Get branch_id and brand_id
       let branchId: string | null = null
       let brandId: string | null = null
 
@@ -81,7 +147,6 @@ export default function NewInquiryPage() {
 
       if (!branchId) throw new Error('지점 정보를 찾을 수 없습니다. 관리자에게 문의하세요.')
 
-      // brand_id가 누락된 경우 branches에서 직접 조회
       if (!brandId) {
         const { data: b } = await supabase
           .from('branches')
@@ -91,19 +156,20 @@ export default function NewInquiryPage() {
         brandId = b?.brand_id || null
       }
 
-      // Create inquiry
+      const storedFormData = Object.keys(formData).length > 0 ? formData : null
+
       const { data: inquiry, error: inqError } = await supabase
         .from('inquiries')
         .insert({
           branch_id: branchId,
           brand_id: brandId,
-          title: title.trim(),
+          title: CATEGORY_LABELS[category],
           category,
           status: 'pending',
           priority: 'medium',
           created_by_type: 'branch',
           created_by_id: user.id,
-          form_data: Object.keys(formData).length > 0 ? formData : null,
+          form_data: storedFormData,
           last_message_at: new Date().toISOString(),
         })
         .select()
@@ -111,7 +177,6 @@ export default function NewInquiryPage() {
 
       if (inqError) throw inqError
 
-      // Create first message
       const { data: message, error: msgError } = await supabase
         .from('messages')
         .insert({
@@ -126,7 +191,6 @@ export default function NewInquiryPage() {
 
       if (msgError) throw msgError
 
-      // Upload files
       if (files.length > 0 && message) {
         for (const file of files) {
           const path = `${branchId}/${inquiry.id}/${message.id}/${file.name}`
@@ -150,11 +214,10 @@ export default function NewInquiryPage() {
       setTimeout(() => router.push(`/board/inquiries/${inquiry.id}`), 1200)
     } catch (err) {
       const msg =
-        err instanceof Error
-          ? err.message
-          : typeof err === 'object' && err !== null && 'message' in err
-          ? (err as { message: string }).message
-          : '문의 등록에 실패했습니다.'
+        err instanceof Error ? err.message
+        : typeof err === 'object' && err !== null && 'message' in err
+        ? (err as { message: string }).message
+        : '문의 등록에 실패했습니다.'
       setError(msg)
       setSubmitting(false)
     }
@@ -162,12 +225,12 @@ export default function NewInquiryPage() {
 
   return (
     <div className="min-h-screen bg-[#F6FAF6] font-sans">
-      {/* 토스트 */}
       {toast && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-[#2D6A4F] text-white px-6 py-3 rounded-2xl shadow-lg text-sm font-semibold animate-fade-in">
           {toast}
         </div>
       )}
+
       <header className="bg-white border-b border-gray-100 px-4 sm:px-6 py-4 flex items-center gap-3 sticky top-0 z-10">
         <Link href="/board/inquiries" className="text-gray-400 hover:text-gray-600">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -183,14 +246,14 @@ export default function NewInquiryPage() {
           <div className="bg-white rounded-2xl p-6 w-full max-w-sm" onClick={e => e.stopPropagation()}>
             <div className="text-3xl text-center mb-3">{kosPopup.icon}</div>
             <h2 className="font-bold text-[#1C2B1E] text-center mb-2">{kosPopup.label}</h2>
-            <p className="text-sm text-gray-500 text-center mb-5">
-              이 항목은 KOS에서 처리해 주세요 😊
-            </p>
+            <p className="text-sm text-gray-500 text-center mb-5">이 항목은 KOS에서 처리해 주세요 😊</p>
             <div className="flex gap-3">
-              <button type="button" onClick={() => setKosPopup(null)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-600 font-semibold py-3 rounded-xl text-sm transition-colors">
+              <button type="button" onClick={() => setKosPopup(null)}
+                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-600 font-semibold py-3 rounded-xl text-sm transition-colors">
                 게시판으로 문의하기
               </button>
-              <a href={KOS_URL} target="_blank" rel="noopener noreferrer" className="flex-1 bg-[#2D6A4F] hover:bg-[#1B4332] text-white font-semibold py-3 rounded-xl text-sm transition-colors text-center">
+              <a href={KOS_URL} target="_blank" rel="noopener noreferrer"
+                className="flex-1 bg-[#2D6A4F] hover:bg-[#1B4332] text-white font-semibold py-3 rounded-xl text-sm transition-colors text-center">
                 KOS 바로가기
               </a>
             </div>
@@ -218,19 +281,31 @@ export default function NewInquiryPage() {
         </div>
 
         <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-gray-100 p-6 space-y-5">
+          {/* 지점명 (read-only) */}
+          {branchName && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">지점명</label>
+              <div className="w-full px-4 py-2.5 rounded-xl border border-gray-100 bg-gray-50 text-sm text-gray-600 font-medium">
+                {branchName}
+              </div>
+            </div>
+          )}
+
           {/* 카테고리 선택 */}
           <div>
             <label className="block text-sm font-bold text-gray-700 mb-3">
               문의 분류 <span className="text-red-500">*</span>
             </label>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              {CATEGORIES.map(cat => (
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {FORM_CATEGORIES.map(cat => (
                 <button
                   key={cat}
                   type="button"
                   onClick={() => {
                     setCategory(cat)
                     setFormData({})
+                    setContent('')
+                    setFiles([])
                   }}
                   className={`flex flex-col items-center gap-1.5 px-3 py-3 rounded-xl border text-sm font-medium transition-all ${
                     category === cat
@@ -245,51 +320,94 @@ export default function NewInquiryPage() {
             </div>
           </div>
 
-          {/* 동적 폼 필드 */}
-          {category && ['MEAL_COUNT', 'ALLERGY', 'DELIVERY', 'SCHEDULE'].includes(category) && (
-            <DynamicForm
-              category={category}
-              values={formData}
-              onChange={handleFormChange}
-            />
-          )}
+          {/* 카테고리별 동적 필드 */}
+          <div className={`overflow-hidden transition-all duration-300 ${cfg ? 'max-h-[1200px] opacity-100' : 'max-h-0 opacity-0'}`}>
+            {cfg && (
+              <div className="space-y-4 border-t border-gray-100 pt-4">
+                {/* 품목명 (배송/납품 문제) */}
+                {cfg.showItemName && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                      품목명 <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.item_name || ''}
+                      onChange={e => handleFieldChange('item_name', e.target.value)}
+                      placeholder="불량 품목명을 입력하세요"
+                      className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#2D6A4F] focus:border-transparent"
+                    />
+                  </div>
+                )}
 
-          {/* 제목 */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              제목 <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              value={title}
-              onChange={e => setTitle(e.target.value)}
-              placeholder="문의 제목을 입력하세요"
-              maxLength={100}
-              className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#2D6A4F] focus:border-transparent"
-            />
-          </div>
+                {/* 날짜 선택 */}
+                {cfg.showDate && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                      {cfg.dateLabel} <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="date"
+                      value={formData.incident_date || ''}
+                      onChange={e => handleFieldChange('incident_date', e.target.value)}
+                      className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#2D6A4F] focus:border-transparent"
+                    />
+                  </div>
+                )}
 
-          {/* 내용 */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              내용 <span className="text-red-500">*</span>
-            </label>
-            <textarea
-              value={content}
-              onChange={e => setContent(e.target.value)}
-              rows={6}
-              placeholder="문의 내용을 자세히 입력해주세요"
-              className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#2D6A4F] focus:border-transparent resize-none"
-            />
-            <p className="text-xs text-gray-400 mt-1 text-right">{content.length}자</p>
-          </div>
+                {/* 교직원 식수 */}
+                {cfg.showStaffCount && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                      교직원 식수 <span className="text-red-500">*</span>
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min="1"
+                        value={formData.staff_count || ''}
+                        onChange={e => handleFieldChange('staff_count', e.target.value)}
+                        placeholder="인원 수"
+                        className="w-36 px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#2D6A4F] focus:border-transparent"
+                      />
+                      <span className="text-sm text-gray-500">명분</span>
+                    </div>
+                  </div>
+                )}
 
-          {/* 파일 첨부 */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              파일 첨부 <span className="text-gray-400">(선택)</span>
-            </label>
-            <FileUpload files={files} onFilesChange={setFiles} maxFiles={5} maxSizeMB={10} />
+                {/* 내용 텍스트 */}
+                {cfg.showContent && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                      {cfg.contentLabel} <span className="text-red-500">*</span>
+                    </label>
+                    <textarea
+                      value={content}
+                      onChange={e => setContent(e.target.value)}
+                      rows={5}
+                      placeholder={`${cfg.contentLabel}을 자세히 입력해 주세요`}
+                      className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#2D6A4F] focus:border-transparent resize-none"
+                    />
+                    <p className="text-xs text-gray-400 mt-1 text-right">{content.length}자</p>
+                  </div>
+                )}
+
+                {/* 사진 첨부 */}
+                {cfg.showFile && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                      사진 첨부 <span className="text-gray-400">(선택)</span>
+                    </label>
+                    {cfg.fileHint && (
+                      <p className="text-xs text-[#2D6A4F] bg-[#E8F5E9] rounded-lg px-3 py-2 mb-2">
+                        {cfg.fileHint}
+                      </p>
+                    )}
+                    <FileUpload files={files} onFilesChange={setFiles} maxFiles={5} maxSizeMB={10} />
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {error && (
