@@ -55,7 +55,7 @@ export default function CustomerSettingsPage() {
 
   return (
     <div className="min-h-screen bg-[#F6FAF6] font-sans">
-      <header className="bg-white border-b border-gray-100 px-4 sm:px-6 py-4 flex items-center gap-3 sticky top-0 z-10">
+      <header className="bg-white border-b border-gray-100 px-4 sm:px-6 py-4 hidden sm:flex items-center gap-3 sticky top-0 z-10">
         <Link href="/board/dashboard" className="text-gray-400 hover:text-gray-600">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path strokeLinecap="round" strokeLinejoin="round" d="M19 12H5m7-7l-7 7 7 7" />

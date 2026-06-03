@@ -490,7 +490,7 @@ export default function AdminBranchesPage() {
   return (
     <div className="min-h-screen bg-[#F6FAF6] font-sans">
       {/* 헤더 */}
-      <header className="bg-white border-b border-gray-100 px-4 sm:px-6 py-4 flex items-center justify-between sticky top-0 z-20">
+      <header className="bg-white border-b border-gray-100 px-4 sm:px-6 py-4 hidden sm:flex items-center justify-between sticky top-0 z-20">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 bg-gradient-to-br from-[#2D6A4F] to-[#52B788] rounded-xl flex items-center justify-center text-white font-bold text-sm">K</div>
           <div>

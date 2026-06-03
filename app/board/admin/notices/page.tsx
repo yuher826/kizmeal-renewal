@@ -21,7 +21,7 @@ export default function AdminNoticesPage() {
 
   return (
     <div className="min-h-screen bg-[#F6FAF6] font-sans">
-      <header className="bg-white border-b border-gray-100 px-4 sm:px-6 h-16 flex items-center justify-between sticky top-0 z-10">
+      <header className="bg-white border-b border-gray-100 px-4 sm:px-6 h-16 hidden sm:flex items-center justify-between sticky top-0 z-10">
         <div>
           <h1 className="font-bold text-[#1C2B1E] text-base">공지사항</h1>
           <p className="text-gray-400 text-xs">원에게 전달할 공지를 관리하세요</p>

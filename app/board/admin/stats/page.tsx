@@ -64,7 +64,7 @@ export default function AdminStatsPage() {
 
   return (
     <div className="min-h-screen bg-[#F6FAF6] font-sans">
-      <header className="bg-white border-b border-gray-100 px-4 sm:px-6 h-16 flex items-center sticky top-0 z-10">
+      <header className="bg-white border-b border-gray-100 px-4 sm:px-6 h-16 hidden sm:flex items-center sticky top-0 z-10">
         <div>
           <h1 className="font-bold text-[#1C2B1E] text-base">통계</h1>
           <p className="text-gray-400 text-xs">문의 현황 · 처리율 · 월별 추이</p>

@@ -163,7 +163,7 @@ export default function AdminDashboard() {
 
   return (
     <div className="min-h-screen bg-[#F0F4F0] font-sans">
-      <header className="bg-white border-b border-gray-100 px-6 py-4 flex items-center justify-between sticky top-0 z-10">
+      <header className="bg-white border-b border-gray-100 px-6 py-4 hidden sm:flex items-center justify-between sticky top-0 z-10">
         <Link href="/board/admin" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
           <div className="w-8 h-8 bg-gradient-to-br from-[#2D6A4F] to-[#52B788] rounded-xl flex items-center justify-center text-white font-bold">K</div>
           <div>
