@@ -13,11 +13,13 @@
     "@supabase/ssr": "^0.10.3",
     "@supabase/supabase-js": "^2.106.2",
     "next": "14.2.35",
+    "puppeteer": "^25.1.0",
     "qrcode.react": "^4.2.0",
     "react": "^18",
     "react-dom": "^18",
     "recharts": "^3.8.1",
-    "resend": "^6.12.4"
+    "resend": "^6.12.4",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@types/node": "^20",
