@@ -316,14 +316,14 @@ export default function AdminDashboard() {
                   <thead>
                     <tr className="bg-[#F8FDF8]">
                       {['기관명', '브랜드', '만료일', 'D-Day', '식수', ''].map(h => (
-                        <th key={h} className="text-left px-5 py-3 text-xs font-bold text-gray-400">{h}</th>
+                        <th key={h} className="text-left px-5 py-3 text-xs font-bold text-gray-400 whitespace-nowrap">{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
                     {expiryList.map(item => (
                       <tr key={item.id} className="hover:bg-[#F8FDF8] transition-colors">
-                        <td className="px-5 py-4 text-sm font-semibold text-[#1C2B1E]">{item.org}</td>
+                        <td className="px-5 py-4 text-sm font-semibold text-[#1C2B1E] whitespace-nowrap">{item.org}</td>
                         <td className="px-5 py-4 text-sm text-gray-500">{item.brand}</td>
                         <td className="px-5 py-4 text-sm text-gray-600">{item.expires}</td>
                         <td className="px-5 py-4">

@@ -150,10 +150,10 @@ export default function DietDeployPage() {
             <div className="divide-y divide-gray-50">
               {pdfs.map(pdf => (
                 <div key={pdf.id} className="px-5 py-3.5 flex items-center justify-between hover:bg-[#F8FDF8]">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-[#E8F5E9] flex items-center justify-center text-sm">📄</div>
-                    <div>
-                      <p className="text-sm font-semibold text-[#1C2B1E]">{pdf.branch_name}</p>
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-8 h-8 rounded-lg bg-[#E8F5E9] flex items-center justify-center text-sm flex-shrink-0">📄</div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-[#1C2B1E] whitespace-nowrap truncate">{pdf.branch_name}</p>
                       <p className="text-xs text-gray-400">
                         {pdf.deployed_at
                           ? `배포: ${new Date(pdf.deployed_at).toLocaleString('ko-KR', { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' })}`

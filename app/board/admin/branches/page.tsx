@@ -617,9 +617,9 @@ export default function AdminBranchesPage() {
                         className={`w-full text-left p-4 space-y-2 hover:bg-[#F8FDF8] transition-colors ${selectedBranch?.id === b.id ? 'bg-[#F0F7F4]' : ''}`}
                       >
                         <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <p className="font-semibold text-[#1C2B1E] text-sm">{b.name}</p>
-                            <p className="text-xs text-gray-400">{b.kos_id}</p>
+                          <div className="min-w-0">
+                            <p className="font-semibold text-[#1C2B1E] text-sm truncate">{b.name}</p>
+                            <p className="text-xs text-gray-400 whitespace-nowrap">{b.kos_id}</p>
                           </div>
                           <div className="flex gap-1 flex-shrink-0">
                             <StatusBadge status={b.status} />
@@ -668,7 +668,7 @@ export default function AdminBranchesPage() {
                             onClick={() => { setSelectedBranch(b); setSlideTab('info'); setActionMsg(''); setConfirmDeactivate(false) }}
                             className={`hover:bg-[#F8FDF8] cursor-pointer border-t border-gray-50 transition-colors ${selectedBranch?.id === b.id ? 'bg-[#F0F7F4]' : ''}`}
                           >
-                            <td className="px-4 py-3">
+                            <td className="px-4 py-3 whitespace-nowrap">
                               <p className="text-sm font-semibold text-[#1C2B1E]">{b.name}</p>
                               <p className="text-xs text-gray-400">{b.kos_id}</p>
                             </td>

@@ -129,7 +129,7 @@ export default function AdminDietPage() {
                     const allergyCount = prof?.allergy_children?.length || 0
                     return (
                       <tr key={b.id} className="hover:bg-[#F8FDF8] transition-colors">
-                        <td className="px-5 py-3.5">
+                        <td className="px-5 py-3.5 whitespace-nowrap">
                           <p className="text-sm font-semibold text-[#1C2B1E]">{b.name}</p>
                           <p className="text-xs text-gray-400">{b.brands?.name || ''}</p>
                         </td>

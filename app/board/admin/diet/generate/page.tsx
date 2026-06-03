@@ -237,7 +237,7 @@ export default function DietGeneratePage() {
                   const slots = prof?.snack_slots?.length || 0
                   return (
                     <tr key={r.branch.id} className="hover:bg-[#F8FDF8]">
-                      <td className="px-5 py-3">
+                      <td className="px-5 py-3 whitespace-nowrap">
                         <p className="text-sm font-semibold text-[#1C2B1E]">{r.branch.name}</p>
                         <p className="text-xs text-gray-400">{prof?.branch_type || '—'}</p>
                       </td>
