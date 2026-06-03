@@ -57,7 +57,7 @@ export default function NutritionistDashboardPage() {
 
   return (
     <div className="min-h-screen bg-[#F6FAF6]">
-      <header className="bg-white border-b border-gray-100 px-4 sm:px-6 py-4 flex items-center justify-between sticky top-0 z-10">
+      <header className="hidden sm:flex bg-white border-b border-gray-100 px-4 sm:px-6 py-4 items-center justify-between sticky top-0 z-10">
         <div>
           <h1 className="font-bold text-[#1C2B1E]">영양사 대시보드</h1>
           <p className="text-xs text-gray-400">{branchName}</p>

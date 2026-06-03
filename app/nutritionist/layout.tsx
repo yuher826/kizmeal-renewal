@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import NutritionistMobileNav from '@/components/board/NutritionistMobileNav'
 
 export default async function NutritionistLayout({ children }: { children: React.ReactNode }) {
   const cookieStore = await cookies()
@@ -31,5 +32,10 @@ export default async function NutritionistLayout({ children }: { children: React
     redirect('/board/dashboard')
   }
 
-  return <>{children}</>
+  return (
+    <>
+      <NutritionistMobileNav />
+      {children}
+    </>
+  )
 }
