@@ -45,10 +45,16 @@ export default function AdminDietPage() {
           <h1 className="font-bold text-[#1C2B1E] text-base">식단표 관리</h1>
           <p className="text-gray-400 text-xs">원별 프로파일 · 업로드 · PDF 배포</p>
         </div>
-        <Link href="/board/admin/diet/upload"
-          className="inline-flex items-center gap-2 bg-[#2D6A4F] hover:bg-[#1B4332] text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors">
-          <span>📑</span> 엑셀 업로드
-        </Link>
+        <div className="flex gap-2">
+          <Link href="/board/admin/diet/templates"
+            className="inline-flex items-center gap-1.5 bg-white border border-[#2D6A4F] text-[#2D6A4F] hover:bg-[#E8F5E9] text-sm font-semibold px-4 py-2 rounded-xl transition-colors">
+            <span>🎨</span> 템플릿 관리
+          </Link>
+          <Link href="/board/admin/diet/upload"
+            className="inline-flex items-center gap-2 bg-[#2D6A4F] hover:bg-[#1B4332] text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors">
+            <span>📑</span> 엑셀 업로드
+          </Link>
+        </div>
       </header>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">

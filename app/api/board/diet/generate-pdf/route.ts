@@ -29,11 +29,25 @@ interface ProfileData {
   special_notes: string; allergy_children: AllergyChild[]
 }
 
+interface StyleJson {
+  headerColor: string; accentColor: string; sectionBgColor: string
+  headerBgColor: string; weekTitleColor: string; weekBorderColor: string
+  borderColor: string; fontFamily: string
+}
+
+const DEFAULT_STYLES: StyleJson = {
+  headerColor: '#1B4332', accentColor: '#2D6A4F',
+  sectionBgColor: '#E8F5E9', headerBgColor: '#F8FDF8',
+  weekTitleColor: '#2D6A4F', weekBorderColor: '#2D6A4F',
+  borderColor: '#ccc', fontFamily: "'Noto Sans KR', 'Malgun Gothic', sans-serif",
+}
+
 function buildDietHtml(
   branchName: string,
   yearMonth: string,
   parsed: ParsedDiet,
   profile: ProfileData,
+  styles: StyleJson = DEFAULT_STYLES,
 ): string {
   const [year, month] = yearMonth.split('-')
   const slots = (profile.snack_slots || ['morning', 'afternoon'])
@@ -93,25 +107,25 @@ function buildDietHtml(
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap');
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Noto Sans KR', 'Malgun Gothic', sans-serif; font-size: 9pt; color: #1a1a1a; background: white; }
+  body { font-family: ${styles.fontFamily}; font-size: 9pt; color: #1a1a1a; background: white; }
   @page { size: A4 landscape; margin: 12mm 10mm; }
   .page { padding: 0; }
   .header { text-align: center; margin-bottom: 6mm; }
-  .header h1 { font-size: 16pt; font-weight: 700; color: #1B4332; letter-spacing: -0.5px; }
-  .header h2 { font-size: 12pt; font-weight: 500; color: #2D6A4F; margin-top: 2px; }
+  .header h1 { font-size: 16pt; font-weight: 700; color: ${styles.headerColor}; letter-spacing: -0.5px; }
+  .header h2 { font-size: 12pt; font-weight: 500; color: ${styles.accentColor}; margin-top: 2px; }
   .header .subtitle { font-size: 8pt; color: #666; margin-top: 2px; }
   .week-block { margin-bottom: 4mm; }
-  .week-title { font-weight: 700; font-size: 9pt; color: #2D6A4F; padding: 2px 0 2px 2px; border-left: 3px solid #2D6A4F; margin-bottom: 1.5mm; }
+  .week-title { font-weight: 700; font-size: 9pt; color: ${styles.weekTitleColor}; padding: 2px 0 2px 2px; border-left: 3px solid ${styles.weekBorderColor}; margin-bottom: 1.5mm; }
   .diet-table { width: 100%; border-collapse: collapse; }
-  .diet-table th, .diet-table td { border: 1px solid #ccc; padding: 2.5px 4px; text-align: center; vertical-align: top; }
-  .th-section { width: 60px; background: #E8F5E9; font-weight: 700; font-size: 8pt; color: #1B4332; }
-  .th-day { background: #F8FDF8; font-weight: 700; font-size: 8pt; width: calc((100% - 60px) / 5); }
+  .diet-table th, .diet-table td { border: 1px solid ${styles.borderColor}; padding: 2.5px 4px; text-align: center; vertical-align: top; }
+  .th-section { width: 60px; background: ${styles.sectionBgColor}; font-weight: 700; font-size: 8pt; color: ${styles.headerColor}; }
+  .th-day { background: ${styles.headerBgColor}; font-weight: 700; font-size: 8pt; width: calc((100% - 60px) / 5); }
   .th-day small { font-size: 7pt; color: #888; font-weight: 400; }
-  .section-label { background: #F8FDF8; font-weight: 600; font-size: 8pt; color: #2D6A4F; white-space: nowrap; }
+  .section-label { background: ${styles.headerBgColor}; font-weight: 600; font-size: 8pt; color: ${styles.accentColor}; white-space: nowrap; }
   .menu-cell { font-size: 7.5pt; line-height: 1.4; }
   .menu-name { display: block; }
   .allergen { color: #dc2626; font-weight: 700; font-size: 7pt; }
-  .footer { margin-top: 4mm; font-size: 7pt; color: #555; border-top: 1px solid #ccc; padding-top: 3mm; }
+  .footer { margin-top: 4mm; font-size: 7pt; color: #555; border-top: 1px solid ${styles.borderColor}; padding-top: 3mm; }
   .origin { margin-bottom: 2mm; }
   .allergen-guide { line-height: 1.8; }
   .allergen-guide span { margin-right: 4px; }
@@ -189,8 +203,18 @@ export async function POST(req: NextRequest) {
     const profile = (branch.profile_data as ProfileData) || { snack_slots: ['morning','afternoon'], custom_slots: [], special_notes: '', allergy_children: [] }
     const parsed  = upload.parsed_data as ParsedDiet
 
+    // 활성 템플릿 스타일 조회 (없으면 기본 스타일 사용)
+    const { data: activeTmpl } = await supabase
+      .from('diet_templates')
+      .select('style_json')
+      .eq('is_active', true)
+      .maybeSingle()
+    const styles: StyleJson = activeTmpl?.style_json
+      ? { ...DEFAULT_STYLES, ...(activeTmpl.style_json as Partial<StyleJson>) }
+      : DEFAULT_STYLES
+
     // Build HTML
-    const html = buildDietHtml(branch.name, upload.year_month, parsed, profile)
+    const html = buildDietHtml(branch.name, upload.year_month, parsed, profile, styles)
 
     // Generate PDF with puppeteer
     const puppeteer = await import('puppeteer')
