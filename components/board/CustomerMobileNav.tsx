@@ -121,7 +121,7 @@ export default function CustomerMobileNav() {
         </div>
 
         {/* 네비게이션 항목 */}
-        <nav className="flex-1 px-3 py-3 overflow-y-auto">
+        <nav className="flex-1 min-h-0 px-3 py-3 overflow-y-auto max-h-[calc(100vh-140px)]">
           {NAV.map(item => {
             const active = pathname === item.href ||
               (item.href !== '/board/dashboard' && pathname.startsWith(item.href))
