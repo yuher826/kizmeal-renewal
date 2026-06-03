@@ -84,6 +84,32 @@ export interface Brand {
 export type BranchStatus = 'new' | 'active' | 'vacation' | 'expired' | 'inactive'
 export type BranchType = 'franchise' | 'independent'
 
+// ── 식단 프로파일 (meal_config JSONB) ──────────────────────────
+export interface MealConfigSnack {
+  오전: boolean
+  오후: boolean
+  방과후: boolean
+  돌봄: boolean
+  기타: string[]
+}
+
+export interface AllergyChildConfig {
+  이름: string
+  항목: number[]
+  기타알레르기: string[]
+}
+
+export interface MealConfig {
+  간식: MealConfigSnack
+  특이사항: string
+  pptx슬라이드: 1 | 3
+  알레르기아이: AllergyChildConfig[]
+  식단확인: {
+    마지막확인: string | null
+    확인횟수: number
+  }
+}
+
 export interface Branch {
   id: string
   brand_id: string
@@ -107,7 +133,7 @@ export interface Branch {
   branch_type?: BranchType
   status?: BranchStatus
   diet_type?: 'ck' | 'catering'
-  meal_config?: Record<string, boolean>
+  meal_config?: MealConfig | Record<string, unknown>
   must_change_password?: boolean
   assigned_admin_id?: string
 }

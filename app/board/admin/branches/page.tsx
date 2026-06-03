@@ -822,31 +822,58 @@ export default function AdminBranchesPage() {
                     </>
                   )}
 
-                  {slideTab === 'diet' && (
-                    <>
-                      <div>
-                        <p className="text-xs font-medium text-gray-500 mb-2">간식 구성</p>
-                        <div className="grid grid-cols-2 gap-2">
-                          {['오전', '오후', '방과후', '돌봄'].map(key => {
-                            const active = (selectedBranch.meal_config || {})[key]
-                            return (
-                              <div key={key} className={`px-3 py-2 rounded-xl text-xs font-medium ${active ? 'bg-[#E8F5E9] text-[#2D6A4F]' : 'bg-gray-100 text-gray-400'}`}>
-                                {active ? '✓' : '○'} {key}간식
-                              </div>
-                            )
-                          })}
+                  {slideTab === 'diet' && (() => {
+                    const mc = (selectedBranch.meal_config || {}) as Record<string, unknown>
+                    const hasNew = mc && typeof mc === 'object' && mc.간식
+                    const snack = hasNew ? mc.간식 as Record<string, unknown> : null
+                    const allergyKids = hasNew ? ((mc.알레르기아이 as unknown[]) || []).length : 0
+                    const slide = hasNew ? (mc.pptx슬라이드 as number) || 1 : null
+                    const notes = hasNew ? (mc.특이사항 as string) || '' : ''
+                    const snackBadges: string[] = snack
+                      ? [...(['오전', '오후', '방과후', '돌봄'] as const).filter(k => snack[k]), ...((snack.기타 as string[]) || [])]
+                      : []
+                    return (
+                      <>
+                        <div className="flex gap-2 flex-wrap">
+                          <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${selectedBranch.diet_type === 'catering' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                            {selectedBranch.diet_type === 'catering' ? '위탁' : 'CK'}
+                          </span>
+                          {slide !== null && (
+                            <span className="text-xs bg-gray-100 text-gray-600 font-semibold px-2 py-0.5 rounded-full">Slide {slide}</span>
+                          )}
+                          {allergyKids > 0 && (
+                            <span className="text-xs bg-red-100 text-red-700 font-semibold px-2 py-0.5 rounded-full">⚠️ {allergyKids}명</span>
+                          )}
                         </div>
-                      </div>
-                      <div className="pt-2">
-                        <Link
-                          href={`/board/admin/branches/${selectedBranch.id}/profile`}
-                          className="block w-full text-center text-sm text-[#2D6A4F] border border-[#2D6A4F] rounded-xl py-2 font-medium hover:bg-[#F0F7F4] transition-colors"
-                        >
-                          프로파일 상세 설정 →
-                        </Link>
-                      </div>
-                    </>
-                  )}
+                        {snackBadges.length > 0 ? (
+                          <div>
+                            <p className="text-xs text-gray-400 mb-1.5">간식 구성</p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {snackBadges.map(s => (
+                                <span key={s} className="text-xs bg-[#E8F5E9] text-[#2D6A4F] font-medium px-2 py-0.5 rounded-full">{s}</span>
+                              ))}
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="text-xs text-gray-400">간식 구성 미설정</p>
+                        )}
+                        {notes && (
+                          <div>
+                            <p className="text-xs text-gray-400 mb-1">특이사항</p>
+                            <p className="text-xs text-gray-600 bg-gray-50 rounded-lg px-3 py-2">{notes}</p>
+                          </div>
+                        )}
+                        <div className="pt-1">
+                          <Link
+                            href={`/board/admin/diet/${selectedBranch.id}`}
+                            className="block w-full text-center text-sm text-[#2D6A4F] border border-[#2D6A4F] rounded-xl py-2 font-medium hover:bg-[#F0F7F4] transition-colors"
+                          >
+                            프로파일 설정하기 →
+                          </Link>
+                        </div>
+                      </>
+                    )
+                  })()}
 
                   {slideTab === 'account' && (
                     <div className="space-y-4">
@@ -1438,14 +1465,40 @@ export default function AdminBranchesPage() {
                   </select>
                 </div>
               )}
-              {slideTab === 'diet' && (
-                <div className="grid grid-cols-2 gap-3">
-                  {['오전', '오후', '방과후', '돌봄'].map(key => {
-                    const active = (selectedBranch.meal_config || {})[key]
-                    return <div key={key} className={`px-3 py-2 rounded-xl text-sm font-medium ${active ? 'bg-[#E8F5E9] text-[#2D6A4F]' : 'bg-gray-100 text-gray-400'}`}>{active ? '✓' : '○'} {key}</div>
-                  })}
-                </div>
-              )}
+              {slideTab === 'diet' && (() => {
+                const mc = (selectedBranch.meal_config || {}) as Record<string, unknown>
+                const hasNew = mc && typeof mc === 'object' && mc.간식
+                const snack = hasNew ? mc.간식 as Record<string, unknown> : null
+                const allergyKids = hasNew ? ((mc.알레르기아이 as unknown[]) || []).length : 0
+                const slide = hasNew ? (mc.pptx슬라이드 as number) || 1 : null
+                const snackBadges: string[] = snack
+                  ? [...(['오전', '오후', '방과후', '돌봄'] as const).filter(k => snack[k]), ...((snack.기타 as string[]) || [])]
+                  : []
+                return (
+                  <div className="space-y-3">
+                    <div className="flex flex-wrap gap-2">
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${selectedBranch.diet_type === 'catering' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                        {selectedBranch.diet_type === 'catering' ? '위탁' : 'CK'}
+                      </span>
+                      {slide !== null && <span className="text-xs bg-gray-100 text-gray-600 font-semibold px-2 py-0.5 rounded-full">Slide {slide}</span>}
+                      {allergyKids > 0 && <span className="text-xs bg-red-100 text-red-700 font-semibold px-2 py-0.5 rounded-full">⚠️ {allergyKids}명</span>}
+                    </div>
+                    {snackBadges.length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5">
+                        {snackBadges.map(s => (
+                          <span key={s} className="text-xs bg-[#E8F5E9] text-[#2D6A4F] font-medium px-2 py-0.5 rounded-full">{s}</span>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-gray-400">간식 구성 미설정</p>
+                    )}
+                    <Link href={`/board/admin/diet/${selectedBranch.id}`}
+                      className="block w-full text-center text-sm bg-[#2D6A4F] text-white font-semibold py-2.5 rounded-xl hover:bg-[#1B4332] transition-colors">
+                      프로파일 설정하기
+                    </Link>
+                  </div>
+                )
+              })()}
               {slideTab === 'account' && (
                 <div className="space-y-3">
                   <div className="flex justify-between text-sm"><span className="text-gray-400">이메일</span><span className="font-medium text-right text-xs">{selectedBranch.email || '—'}</span></div>

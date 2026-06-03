@@ -14,21 +14,51 @@ const STATUS_META: Record<string, { label: string; color: string }> = {
   resolved: { label: '완료', color: '#2D6A4F' },
 }
 
+interface DietStat {
+  total: number
+  configured: number
+  allergyBranches: number
+  allergyTotal: number
+  slide1: number
+  slide3: number
+  unconfirmed: number
+}
+
 export default function AdminStatsPage() {
   const [loading, setLoading] = useState(true)
   const [total, setTotal] = useState(0)
   const [resolved, setResolved] = useState(0)
   const [statusData, setStatusData] = useState<{ name: string; value: number; color: string }[]>([])
   const [monthData, setMonthData] = useState<{ month: string; 문의수: number }[]>([])
+  const [dietStat, setDietStat] = useState<DietStat | null>(null)
 
   const load = useCallback(async () => {
     const supabase = createClient()
-    const { data } = await supabase.from('inquiries').select('status, created_at')
+    const [{ data }, { data: branches }] = await Promise.all([
+      supabase.from('inquiries').select('status, created_at'),
+      supabase.from('branches').select('meal_config, diet_type').eq('is_active', true),
+    ])
     const inqs = data || []
+    const branchList = branches || []
 
     setTotal(inqs.length)
     const resolvedCount = inqs.filter(i => i.status === 'resolved').length
     setResolved(resolvedCount)
+
+    // 식단 통계
+    let configured = 0, allergyBranches = 0, allergyTotal = 0, slide1 = 0, slide3 = 0, unconfirmed = 0
+    for (const b of branchList) {
+      const mc = b.meal_config as Record<string, unknown> | null
+      if (!mc || !mc.간식) continue
+      configured++
+      const kids = (mc.알레르기아이 as unknown[]) || []
+      if (kids.length > 0) { allergyBranches++; allergyTotal += kids.length }
+      const s = (mc.pptx슬라이드 as number) || 1
+      if (s === 3) slide3++; else slide1++
+      const confirm = mc.식단확인 as Record<string, unknown> | undefined
+      if (!confirm?.마지막확인) unconfirmed++
+    }
+    setDietStat({ total: branchList.length, configured, allergyBranches, allergyTotal, slide1, slide3, unconfirmed })
 
     // 상태별
     const statusMap: Record<string, number> = {}
@@ -86,6 +116,28 @@ export default function AdminStatsPage() {
             </div>
           ))}
         </div>
+
+        {/* 식단 프로파일 통계 */}
+        {dietStat && (
+          <div className="bg-white rounded-2xl border border-gray-100 p-6">
+            <h2 className="font-bold text-[#1C2B1E] mb-4 text-sm sm:text-base">식단 프로파일 현황</h2>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {[
+                { label: '프로파일 설정', value: `${dietStat.configured}/${dietStat.total}`, sub: '원', color: 'text-[#2D6A4F]' },
+                { label: '미설정 원',    value: dietStat.total - dietStat.configured,        sub: '원', color: 'text-orange-600' },
+                { label: '알레르기 아동', value: dietStat.allergyTotal,                       sub: '명', color: 'text-red-600' },
+                { label: 'Slide 1 (간식)', value: dietStat.slide1,                           sub: '원', color: 'text-blue-600' },
+                { label: 'Slide 3 (점심)', value: dietStat.slide3,                           sub: '원', color: 'text-gray-500' },
+                { label: '식단표 미확인', value: dietStat.unconfirmed,                        sub: '원', color: 'text-yellow-600' },
+              ].map(stat => (
+                <div key={stat.label} className="bg-[#F8FDF8] rounded-xl p-3">
+                  <p className={`text-xl font-bold ${stat.color}`}>{stat.value}<span className="text-xs font-normal text-gray-400 ml-0.5">{stat.sub}</span></p>
+                  <p className="text-xs text-gray-500 mt-0.5">{stat.label}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="grid lg:grid-cols-2 gap-6">
           {/* 상태별 도넛 */}

@@ -40,6 +40,14 @@ export async function POST(request: Request) {
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
       )
 
+      const defaultMealConfig = {
+        간식: { 오전: false, 오후: true, 방과후: false, 돌봄: false, 기타: [] },
+        특이사항: '',
+        pptx슬라이드: 1,
+        알레르기아이: [],
+        식단확인: { 마지막확인: null, 확인횟수: 0 },
+      }
+
       const { data: branch, error: branchError } = await supabase
         .from('branches')
         .insert({
@@ -49,6 +57,7 @@ export async function POST(request: Request) {
           must_change_password: true,
           is_active: true,
           status: 'new',
+          meal_config: branchData.meal_config ?? defaultMealConfig,
         })
         .select()
         .single()
