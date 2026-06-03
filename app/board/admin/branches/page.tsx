@@ -116,7 +116,7 @@ export default function AdminBranchesPage() {
             <p className="text-gray-400 text-xs">전체 가맹점 목록</p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="hidden sm:flex items-center gap-3">
           <Link href="/board/admin" className="text-sm text-[#2D6A4F] font-medium hover:underline">대시보드</Link>
           <Link href="/board/admin/branches/qr" className="text-sm text-[#2D6A4F] font-medium hover:underline">QR코드 생성</Link>
           <Link href="/board/admin/inquiries" className="text-sm text-[#2D6A4F] font-medium hover:underline">문의 관리</Link>
@@ -171,9 +171,58 @@ export default function AdminBranchesPage() {
           </div>
         </div>
 
-        {/* Table */}
+        {/* 가맹점 목록 */}
         <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-          <div className="overflow-x-auto">
+          {/* 모바일 카드뷰 */}
+          <div className="sm:hidden divide-y divide-gray-50">
+            {loading ? (
+              Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="p-4"><div className="h-20 bg-gray-50 rounded-xl animate-pulse"/></div>
+              ))
+            ) : filtered.length === 0 ? (
+              <div className="px-4 py-10 text-center text-gray-400 text-sm">가맹점 없음</div>
+            ) : filtered.map(b => {
+              const days = daysUntil(b.contract_end)
+              return (
+                <div key={b.id} className="p-4 space-y-2.5">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="font-semibold text-[#1C2B1E]">{b.name}</p>
+                      <p className="text-xs text-gray-400">{b.kos_id}</p>
+                    </div>
+                    <span className="text-xs bg-[#E8F5E9] text-[#2D6A4F] font-medium px-2 py-0.5 rounded-full flex-shrink-0">{b.brands?.name || '—'}</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2 text-xs text-gray-500">
+                    {b.owner_name && <span>👤 {b.owner_name}</span>}
+                    {b.phone && <span>📞 {b.phone}</span>}
+                    {b.meal_count ? <span>🍽️ {b.meal_count}명</span> : null}
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      {b.contract_end && days !== null && (
+                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                          days < 0 ? 'bg-gray-200 text-gray-500'
+                          : days <= 14 ? 'bg-red-100 text-red-700'
+                          : days <= 30 ? 'bg-yellow-100 text-yellow-800'
+                          : 'bg-blue-50 text-blue-700'
+                        }`}>{days < 0 ? '만료' : `D-${days}`}</span>
+                      )}
+                      {(b.pending_count || 0) > 0 && (
+                        <span className="text-xs bg-red-100 text-red-700 font-semibold px-2 py-0.5 rounded-full">미처리 {b.pending_count}건</span>
+                      )}
+                    </div>
+                    <Link href={`/board/admin/inquiries?branch=${b.id}`}
+                      className="text-xs bg-[#2D6A4F] hover:bg-[#1B4332] text-white font-semibold px-4 py-2.5 rounded-xl transition-colors">
+                      문의 보기
+                    </Link>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+
+          {/* 데스크탑 테이블 */}
+          <div className="hidden sm:block overflow-x-auto">
             <table className="w-full">
               <thead>
                 <tr className="bg-[#F8FDF8]">

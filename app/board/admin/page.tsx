@@ -171,7 +171,7 @@ export default function AdminDashboard() {
             <p className="text-gray-400 text-xs">{adminName || '관리자'} · 대시보드</p>
           </div>
         </Link>
-        <div className="flex items-center gap-3">
+        <div className="hidden sm:flex items-center gap-3">
           <Link href="/board/admin/inquiries" className="text-sm text-[#2D6A4F] font-medium hover:underline">문의 관리</Link>
           <Link href="/board/admin/branches" className="text-sm text-[#2D6A4F] font-medium hover:underline">가맹점 관리</Link>
           <Link href="/board/admin/parents" className="relative text-sm text-[#2D6A4F] font-medium hover:underline inline-flex items-center gap-1.5">

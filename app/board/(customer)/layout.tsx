@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase-server'
+import CustomerMobileNav from '@/components/board/CustomerMobileNav'
 
 export default async function CustomerLayout({ children }: { children: React.ReactNode }) {
   const supabase = createClient()
@@ -24,5 +25,10 @@ export default async function CustomerLayout({ children }: { children: React.Rea
     if (!memberData) redirect('/board/login')
   }
 
-  return <>{children}</>
+  return (
+    <>
+      <CustomerMobileNav />
+      {children}
+    </>
+  )
 }

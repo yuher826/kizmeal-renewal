@@ -144,7 +144,7 @@ export default function AdminInquiriesPage() {
             <p className="text-gray-400 text-xs">전체 문의 목록</p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="hidden sm:flex items-center gap-3">
           {stats.unread > 0 && (
             <span className="text-xs bg-red-100 text-red-700 font-semibold px-2.5 py-1 rounded-full">
               미처리 {stats.unread}건
@@ -229,9 +229,58 @@ export default function AdminInquiriesPage() {
           </div>
         )}
 
-        {/* 문의 테이블 */}
+        {/* 문의 목록 */}
         <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-          <div className="overflow-x-auto">
+          {/* 모바일 카드뷰 */}
+          <div className="sm:hidden divide-y divide-gray-50">
+            {loading ? (
+              Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="p-4"><div className="h-16 bg-gray-50 rounded-xl animate-pulse"/></div>
+              ))
+            ) : filtered.length === 0 ? (
+              <div className="px-4 py-10 text-center text-gray-400 text-sm">문의 내역이 없습니다.</div>
+            ) : filtered.map(inq => {
+              const rule = slaRules[inq.category]
+              const slaStatus = getSlaStatus(inq, rule)
+              return (
+                <div key={inq.id} className="p-4 space-y-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-[#1C2B1E]">{inq.branches?.name || '—'}</p>
+                      <div className="flex flex-wrap gap-1.5 mt-1">
+                        <span className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-xs font-semibold ${CATEGORY_COLORS[inq.category]}`}>
+                          {CATEGORY_ICONS[inq.category]} {CATEGORY_LABELS[inq.category]}
+                        </span>
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${STATUS_COLORS[inq.status]}`}>
+                          {STATUS_LABELS[inq.status]}
+                        </span>
+                      </div>
+                    </div>
+                    <Link href={`/board/admin/inquiries/${inq.id}`}
+                      className="flex-shrink-0 text-xs bg-[#2D6A4F] hover:bg-[#1B4332] text-white font-semibold px-4 py-2.5 rounded-xl transition-colors">
+                      답변
+                    </Link>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    {(inq.unread_count_admin ?? 0) > 0 && (
+                      <span className="w-4 h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center flex-shrink-0">{inq.unread_count_admin}</span>
+                    )}
+                    <p className="text-sm text-[#1C2B1E] truncate">{inq.title}</p>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-gray-400">
+                    <span>{inq.admins?.name || '미배정'}</span>
+                    <span>·</span>
+                    <span>{getSlaIcon(slaStatus)}</span>
+                    <span>·</span>
+                    <span>{timeAgo(inq.created_at)}</span>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+
+          {/* 데스크탑 테이블 */}
+          <div className="hidden sm:block overflow-x-auto">
             <table className="w-full">
               <thead>
                 <tr className="bg-[#F8FDF8]">
