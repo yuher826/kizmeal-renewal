@@ -228,7 +228,7 @@ export default function AdminDashboard() {
 
         {/* General inquiry quick access */}
         <Link
-          href="/board/admin/public-inquiries"
+          href="/board/admin/inquiries?tab=public"
           className="block bg-white rounded-2xl border border-gray-100 p-5 hover:shadow-md transition-shadow"
         >
           <div className="flex items-center justify-between">

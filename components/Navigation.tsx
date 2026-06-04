@@ -52,7 +52,7 @@ const NAV: NavItem[] = [
   {
     key: 'support',
     label: '고객지원',
-    matchPrefixes: ['/notice', '/inquiry', '/parent/login'],
+    matchPrefixes: ['/notice', '/inquiry/check', '/parent/login'],
     dropdown: [
       { icon: '👨‍👩‍👧', label: '학부모 포털', href: '/parent/login' },
       { icon: '🔍', label: '내 문의 확인', href: '/inquiry/check' },
@@ -247,21 +247,19 @@ export default function Navigation() {
         </ul>
 
         <div className="flex items-center gap-3 flex-shrink-0">
+          <Link
+            href="/parent/login"
+            className="hidden lg:inline-flex border border-[#2D6A4F] text-[#2D6A4F] hover:bg-[#2D6A4F] hover:text-white rounded-full px-4 py-2 text-sm font-medium transition-colors"
+          >
+            학부모 포털
+          </Link>
           {!isLoggedIn && (
-            <>
-              <Link
-                href="/parent/login"
-                className="hidden lg:inline-flex border border-[#2D6A4F] text-[#2D6A4F] hover:bg-[#2D6A4F] hover:text-white rounded-full px-4 py-2 text-sm font-medium transition-colors"
-              >
-                학부모 포털
-              </Link>
-              <Link
-                href="/board/login"
-                className="hidden lg:inline-flex bg-[#2D6A4F] text-white hover:bg-[#1B4332] rounded-full px-4 py-2 text-sm font-medium transition-colors"
-              >
-                소통채널
-              </Link>
-            </>
+            <Link
+              href="/board/login"
+              className="hidden lg:inline-flex bg-[#2D6A4F] text-white hover:bg-[#1B4332] rounded-full px-4 py-2 text-sm font-medium transition-colors"
+            >
+              소통채널
+            </Link>
           )}
           {isLoggedIn && (
             <div className="hidden lg:flex items-center gap-3">
@@ -368,15 +366,15 @@ export default function Navigation() {
               </div>
             );
           })}
-          {!isLoggedIn && (
-            <div className="mt-4 space-y-2">
-              <Link
-                href="/parent/login"
-                className="block text-center border border-[#2D6A4F] text-[#2D6A4F] hover:bg-[#2D6A4F] hover:text-white py-3 rounded-full font-medium text-sm transition-colors"
-                onClick={() => setIsMobileOpen(false)}
-              >
-                학부모 포털
-              </Link>
+          <div className="mt-4 space-y-2">
+            <Link
+              href="/parent/login"
+              className="block text-center border border-[#2D6A4F] text-[#2D6A4F] hover:bg-[#2D6A4F] hover:text-white py-3 rounded-full font-medium text-sm transition-colors"
+              onClick={() => setIsMobileOpen(false)}
+            >
+              학부모 포털
+            </Link>
+            {!isLoggedIn && (
               <Link
                 href="/board/login"
                 className="block text-center bg-[#2D6A4F] text-white hover:bg-[#1B4332] py-3 rounded-full font-medium text-sm transition-colors"
@@ -384,8 +382,8 @@ export default function Navigation() {
               >
                 소통채널
               </Link>
-            </div>
-          )}
+            )}
+          </div>
           {isLoggedIn && (
             <div className="mt-4 border-t border-gray-100 pt-4 space-y-1">
               <Link
