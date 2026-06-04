@@ -79,7 +79,7 @@ export default function GalleryPage() {
     <>
       {/* Hero */}
       <section
-        className="relative h-64 flex items-center justify-center overflow-hidden"
+        className="relative min-h-[320px] flex items-center justify-center overflow-hidden"
         style={{ background: 'linear-gradient(135deg, #1B4332 0%, #2D6A4F 100%)' }}
       >
         <div className="text-center pt-16 relative z-10">
