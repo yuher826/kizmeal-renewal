@@ -1,23 +1,30 @@
 'use client'
 
+import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
+
 type Notice = {
   id: string
   title: string
   date: string
   target: string
   pinned: boolean
+  type: 'public' | 'branch'
 }
 
-// 샘플 데이터 — 공지 테이블 연동은 추후
 const SAMPLE: Notice[] = [
-  { id: '1', title: '2026년 1학기 식자재 단가 안내', date: '2026-05-28', target: '전체 원', pinned: true },
-  { id: '2', title: '여름철 식중독 예방 가이드 배포', date: '2026-05-20', target: '전체 원', pinned: false },
-  { id: '3', title: '5월 신메뉴 레시피 업데이트', date: '2026-05-12', target: '유치원', pinned: false },
+  { id: '1', title: '2026년 1학기 식자재 단가 안내', date: '2026-05-28', target: '전체 원', pinned: true, type: 'branch' },
+  { id: '2', title: '여름철 식중독 예방 가이드 배포', date: '2026-05-20', target: '전체 원', pinned: false, type: 'public' },
+  { id: '3', title: '5월 신메뉴 레시피 업데이트', date: '2026-05-12', target: '유치원', pinned: false, type: 'branch' },
 ]
 
 export default function AdminNoticesPage() {
-  const pinned = SAMPLE.filter(n => n.pinned)
-  const normal = SAMPLE.filter(n => !n.pinned)
+  const searchParams = useSearchParams()
+  const activeType = (searchParams.get('type') as 'public' | 'branch') || 'public'
+
+  const filtered = SAMPLE.filter(n => n.type === activeType)
+  const pinned = filtered.filter(n => n.pinned)
+  const normal = filtered.filter(n => !n.pinned)
 
   return (
     <div className="min-h-screen bg-[#F6FAF6] font-sans">
@@ -35,6 +42,30 @@ export default function AdminNoticesPage() {
       </header>
 
       <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 space-y-4">
+        {/* 탭 */}
+        <div className="flex gap-1 bg-white border border-gray-100 rounded-2xl p-1 w-fit">
+          <Link
+            href="/board/admin/notices?type=public"
+            className={`px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${
+              activeType === 'public'
+                ? 'bg-[#2D6A4F] text-white'
+                : 'text-gray-500 hover:bg-gray-50'
+            }`}
+          >
+            🌐 홈페이지 공지
+          </Link>
+          <Link
+            href="/board/admin/notices?type=branch"
+            className={`px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${
+              activeType === 'branch'
+                ? 'bg-[#2D6A4F] text-white'
+                : 'text-gray-500 hover:bg-gray-50'
+            }`}
+          >
+            📣 가맹점 공지
+          </Link>
+        </div>
+
         {/* 고정 공지 */}
         {pinned.length > 0 && (
           <div className="space-y-3">
@@ -65,7 +96,13 @@ export default function AdminNoticesPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {normal.map(n => (
+                {normal.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="px-5 py-10 text-center text-gray-400 text-sm">
+                      {activeType === 'public' ? '홈페이지 공지가 없습니다' : '가맹점 공지가 없습니다'}
+                    </td>
+                  </tr>
+                ) : normal.map(n => (
                   <tr key={n.id} className="hover:bg-[#F8FDF8] transition-colors">
                     <td className="px-5 py-4 text-sm font-medium text-[#1C2B1E]">{n.title}</td>
                     <td className="px-5 py-4">

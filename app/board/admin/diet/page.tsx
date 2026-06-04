@@ -231,8 +231,8 @@ export default function AdminDietPage() {
                   return (
                     <tr key={b.id} className="hover:bg-[#F8FDF8] transition-colors">
                       <td className="px-4 py-3.5 whitespace-nowrap">
-                        <p className="text-sm font-semibold text-[#1C2B1E]">{b.name}</p>
-                        <p className="text-xs text-gray-400">{b.brands?.name || ''}</p>
+                        <p className="text-sm font-semibold text-[#1C2B1E] whitespace-nowrap">{b.name}</p>
+                        <p className="text-xs text-gray-400 whitespace-nowrap">{b.brands?.name || ''}</p>
                       </td>
                       <td className="px-4 py-3.5">
                         {isConfigured ? (

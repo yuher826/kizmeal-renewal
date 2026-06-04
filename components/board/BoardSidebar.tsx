@@ -13,7 +13,6 @@ const ADMIN_GROUPS: MenuGroup[] = [
     title: '홈페이지 관리', icon: '🌐',
     items: [
       { icon: '📝', label: '콘텐츠 관리', href: '/board/admin/content' },
-      { icon: '🖼️', label: '콘텐츠 업로드', href: '/nutritionist/upload' },
       { icon: '📢', label: '홈페이지 공지', href: '/board/admin/notices?type=public' },
     ],
   },
@@ -21,16 +20,16 @@ const ADMIN_GROUPS: MenuGroup[] = [
     title: '소통허브 관리', icon: '💬',
     items: [
       { icon: '💬', label: '문의 관리', href: '/board/admin/inquiries' },
-      { icon: '📢', label: '가맹점 공지', href: '/board/admin/notices?type=branch' },
-      { icon: '📋', label: '식단표 배포', href: '/board/admin/diet' },
+      { icon: '📣', label: '가맹점 공지', href: '/board/admin/notices?type=branch' },
+      { icon: '🍱', label: '식단표 배포', href: '/board/admin/diet' },
     ],
   },
   {
     title: '운영 관리', icon: '⚙️',
     items: [
       { icon: '🏠', label: '대시보드', href: '/board/admin' },
-      { icon: '👥', label: '원 관리', href: '/board/admin/branches' },
-      { icon: '🎓', label: '학부모 승인', href: '/board/admin/parents' },
+      { icon: '🏫', label: '원 관리', href: '/board/admin/branches' },
+      { icon: '👨‍👩‍👧', label: '학부모 승인', href: '/board/admin/parents' },
       { icon: '📊', label: '통계', href: '/board/admin/stats' },
     ],
   },

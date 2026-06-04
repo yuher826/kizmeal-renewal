@@ -13,7 +13,6 @@ const NAV_GROUPS: NavGroup[] = [
     title: '홈페이지 관리', icon: '🌐',
     items: [
       { icon: '📝', label: '콘텐츠 관리',    href: '/board/admin/content' },
-      { icon: '🖼️', label: '콘텐츠 업로드',  href: '/nutritionist/upload' },
       { icon: '📢', label: '홈페이지 공지',   href: '/board/admin/notices?type=public' },
     ],
   },
@@ -44,7 +43,6 @@ function getPageTitle(pathname: string, searchParams: URLSearchParams): string {
     return '공지사항'
   }
   if (pathname.startsWith('/board/admin/content'))    return '콘텐츠 관리'
-  if (pathname.startsWith('/nutritionist/upload'))    return '콘텐츠 업로드'
   if (pathname.startsWith('/board/admin/inquiries'))  return '문의 관리'
   if (pathname.startsWith('/board/admin/diet'))       return '식단표 배포'
   if (pathname.startsWith('/board/admin/branches'))   return '원 관리'
