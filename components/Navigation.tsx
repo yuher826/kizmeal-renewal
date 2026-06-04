@@ -58,7 +58,7 @@ const NAV: NavItem[] = [
       { icon: '✉️', label: '문의하기', href: '/inquiry' },
     ],
   },
-  { key: 'contact', label: '문의하기', href: '/contact' },
+  { key: 'contact', label: '문의하기', href: '/inquiry' },
 ];
 
 function isActive(item: NavItem, pathname: string): boolean {

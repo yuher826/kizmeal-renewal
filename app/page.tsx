@@ -163,7 +163,7 @@ export default function Home() {
 
             <div className="flex flex-col sm:flex-row gap-4">
               <Link
-                href="/contact"
+                href="/inquiry"
                 className="inline-flex items-center justify-center gap-2 bg-[#F4A261] hover:bg-[#e8935a] text-white font-semibold px-7 py-4 rounded-2xl transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5"
               >
                 무료 상담 신청하기 →
@@ -684,7 +684,7 @@ export default function Home() {
                 {[
                   { label: '공지사항', href: '/notice' },
                   { label: '1:1 문의', href: '/login' },
-                  { label: '문의하기', href: '/contact' },
+                  { label: '문의하기', href: '/inquiry' },
                   { label: '개인정보처리방침', href: '/privacy' },
                 ].map((l) => (
                   <li key={l.href}>
