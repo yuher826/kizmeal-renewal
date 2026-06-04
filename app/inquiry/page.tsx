@@ -173,7 +173,7 @@ export default function InquiryPage() {
       <div className="min-h-screen bg-white">
         {/* Hero */}
         <div
-          className="relative h-80 flex flex-col items-center justify-center overflow-hidden pt-16"
+          className="relative h-96 flex flex-col items-center justify-center overflow-hidden pt-16"
           style={{ background: 'linear-gradient(135deg, #1B4332 0%, #2D6A4F 50%, #3d8b5f 100%)' }}
         >
           <div className="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center text-3xl mb-4">
@@ -198,7 +198,7 @@ export default function InquiryPage() {
         </div>
 
         {/* Form card */}
-        <div className="relative z-10 max-w-2xl mx-auto px-4 -mt-12 pb-16">
+        <div className="relative z-10 max-w-2xl mx-auto px-4 -mt-8 pb-16">
           <div className="bg-white rounded-3xl shadow-2xl shadow-[#2D6A4F]/10 border border-gray-100 p-8 md:p-12">
             <div className="mb-8">
               <p className="text-xs text-[#2D6A4F] font-semibold tracking-widest uppercase mb-2">NEW INQUIRY</p>
