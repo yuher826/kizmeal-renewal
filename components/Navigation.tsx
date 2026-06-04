@@ -51,7 +51,7 @@ const NAV: NavItem[] = [
   {
     key: 'support',
     label: '고객지원',
-    matchPrefixes: ['/notice', '/parent', '/inquiry'],
+    matchPrefixes: ['/notice', '/parent'],
     dropdown: [
       { icon: '👨‍👩‍👧', label: '학부모 포털', href: '/parent/login' },
       { icon: '🔍', label: '내 문의 확인', href: '/inquiry/check' },
@@ -63,7 +63,8 @@ const NAV: NavItem[] = [
 
 function isActive(item: NavItem, pathname: string): boolean {
   if (item.href && pathname === item.href) return true;
-  if (item.matchPrefixes?.some((p) => pathname.startsWith(p))) return true;
+  if (item.href && pathname.startsWith(item.href + '/')) return true;
+  if (item.matchPrefixes?.some((p) => pathname === p || pathname.startsWith(p + '/'))) return true;
   if (item.key === 'support' && pathname === '/login') return true;
   return false;
 }
