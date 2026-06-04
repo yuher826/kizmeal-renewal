@@ -97,8 +97,8 @@ export default function BoardSidebar() {
                 {tab.items.map(renderItem)}
               </div>
               <div className="mt-auto pt-4">
-                <div className="bg-[#F6FAF6] border border-[#E8F5E9] rounded-xl px-3.5 py-3">
-                  <p className="text-[11px] leading-relaxed text-[#40916C]">{tab.description}</p>
+                <div className="bg-[#F6FAF6] border border-[#2D6A4F]/20 rounded-xl p-4">
+                  <p className="text-sm leading-relaxed text-gray-600">{tab.description}</p>
                 </div>
               </div>
             </>

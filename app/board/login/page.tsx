@@ -103,9 +103,9 @@ export default function BoardLoginPage() {
             K
           </div>
           <h1 className="text-[28px] font-bold text-white leading-tight mb-2">
-            키즈밀 소통채널
+            키즈밀 소통&amp;운영 관리시스템
           </h1>
-          <p className="text-white/70 text-base">고객사 전용 커뮤니케이션 플랫폼</p>
+          <p className="text-white/70 text-base">원 관리부터 문의 처리까지 한 곳에서</p>
 
           <div className="mt-12 pt-10 border-t border-white/20 space-y-4">
             <p className="text-white text-2xl font-bold leading-snug">&ldquo;새벽 3시의 약속&rdquo;</p>
