@@ -47,7 +47,7 @@ const NAV: NavItem[] = [
       { icon: '🌿', label: '식재료정보', href: '/info/ingredient' },
     ],
   },
-  { key: 'gallery', label: '포토갤러리', href: '/parent/login' },
+  { key: 'gallery', label: '포토갤러리', href: '/gallery' },
   {
     key: 'support',
     label: '고객지원',
