@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { createClient } from '@/lib/supabase';
 
 type DropdownItem = { icon: string; label: string; href: string };
 type NavItem = {
@@ -52,14 +51,12 @@ const NAV: NavItem[] = [
   {
     key: 'support',
     label: '고객지원',
-    matchPrefixes: ['/notice', '/inquiry/check', '/parent/login'],
+    matchPrefixes: ['/notice'],
     dropdown: [
-      { icon: '👨‍👩‍👧', label: '학부모 포털', href: '/parent/login' },
-      { icon: '🔍', label: '내 문의 확인', href: '/inquiry/check' },
       { icon: '📢', label: '공지사항', href: '/notice' },
     ],
   },
-  { key: 'contact', label: '문의하기', href: '/inquiry' },
+  { key: 'contact', label: '문의하기', href: '/contact' },
 ];
 
 function isActive(item: NavItem, pathname: string): boolean {
@@ -75,9 +72,6 @@ export default function Navigation() {
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [mobileExpanded, setMobileExpanded] = useState<string | null>(null);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [parentName, setParentName] = useState('');
-  const [dashboardUrl, setDashboardUrl] = useState('/parent/dashboard');
   const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const navRef = useRef<HTMLDivElement>(null);
   const isHome = pathname === '/';
@@ -87,39 +81,6 @@ export default function Navigation() {
     onScroll();
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
-  }, []);
-
-  useEffect(() => {
-    const supabase = createClient();
-
-    async function resolveUser(userId: string, email?: string) {
-      const { data: admin } = await supabase.from('admins').select('name').eq('auth_id', userId).maybeSingle();
-      if (admin) {
-        setParentName(admin.name || email?.split('@')[0] || '');
-        setDashboardUrl('/board/admin');
-        return;
-      }
-      const { data: parent } = await supabase.from('parents').select('name').eq('auth_id', userId).maybeSingle();
-      setParentName(parent?.name || email?.split('@')[0] || '');
-      setDashboardUrl('/parent/dashboard');
-    }
-
-    supabase.auth.getSession().then(({ data }) => {
-      setIsLoggedIn(!!data.session);
-      if (data.session) resolveUser(data.session.user.id, data.session.user.email ?? undefined);
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setIsLoggedIn(!!session);
-      if (session) {
-        resolveUser(session.user.id, session.user.email ?? undefined);
-      } else {
-        setParentName('');
-        setDashboardUrl('/parent/dashboard');
-      }
-    });
-
-    return () => subscription.unsubscribe();
   }, []);
 
   useEffect(() => {
@@ -135,12 +96,6 @@ export default function Navigation() {
     setMobileExpanded(null);
     setOpenMenu(null);
   }, [pathname]);
-
-  async function handleNavLogout() {
-    const supabase = createClient();
-    await supabase.auth.signOut();
-    window.location.href = '/';
-  }
 
   const handleEnter = (key: string) => {
     if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
@@ -246,38 +201,7 @@ export default function Navigation() {
           })}
         </ul>
 
-        <div className="flex items-center gap-3 flex-shrink-0">
-          <Link
-            href="/parent/login"
-            className="hidden lg:inline-flex border border-[#2D6A4F] text-[#2D6A4F] hover:bg-[#2D6A4F] hover:text-white rounded-full px-4 py-2 text-sm font-medium transition-colors"
-          >
-            학부모 포털
-          </Link>
-          {!isLoggedIn && (
-            <Link
-              href="/board/login"
-              className="hidden lg:inline-flex bg-[#2D6A4F] text-white hover:bg-[#1B4332] rounded-full px-4 py-2 text-sm font-medium transition-colors"
-            >
-              소통채널
-            </Link>
-          )}
-          {isLoggedIn && (
-            <div className="hidden lg:flex items-center gap-3">
-              <Link
-                href={dashboardUrl}
-                className={`text-sm font-semibold hover:opacity-80 transition-opacity ${!solidBg ? 'text-white' : 'text-[#2D6A4F]'}`}
-              >
-                {parentName} 님 👋
-              </Link>
-              <button
-                type="button"
-                onClick={handleNavLogout}
-                className={`text-xs transition-colors ${!solidBg ? 'text-white/70 hover:text-white' : 'text-gray-400 hover:text-gray-600'}`}
-              >
-                로그아웃
-              </button>
-            </div>
-          )}
+        <div className="flex-shrink-0">
           <button
             className={`lg:hidden p-2 rounded-lg ${navText}`}
             onClick={() => setIsMobileOpen((v) => !v)}
@@ -366,42 +290,6 @@ export default function Navigation() {
               </div>
             );
           })}
-          <div className="mt-4 space-y-2">
-            <Link
-              href="/parent/login"
-              className="block text-center border border-[#2D6A4F] text-[#2D6A4F] hover:bg-[#2D6A4F] hover:text-white py-3 rounded-full font-medium text-sm transition-colors"
-              onClick={() => setIsMobileOpen(false)}
-            >
-              학부모 포털
-            </Link>
-            {!isLoggedIn && (
-              <Link
-                href="/board/login"
-                className="block text-center bg-[#2D6A4F] text-white hover:bg-[#1B4332] py-3 rounded-full font-medium text-sm transition-colors"
-                onClick={() => setIsMobileOpen(false)}
-              >
-                소통채널
-              </Link>
-            )}
-          </div>
-          {isLoggedIn && (
-            <div className="mt-4 border-t border-gray-100 pt-4 space-y-1">
-              <Link
-                href={dashboardUrl}
-                className={`block text-center font-semibold py-3 ${isHome ? 'text-white' : 'text-[#2D6A4F]'}`}
-                onClick={() => setIsMobileOpen(false)}
-              >
-                {parentName} 님 👋
-              </Link>
-              <button
-                type="button"
-                onClick={handleNavLogout}
-                className={`w-full text-center text-sm py-2 transition-colors ${isHome ? 'text-white/70 hover:text-white' : 'text-gray-400 hover:text-gray-600'}`}
-              >
-                로그아웃
-              </button>
-            </div>
-          )}
         </div>
       </div>
     </nav>

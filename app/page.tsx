@@ -683,7 +683,7 @@ export default function Home() {
               <ul className="space-y-2">
                 {[
                   { label: '공지사항', href: '/notice' },
-                  { label: '1:1 문의', href: '/login' },
+                  { label: '1:1 문의', href: '/inquiry' },
                   { label: '문의하기', href: '/inquiry' },
                   { label: '개인정보처리방침', href: '/privacy' },
                 ].map((l) => (
