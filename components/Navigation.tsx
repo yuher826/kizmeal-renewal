@@ -51,12 +51,14 @@ const NAV: NavItem[] = [
   {
     key: 'support',
     label: '고객지원',
-    matchPrefixes: ['/notice'],
+    matchPrefixes: ['/notice', '/parent', '/inquiry'],
     dropdown: [
+      { icon: '👨‍👩‍👧', label: '학부모 포털', href: '/parent/login' },
+      { icon: '🔍', label: '내 문의 확인', href: '/inquiry/check' },
       { icon: '📢', label: '공지사항', href: '/notice' },
     ],
   },
-  { key: 'contact', label: '문의하기', href: '/contact' },
+  { key: 'contact', label: '문의하기', href: '/inquiry' },
 ];
 
 function isActive(item: NavItem, pathname: string): boolean {

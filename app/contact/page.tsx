@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { PageHero, Breadcrumb, ComingSoonCard, PageFooterCTA, SiteFooter } from '@/components/SubPage';
 
 export const metadata: Metadata = {
@@ -34,7 +35,17 @@ export default function Page() {
               ))}
             </div>
           </div>
-          <ComingSoonCard hint="문의 폼, 첨부파일, 카테고리 선택, 자동 회신 메일 기능이 업데이트될 예정입니다." />
+          <div className="flex flex-col gap-6">
+            <ComingSoonCard hint="문의 폼, 첨부파일, 카테고리 선택, 자동 회신 메일 기능이 업데이트될 예정입니다." />
+            <div className="text-center">
+              <Link
+                href="/inquiry"
+                className="inline-flex items-center gap-2 px-6 py-3 bg-[#2D6A4F] text-white rounded-xl font-medium hover:bg-[#1B4332] transition-colors"
+              >
+                문의하기 →
+              </Link>
+            </div>
+          </div>
         </div>
       </section>
       <PageFooterCTA />
