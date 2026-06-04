@@ -102,8 +102,8 @@ export default function GalleryPage() {
       </section>
 
       {/* Category filter */}
-      <section className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 -mt-8 relative z-10">
-        <div className="flex flex-wrap gap-2 justify-center">
+      <section className="bg-white py-6">
+        <div className="flex flex-wrap gap-2 justify-center px-4">
           {CATEGORIES.map((cat) => (
             <button
               key={cat}
