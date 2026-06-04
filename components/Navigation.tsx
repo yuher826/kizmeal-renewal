@@ -40,14 +40,14 @@ const NAV: NavItem[] = [
     label: '식단&정보',
     matchPrefixes: ['/menu', '/info'],
     dropdown: [
-      { icon: '📋', label: '이번 주 식단', href: '/menu' },
+      { icon: '📋', label: '이번 주 식단', href: '/parent/login' },
       { icon: '📰', label: '건강정보지', href: '/info/health' },
       { icon: '⭐', label: '이달의 신메뉴', href: '/info/newmenu' },
       { icon: '👨‍🍳', label: '생생현장레시피', href: '/info/recipe' },
       { icon: '🌿', label: '식재료정보', href: '/info/ingredient' },
     ],
   },
-  { key: 'gallery', label: '포토갤러리', href: '/gallery' },
+  { key: 'gallery', label: '포토갤러리', href: '/parent/login' },
   {
     key: 'support',
     label: '고객지원',

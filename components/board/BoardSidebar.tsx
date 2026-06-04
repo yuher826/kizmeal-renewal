@@ -12,6 +12,7 @@ const ADMIN_GROUPS: MenuGroup[] = [
   {
     title: '홈페이지 관리', icon: '🌐',
     items: [
+      { icon: '📝', label: '콘텐츠 관리', href: '/board/admin/content' },
       { icon: '🖼️', label: '콘텐츠 업로드', href: '/nutritionist/upload' },
       { icon: '📢', label: '홈페이지 공지', href: '/board/admin/notices?type=public' },
     ],
