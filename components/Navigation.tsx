@@ -52,9 +52,10 @@ const NAV: NavItem[] = [
   {
     key: 'support',
     label: '고객지원',
-    matchPrefixes: ['/notice'],
+    matchPrefixes: ['/notice', '/inquiry'],
     dropdown: [
       { icon: '📢', label: '공지사항', href: '/notice' },
+      { icon: '✉️', label: '문의하기', href: '/inquiry' },
     ],
   },
   { key: 'contact', label: '문의하기', href: '/contact' },

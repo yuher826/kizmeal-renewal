@@ -41,6 +41,7 @@ export default function AdminDashboard() {
   const [expiryList, setExpiryList] = useState<{
     id: string; org: string; expires: string; days: number; mealCount: number; brand: string
   }[]>([])
+  const [publicInquiryCount, setPublicInquiryCount] = useState(0)
 
   const load = useCallback(async () => {
     const supabase = createClient()
@@ -150,6 +151,15 @@ export default function AdminDashboard() {
       })))
     }
 
+    // Public inquiry unanswered count
+    try {
+      const piRes = await fetch('/api/public-inquiry/admin?status=pending')
+      if (piRes.ok) {
+        const piData = await piRes.json()
+        setPublicInquiryCount(piData.count || 0)
+      }
+    } catch { /* non-critical */ }
+
     setLoading(false)
   }, [])
 
@@ -215,6 +225,30 @@ export default function AdminDashboard() {
             </>
           )}
         </div>
+
+        {/* General inquiry quick access */}
+        <Link
+          href="/board/admin/public-inquiries"
+          className="block bg-white rounded-2xl border border-gray-100 p-5 hover:shadow-md transition-shadow"
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">💬</span>
+              <div>
+                <h3 className="font-bold text-[#1C2B1E]">일반 문의 관리</h3>
+                <p className="text-xs text-gray-400 mt-0.5">홈페이지 비회원 문의</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {!loading && publicInquiryCount > 0 && (
+                <span className="bg-red-500 text-white text-xs font-bold px-2.5 py-1 rounded-full">
+                  미답변 {publicInquiryCount}건
+                </span>
+              )}
+              <span className="text-gray-300 text-lg">→</span>
+            </div>
+          </div>
+        </Link>
 
         {/* Charts */}
         <div className="grid lg:grid-cols-2 gap-6">
