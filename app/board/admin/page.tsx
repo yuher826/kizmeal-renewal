@@ -42,6 +42,9 @@ export default function AdminDashboard() {
     id: string; org: string; expires: string; days: number; mealCount: number; brand: string
   }[]>([])
   const [publicInquiryCount, setPublicInquiryCount] = useState(0)
+  const [allergyCount, setAllergyCount] = useState(0)
+  const [complaintCount, setComplaintCount] = useState(0)
+  const [parentInqCount, setParentInqCount] = useState(0)
 
   const load = useCallback(async () => {
     const supabase = createClient()
@@ -63,6 +66,19 @@ export default function AdminDashboard() {
       .select('*', { count: 'exact', head: true })
       .eq('status', 'pending')
     setPendingParents(parentPendingCount || 0)
+
+    // 오늘 처리 필요 위젯 카운트
+    const [complaintRes, allergyRes, parentInqRes] = await Promise.all([
+      supabase.from('inquiries').select('*', { count: 'exact', head: true })
+        .eq('category', 'COMPLAINT').in('status', ['pending', 'in_progress']),
+      supabase.from('parent_inquiries').select('*', { count: 'exact', head: true })
+        .eq('category', 'ALLERGY').in('status', ['pending', 'in_progress']),
+      supabase.from('parent_inquiries').select('*', { count: 'exact', head: true })
+        .eq('status', 'pending'),
+    ])
+    setComplaintCount(complaintRes.count || 0)
+    setAllergyCount(allergyRes.error ? 0 : (allergyRes.count || 0))
+    setParentInqCount(parentInqRes.error ? 0 : (parentInqRes.count || 0))
 
     const [recent, allPending, allInProgress, expiryRes] = await Promise.all([
       supabase
@@ -197,6 +213,57 @@ export default function AdminDashboard() {
       </header>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+
+        {/* 오늘 처리 필요 위젯 */}
+        {(() => {
+          const rows = [
+            { icon: '🚨', label: '알레르기 문의', count: allergyCount, href: '/board/admin/parent-inquiries', urgent: true },
+            { icon: '😤', label: '컴플레인', count: complaintCount, href: '/board/admin/inquiries', urgent: true },
+            { icon: '💚', label: '학부모 문의 미답변', count: parentInqCount, href: '/board/admin/parent-inquiries', urgent: false },
+            { icon: '🟠', label: '운영 문의 미답변', count: stats.pending, href: '/board/admin/inquiries', urgent: false },
+            { icon: '🔵', label: '서비스 문의 미답변', count: publicInquiryCount, href: '/board/admin/service-inquiries', urgent: false },
+          ]
+          const total = rows.reduce((s, r) => s + r.count, 0)
+          return (
+            <div className="bg-white rounded-2xl border border-gray-100 p-5">
+              <h2 className="font-bold text-[#1C2B1E] mb-3 flex items-center gap-2">
+                <span className="text-red-500">🔴</span> 오늘 처리 필요
+              </h2>
+              {loading ? (
+                <div className="h-12 bg-gray-50 rounded-xl animate-pulse" />
+              ) : total === 0 ? (
+                <div className="bg-[#E8F5E9] rounded-xl px-4 py-5 text-center">
+                  <p className="text-sm font-semibold text-[#2D6A4F]">✅ 모든 문의가 처리되었습니다</p>
+                </div>
+              ) : (
+                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                  {rows.map(r => (
+                    <Link
+                      key={r.label}
+                      href={r.href}
+                      className={`flex items-center justify-between px-4 py-3 rounded-xl border transition-colors ${
+                        r.count === 0
+                          ? 'border-gray-100 bg-gray-50/50 opacity-60'
+                          : r.urgent
+                          ? 'border-red-200 bg-red-50 hover:bg-red-100/60'
+                          : 'border-gray-100 hover:bg-[#F8FDF8]'
+                      }`}
+                    >
+                      <span className="flex items-center gap-2 text-sm font-medium text-[#1C2B1E]">
+                        <span>{r.icon}</span>{r.label}
+                      </span>
+                      <span className={`text-sm font-bold ${
+                        r.count === 0 ? 'text-gray-300' : r.urgent ? 'text-red-600' : 'text-[#2D6A4F]'
+                      }`}>
+                        {r.count}건
+                      </span>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+          )
+        })()}
 
         {/* KPI Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

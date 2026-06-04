@@ -1,5 +1,5 @@
 export type InquiryStatus = 'pending' | 'in_progress' | 'resolved' | 'closed'
-export type InquiryCategory = 'MEAL_COUNT' | 'ALLERGY' | 'DELIVERY' | 'MENU' | 'SCHEDULE' | 'PHOTO' | 'CONTRACT' | 'OTHER' | 'STAFF_MEAL' | 'HYGIENE'
+export type InquiryCategory = 'MEAL_COUNT' | 'ALLERGY' | 'DELIVERY' | 'MENU' | 'SCHEDULE' | 'PHOTO' | 'CONTRACT' | 'OTHER' | 'STAFF_MEAL' | 'HYGIENE' | 'COMPLAINT'
 export type SenderType = 'branch' | 'admin' | 'system'
 export type Priority = 'low' | 'medium' | 'high' | 'urgent'
 export type SlaStatus = 'ok' | 'warning' | 'exceeded'
@@ -15,6 +15,7 @@ export const CATEGORY_LABELS: Record<InquiryCategory, string> = {
   OTHER: '기타 문의',
   STAFF_MEAL: '교직원 급식 컴플레인',
   HYGIENE: '위생 민원',
+  COMPLAINT: '컴플레인',
 }
 
 export const CATEGORY_ICONS: Record<InquiryCategory, string> = {
@@ -28,6 +29,7 @@ export const CATEGORY_ICONS: Record<InquiryCategory, string> = {
   OTHER: '💬',
   STAFF_MEAL: '👨‍🍳',
   HYGIENE: '🧹',
+  COMPLAINT: '😤',
 }
 
 export const CATEGORY_COLORS: Record<InquiryCategory, string> = {
@@ -41,6 +43,7 @@ export const CATEGORY_COLORS: Record<InquiryCategory, string> = {
   OTHER: 'bg-gray-100 text-gray-700',
   STAFF_MEAL: 'bg-amber-100 text-amber-800',
   HYGIENE: 'bg-red-100 text-red-800',
+  COMPLAINT: 'bg-red-100 text-red-800',
 }
 
 export const STATUS_LABELS: Record<InquiryStatus, string> = {

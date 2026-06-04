@@ -8,7 +8,7 @@ import { CATEGORY_ICONS, CATEGORY_LABELS, type InquiryCategory } from '@/lib/typ
 import FileUpload from '@/components/board/FileUpload'
 
 const FORM_CATEGORIES: InquiryCategory[] = [
-  'DELIVERY', 'MENU', 'STAFF_MEAL', 'HYGIENE', 'CONTRACT', 'OTHER',
+  'DELIVERY', 'MENU', 'STAFF_MEAL', 'HYGIENE', 'COMPLAINT', 'CONTRACT', 'OTHER',
 ]
 
 interface CatConfig {
@@ -43,6 +43,11 @@ const CAT_CONFIG: Record<string, CatConfig> = {
     showDate: true, dateLabel: '발생일',
     showContent: true, contentLabel: '구체적 내용',
     showFile: true, fileHint: '📸 이물질·위생 관련 사진을 첨부하면 더 빠르게 처리됩니다',
+  },
+  COMPLAINT: {
+    showDate: true, dateLabel: '발생일',
+    showContent: true, contentLabel: '컴플레인 내용',
+    showFile: true, fileHint: '📸 관련 사진을 첨부하면 더 빠르게 처리됩니다',
   },
   CONTRACT: {
     showContent: true, contentLabel: '문의 내용',

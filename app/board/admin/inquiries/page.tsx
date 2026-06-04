@@ -74,6 +74,7 @@ export default function AdminInquiriesPage() {
   const [filterAdmin, setFilterAdmin] = useState('')
   const [filterSla, setFilterSla] = useState<'all' | 'warning' | 'exceeded'>('all')
   const [sortBy, setSortBy] = useState<'latest' | 'oldest' | 'sla'>('latest')
+  const [complaintOnly, setComplaintOnly] = useState(false)
 
   // ── Public inquiry state ──────────────────────────────────────
   const [publicStatus, setPublicStatus] = useState('all')
@@ -144,8 +145,12 @@ export default function AdminInquiriesPage() {
   }, [tab, loadPublic])
 
   // ── Branch filtered list ──────────────────────────────────────
+  const isActiveComplaint = (i: Inquiry) =>
+    i.category === 'COMPLAINT' && i.status !== 'resolved' && i.status !== 'closed'
+
   const filtered = inquiries
     .filter(i => {
+      if (complaintOnly && i.category !== 'COMPLAINT') return false
       if (branchFilter && i.branch_id !== branchFilter) return false
       if (filterStatus && i.status !== filterStatus) return false
       if (filterCategory && i.category !== filterCategory) return false
@@ -165,6 +170,10 @@ export default function AdminInquiriesPage() {
       return true
     })
     .sort((a, b) => {
+      // 컴플레인(미해결)은 항상 최상단 고정
+      const ac = isActiveComplaint(a)
+      const bc = isActiveComplaint(b)
+      if (ac !== bc) return ac ? -1 : 1
       if (sortBy === 'oldest') return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
       if (sortBy === 'sla') {
         const ra = slaRules[a.category]
@@ -219,8 +228,8 @@ export default function AdminInquiriesPage() {
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 bg-gradient-to-br from-[#2D6A4F] to-[#52B788] rounded-xl flex items-center justify-center text-white font-bold text-sm">K</div>
           <div>
-            <Link href="/board/admin" className="font-bold text-[#1C2B1E] text-sm hover:text-[#2D6A4F]">문의 관리</Link>
-            <p className="text-gray-400 text-xs">전체 문의 목록</p>
+            <Link href="/board/admin" className="font-bold text-[#1C2B1E] text-sm hover:text-[#2D6A4F]">운영 문의</Link>
+            <p className="text-gray-400 text-xs">계약된 원 담당자의 실무 문의 및 컴플레인</p>
           </div>
         </div>
         <div className="hidden sm:flex items-center gap-3">
@@ -306,7 +315,7 @@ export default function AdminInquiriesPage() {
                 <select value={filterCategory} onChange={e => setFilterCategory(e.target.value as InquiryCategory | '')}
                   className="px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#2D6A4F]">
                   <option value="">전체 분류</option>
-                  {(['DELIVERY', 'MENU', 'STAFF_MEAL', 'HYGIENE', 'CONTRACT', 'OTHER'] as InquiryCategory[]).map(k => (
+                  {(['COMPLAINT', 'DELIVERY', 'MENU', 'STAFF_MEAL', 'HYGIENE', 'CONTRACT', 'OTHER'] as InquiryCategory[]).map(k => (
                     <option key={k} value={k}>{CATEGORY_ICONS[k]} {CATEGORY_LABELS[k]}</option>
                   ))}
                 </select>
@@ -327,6 +336,17 @@ export default function AdminInquiriesPage() {
                   <option value="oldest">오래된순</option>
                   <option value="sla">SLA 임박순</option>
                 </select>
+                <button
+                  type="button"
+                  onClick={() => setComplaintOnly(v => !v)}
+                  className={`px-3 py-2 rounded-xl text-sm font-semibold transition-colors border ${
+                    complaintOnly
+                      ? 'bg-red-500 border-red-500 text-white'
+                      : 'bg-white border-gray-200 text-gray-600 hover:border-red-300 hover:text-red-600'
+                  }`}
+                >
+                  😤 컴플레인만 보기
+                </button>
               </div>
             </div>
 
@@ -356,12 +376,16 @@ export default function AdminInquiriesPage() {
                 ) : filtered.map(inq => {
                   const rule = slaRules[inq.category]
                   const slaStatus = getSlaStatus(inq, rule)
+                  const activeComplaint = isActiveComplaint(inq)
                   return (
-                    <div key={inq.id} className="p-4 space-y-2">
+                    <div key={inq.id} className={`p-4 space-y-2 ${activeComplaint ? 'bg-red-50' : ''}`}>
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
                           <p className="text-sm font-semibold text-[#1C2B1E] whitespace-nowrap truncate">{inq.branches?.name || '—'}</p>
                           <div className="flex flex-wrap gap-1.5 mt-1">
+                            {activeComplaint && (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-red-500 text-white">🚨 긴급</span>
+                            )}
                             <span className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-xs font-semibold ${CATEGORY_COLORS[inq.category]}`}>
                               {CATEGORY_ICONS[inq.category]} {CATEGORY_LABELS[inq.category]}
                             </span>
@@ -430,9 +454,10 @@ export default function AdminInquiriesPage() {
                       filtered.map(inq => {
                         const rule = slaRules[inq.category]
                         const slaStatus = getSlaStatus(inq, rule)
+                        const activeComplaint = isActiveComplaint(inq)
 
                         return (
-                          <tr key={inq.id} className="hover:bg-[#F8FDF8] transition-colors border-t border-gray-50">
+                          <tr key={inq.id} className={`transition-colors border-t border-gray-50 ${activeComplaint ? 'bg-red-50 hover:bg-red-100/60' : 'hover:bg-[#F8FDF8]'}`}>
                             <td className="px-4 py-3">
                               <input
                                 type="checkbox"
@@ -452,7 +477,10 @@ export default function AdminInquiriesPage() {
                                 )}
                               </div>
                             </td>
-                            <td className="px-4 py-3">
+                            <td className="px-4 py-3 whitespace-nowrap">
+                              {activeComplaint && (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-red-500 text-white mr-1.5">🚨 긴급</span>
+                              )}
                               <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${CATEGORY_COLORS[inq.category]}`}>
                                 {CATEGORY_ICONS[inq.category]} {CATEGORY_LABELS[inq.category]}
                               </span>

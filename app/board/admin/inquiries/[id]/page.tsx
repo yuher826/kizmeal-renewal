@@ -29,6 +29,7 @@ export default function AdminInquiryDetailPage({ params }: { params: { id: strin
   const [templates, setTemplates] = useState<ReplyTemplate[]>([])
   const [currentAdmin, setCurrentAdmin] = useState<Admin | null>(null)
   const [loading, setLoading] = useState(true)
+  const [branchComplaints, setBranchComplaints] = useState(0)
 
   const [content, setContent] = useState('')
   const [isInternal, setIsInternal] = useState(false)
@@ -69,6 +70,17 @@ export default function AdminInquiryDetailPage({ params }: { params: { id: strin
 
       if (inqRes.data) setInquiry(inqRes.data as unknown as Inquiry)
       if (msgsRes.data) setMessages(msgsRes.data as unknown as Message[])
+
+      // 이 원의 컴플레인 누적 이력
+      const inqBranchId = (inqRes.data as unknown as Inquiry)?.branch_id
+      if (inqBranchId) {
+        const { count } = await supabase
+          .from('inquiries')
+          .select('*', { count: 'exact', head: true })
+          .eq('branch_id', inqBranchId)
+          .eq('category', 'COMPLAINT')
+        setBranchComplaints(count || 0)
+      }
       if (adminsRes.data) setAdmins(adminsRes.data as Admin[])
       if (slaRes.data) {
         const inqData = inqRes.data as unknown as Inquiry
@@ -599,6 +611,21 @@ export default function AdminInquiryDetailPage({ params }: { params: { id: strin
                 </div>
               ))}
             </div>
+          </div>
+
+          {/* 이 원의 컴플레인 이력 */}
+          <div className={`rounded-xl px-3.5 py-3 border ${
+            branchComplaints >= 3 ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-100'
+          }`}>
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-gray-500">😤 이 원의 컴플레인 이력</span>
+              <span className={`text-sm font-bold ${branchComplaints >= 3 ? 'text-red-600' : 'text-gray-700'}`}>
+                {branchComplaints}건
+              </span>
+            </div>
+            {branchComplaints >= 3 && (
+              <p className="text-[11px] text-red-600 mt-1.5">⚠️ 컴플레인이 누적된 원입니다. 주의가 필요합니다.</p>
+            )}
           </div>
 
           {/* 전화 처리 이력 */}

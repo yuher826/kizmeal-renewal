@@ -4,36 +4,9 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
+import { ADMIN_TABS, getActiveAdminTab } from '@/lib/admin-tabs'
 
 type MenuItem = { icon: string; label: string; href: string }
-type MenuGroup = { title: string; icon: string; items: MenuItem[] }
-
-const ADMIN_GROUPS: MenuGroup[] = [
-  {
-    title: '홈페이지 관리', icon: '🌐',
-    items: [
-      { icon: '📝', label: '콘텐츠 관리', href: '/board/admin/content' },
-      { icon: '📢', label: '홈페이지 공지', href: '/board/admin/notices?type=public' },
-    ],
-  },
-  {
-    title: '소통허브 관리', icon: '💬',
-    items: [
-      { icon: '💬', label: '문의 관리', href: '/board/admin/inquiries' },
-      { icon: '📣', label: '가맹점 공지', href: '/board/admin/notices?type=branch' },
-      { icon: '🍱', label: '식단표 배포', href: '/board/admin/diet' },
-    ],
-  },
-  {
-    title: '운영 관리', icon: '⚙️',
-    items: [
-      { icon: '🏠', label: '대시보드', href: '/board/admin' },
-      { icon: '🏫', label: '원 관리', href: '/board/admin/branches' },
-      { icon: '👨‍👩‍👧', label: '학부모 승인', href: '/board/admin/parents' },
-      { icon: '📊', label: '통계', href: '/board/admin/stats' },
-    ],
-  },
-]
 
 const CUSTOMER_MENU: MenuItem[] = [
   { icon: '🏠', label: '홈', href: '/board/dashboard' },
@@ -111,19 +84,26 @@ export default function BoardSidebar() {
         </div>
       </Link>
 
-      <nav className="flex-1 overflow-y-auto py-4 px-3">
-        {role === 'admin' ? (
-          ADMIN_GROUPS.map((group, gi) => (
-            <div key={group.title} className={gi > 0 ? 'mt-2 pt-3 border-t border-gray-100' : ''}>
+      <nav className="flex-1 overflow-y-auto py-4 px-3 flex flex-col">
+        {role === 'admin' ? (() => {
+          const activeTab = getActiveAdminTab(pathname, searchParams.get('type'))
+          const tab = ADMIN_TABS.find(t => t.key === activeTab) || ADMIN_TABS[1]
+          return (
+            <>
               <p className="px-3 pb-1.5 text-[11px] font-bold text-gray-400 uppercase tracking-wide flex items-center gap-1.5">
-                <span>{group.icon}</span>{group.title}
+                <span>{tab.icon}</span>{tab.label}
               </p>
               <div className="space-y-1">
-                {group.items.map(renderItem)}
+                {tab.items.map(renderItem)}
               </div>
-            </div>
-          ))
-        ) : (
+              <div className="mt-auto pt-4">
+                <div className="bg-[#F6FAF6] border border-[#E8F5E9] rounded-xl px-3.5 py-3">
+                  <p className="text-[11px] leading-relaxed text-[#40916C]">{tab.description}</p>
+                </div>
+              </div>
+            </>
+          )
+        })() : (
           <div className="space-y-1">
             {CUSTOMER_MENU.map(renderItem)}
           </div>

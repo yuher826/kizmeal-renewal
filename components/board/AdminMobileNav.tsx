@@ -4,36 +4,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-
-type NavItem = { icon: string; label: string; href: string }
-type NavGroup = { title: string; icon: string; items: NavItem[] }
-
-const NAV_GROUPS: NavGroup[] = [
-  {
-    title: '홈페이지 관리', icon: '🌐',
-    items: [
-      { icon: '📝', label: '콘텐츠 관리',    href: '/board/admin/content' },
-      { icon: '📢', label: '홈페이지 공지',   href: '/board/admin/notices?type=public' },
-    ],
-  },
-  {
-    title: '소통허브 관리', icon: '💬',
-    items: [
-      { icon: '💬', label: '문의 관리',   href: '/board/admin/inquiries' },
-      { icon: '📣', label: '가맹점 공지', href: '/board/admin/notices?type=branch' },
-      { icon: '🍱', label: '식단표 배포', href: '/board/admin/diet' },
-    ],
-  },
-  {
-    title: '운영 관리', icon: '⚙️',
-    items: [
-      { icon: '🏠', label: '대시보드',   href: '/board/admin' },
-      { icon: '🏫', label: '원 관리',    href: '/board/admin/branches' },
-      { icon: '👨‍👩‍👧', label: '학부모 승인', href: '/board/admin/parents' },
-      { icon: '📊', label: '통계',       href: '/board/admin/stats' },
-    ],
-  },
-]
+import { ADMIN_TABS, getActiveAdminTab, type AdminTabKey } from '@/lib/admin-tabs'
 
 function getPageTitle(pathname: string, searchParams: URLSearchParams): string {
   const type = searchParams.get('type')
@@ -42,13 +13,16 @@ function getPageTitle(pathname: string, searchParams: URLSearchParams): string {
     if (type === 'branch') return '가맹점 공지'
     return '공지사항'
   }
-  if (pathname.startsWith('/board/admin/content'))    return '콘텐츠 관리'
-  if (pathname.startsWith('/board/admin/inquiries'))  return '문의 관리'
-  if (pathname.startsWith('/board/admin/diet'))       return '식단표 배포'
-  if (pathname.startsWith('/board/admin/branches'))   return '원 관리'
-  if (pathname.startsWith('/board/admin/parents'))    return '학부모 승인'
-  if (pathname.startsWith('/board/admin/stats'))      return '통계'
-  if (pathname === '/board/admin')                    return '대시보드'
+  if (pathname.startsWith('/board/admin/content'))          return '콘텐츠 관리'
+  if (pathname.startsWith('/board/admin/parent-inquiries')) return '학부모 문의'
+  if (pathname.startsWith('/board/admin/service-inquiries'))return '서비스 문의'
+  if (pathname.startsWith('/board/admin/public-inquiries')) return '서비스 문의'
+  if (pathname.startsWith('/board/admin/inquiries'))        return '운영 문의'
+  if (pathname.startsWith('/board/admin/diet'))             return '식단표 배포'
+  if (pathname.startsWith('/board/admin/branches'))         return '원 관리'
+  if (pathname.startsWith('/board/admin/parents'))          return '학부모 승인'
+  if (pathname.startsWith('/board/admin/stats'))            return '통계'
+  if (pathname === '/board/admin')                          return '대시보드'
   return '소통채널'
 }
 
@@ -58,7 +32,12 @@ export default function AdminMobileNav() {
   const searchParams = useSearchParams()
   const router = useRouter()
 
+  const activeTab = getActiveAdminTab(pathname, searchParams.get('type'))
+  const [drawerTab, setDrawerTab] = useState<AdminTabKey>(activeTab)
+
   useEffect(() => { setOpen(false) }, [pathname])
+  // 드로어를 열 때마다 현재 활성 탭으로 동기화
+  useEffect(() => { if (open) setDrawerTab(activeTab) }, [open, activeTab])
 
   useEffect(() => {
     document.body.style.overflow = open ? 'hidden' : ''
@@ -81,6 +60,8 @@ export default function AdminMobileNav() {
     if (path === '/board/admin') return pathname === path
     return pathname === path || pathname.startsWith(path + '/')
   }
+
+  const selectedTab = ADMIN_TABS.find(t => t.key === drawerTab) || ADMIN_TABS[1]
 
   return (
     <>
@@ -151,34 +132,53 @@ export default function AdminMobileNav() {
           </button>
         </div>
 
-        {/* 그룹 네비게이션 */}
-        <nav className="flex-1 min-h-0 px-3 py-3 overflow-y-auto space-y-1 max-h-[calc(100vh-140px)]">
-          {NAV_GROUPS.map((group, gi) => (
-            <div key={group.title} className={gi > 0 ? 'pt-2 border-t border-gray-100' : ''}>
-              {/* 그룹 타이틀 */}
-              <p className="px-3 pt-2 pb-1 text-[10px] font-bold text-gray-400 uppercase tracking-wide flex items-center gap-1">
-                <span>{group.icon}</span>{group.title}
-              </p>
-              {group.items.map(item => {
-                const active = isActive(item.href)
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={`flex items-center gap-3 px-3 py-3 rounded-xl mb-0.5 text-sm font-medium transition-colors ${
-                      active
-                        ? 'bg-[#E8F5E9] text-[#2D6A4F]'
-                        : 'text-gray-700 hover:bg-gray-50 active:bg-gray-100'
-                    }`}
-                  >
-                    <span className="text-base w-6 text-center leading-none flex-shrink-0">{item.icon}</span>
-                    <span className="flex-1">{item.label}</span>
-                    {active && <span className="w-1.5 h-1.5 bg-[#2D6A4F] rounded-full flex-shrink-0" />}
-                  </Link>
-                )
-              })}
-            </div>
-          ))}
+        {/* 탭 3개 (가로 균등분할) */}
+        <div className="flex border-b border-gray-100 flex-shrink-0">
+          {ADMIN_TABS.map(tab => {
+            const sel = drawerTab === tab.key
+            return (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setDrawerTab(tab.key)}
+                className={`flex-1 flex flex-col items-center gap-1 py-2.5 text-[11px] border-b-[3px] -mb-px transition-colors ${
+                  sel
+                    ? 'border-[#2D6A4F] text-[#2D6A4F] font-bold'
+                    : 'border-transparent text-gray-400 font-medium'
+                }`}
+              >
+                <span className="text-base leading-none">{tab.icon}</span>
+                <span className="leading-none">{tab.shortLabel}</span>
+              </button>
+            )
+          })}
+        </div>
+
+        {/* 선택된 탭의 메뉴 */}
+        <nav className="flex-1 min-h-0 px-3 py-3 overflow-y-auto">
+          <div className="space-y-1">
+            {selectedTab.items.map(item => {
+              const active = isActive(item.href)
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium transition-colors ${
+                    active
+                      ? 'bg-[#E8F5E9] text-[#2D6A4F]'
+                      : 'text-gray-700 hover:bg-gray-50 active:bg-gray-100'
+                  }`}
+                >
+                  <span className="text-base w-6 text-center leading-none flex-shrink-0">{item.icon}</span>
+                  <span className="flex-1">{item.label}</span>
+                  {active && <span className="w-1.5 h-1.5 bg-[#2D6A4F] rounded-full flex-shrink-0" />}
+                </Link>
+              )
+            })}
+          </div>
+          <div className="mt-3 bg-[#F6FAF6] border border-[#E8F5E9] rounded-xl px-3.5 py-3">
+            <p className="text-[11px] leading-relaxed text-[#40916C]">{selectedTab.description}</p>
+          </div>
         </nav>
 
         {/* 로그아웃 */}

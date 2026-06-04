@@ -26,6 +26,11 @@ const NAV_ITEMS = [
       <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
     </svg>
   )},
+  { href: '/parent/inquiry', label: '문의', icon: (
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M21 12a8 8 0 01-11.6 7.1L3 21l1.9-6.4A8 8 0 1121 12z" />
+    </svg>
+  )},
   { href: '/parent/mypage', label: '마이페이지', icon: (
     <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
@@ -48,8 +53,8 @@ export default function BottomNav() {
               active ? 'text-[#2D6A4F]' : 'text-[#9CA3AF] hover:text-[#2D6A4F]'
             }`}
           >
-            <span>{item.icon}</span>
-            <span className={`text-xs ${active ? 'font-bold text-[#2D6A4F]' : 'font-medium'}`}>{item.label}</span>
+            <span className="[&>svg]:w-6 [&>svg]:h-6">{item.icon}</span>
+            <span className={`text-[10px] whitespace-nowrap ${active ? 'font-bold text-[#2D6A4F]' : 'font-medium'}`}>{item.label}</span>
           </Link>
         )
       })}
