@@ -563,23 +563,6 @@ export default function Home() {
               <p className="text-white/70 text-base mt-4 anim anim-left delay-200">
                 궁금한 점, 불편한 점<br />무엇이든 말씀해 주세요.<br />담당자가 직접 답변드립니다.
               </p>
-              <hr className="border-white/20 my-6 anim anim-left delay-300" />
-              <div className="space-y-1 anim anim-left delay-300">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-lg">📞</div>
-                  <div>
-                    <div className="text-white/50 text-xs">전화 상담</div>
-                    <div className="text-white font-medium">031-388-3501</div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-lg">🕐</div>
-                  <div>
-                    <div className="text-white/50 text-xs">상담 시간</div>
-                    <div className="text-white font-medium">평일 09:00 - 18:00</div>
-                  </div>
-                </div>
-              </div>
             </div>
 
             <div className="anim anim-right delay-200">
@@ -589,7 +572,7 @@ export default function Home() {
                 </div>
                 <h3 className="text-white font-bold text-xl mt-4">온라인 문의</h3>
                 <p className="text-white/70 text-sm mt-2">
-                  메뉴, 알레르기, 계약, 불편사항 등<br />모든 문의를 한 곳에서 접수합니다.
+                  서비스 도입, 가격, 메뉴 등<br />궁금한 점을 편하게 물어보세요.
                 </p>
                 <Link
                   href="/inquiry"
@@ -670,7 +653,7 @@ export default function Home() {
           </div>
           <div className="border-t border-white/10 pt-8 flex flex-col sm:flex-row items-center justify-between gap-4">
             <p className="text-white/30 text-xs">© 2024 키즈밀(KIZMEAL). All rights reserved.</p>
-            <p className="text-white/30 text-xs">사업자등록번호: 000-00-00000 | 대표: 홍길동 | 경기도 성남시</p>
+            <p className="text-white/30 text-xs">사업자등록번호: 140-81-17846 | 대표: 유성모 | 경기도 안양시 동안구 흥안대로439번길 30 8층 815호</p>
           </div>
         </div>
       </footer>
