@@ -20,7 +20,7 @@ export default function NotFound() {
             홈으로 돌아가기
           </Link>
           <Link
-            href="/contact"
+            href="/inquiry"
             className="inline-flex items-center justify-center border-2 border-[#2D6A4F] text-[#2D6A4F] hover:bg-[#2D6A4F] hover:text-white font-semibold px-6 py-3 rounded-xl transition-colors"
           >
             문의하기

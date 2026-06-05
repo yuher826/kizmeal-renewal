@@ -68,11 +68,9 @@ const FAQS = [
 ];
 
 export default function Home() {
-  const [isSubmitted, setIsSubmitted] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [counts, setCounts] = useState({ years: 0, clients: 0, satisfaction: 0, meals: 0 });
   const [openFaq, setOpenFaq] = useState<number | null>(null);
-  const [form, setForm] = useState({ name: '', org: '', phone: '', message: '' });
 
   const statsRef = useRef<HTMLDivElement>(null);
   const statsAnimated = useRef(false);
@@ -558,75 +556,49 @@ export default function Home() {
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid lg:grid-cols-2 gap-12 items-start">
             <div>
-              <p className="text-[#52B788] text-sm font-semibold tracking-widest uppercase mb-4 anim anim-left">CONTACT</p>
-              <h2 className="font-serif font-bold text-3xl sm:text-4xl text-white mb-6 anim anim-left delay-100">
-                지금 바로<br />무료 상담을 신청하세요
+              <p className="text-[#52B788] text-sm tracking-widest uppercase mb-4 anim anim-left">CONTACT</p>
+              <h2 className="font-serif font-bold text-3xl text-white leading-snug anim anim-left delay-100">
+                새벽 3시부터 시작되는<br />22년의 약속
               </h2>
-              <p className="text-white/60 text-base leading-relaxed mb-8 anim anim-left delay-200">
-                담당 영양사가 직접 연락드려 기관에 맞는 최적 식단과 비용을 안내해드립니다. 상담은 100% 무료입니다.
+              <p className="text-white/70 text-base mt-4 anim anim-left delay-200">
+                궁금한 점, 불편한 점<br />무엇이든 말씀해 주세요.<br />담당자가 직접 답변드립니다.
               </p>
-              <div className="space-y-4 anim anim-left delay-300">
-                {[
-                  { icon: '📞', label: '전화 상담', val: '031-000-0000' },
-                  { icon: '📧', label: '이메일', val: 'hello@kizmeal.com' },
-                  { icon: '🕐', label: '상담 시간', val: '평일 09:00 – 18:00' },
-                ].map((info) => (
-                  <div key={info.label} className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-lg">{info.icon}</div>
-                    <div>
-                      <div className="text-white/50 text-xs">{info.label}</div>
-                      <div className="text-white font-medium">{info.val}</div>
-                    </div>
+              <hr className="border-white/20 my-6 anim anim-left delay-300" />
+              <div className="space-y-1 anim anim-left delay-300">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-lg">📞</div>
+                  <div>
+                    <div className="text-white/50 text-xs">전화 상담</div>
+                    <div className="text-white font-medium">031-388-3501</div>
                   </div>
-                ))}
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-lg">🕐</div>
+                  <div>
+                    <div className="text-white/50 text-xs">상담 시간</div>
+                    <div className="text-white font-medium">평일 09:00 - 18:00</div>
+                  </div>
+                </div>
               </div>
             </div>
 
             <div className="anim anim-right delay-200">
-              {isSubmitted ? (
-                <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-10 text-center">
-                  <div className="text-5xl mb-4">✅</div>
-                  <h3 className="font-serif font-bold text-xl text-white mb-2">상담 신청 완료!</h3>
-                  <p className="text-white/60 text-sm">담당자가 영업일 기준 1일 이내 연락드리겠습니다.</p>
+              <div className="bg-white/10 backdrop-blur rounded-2xl p-8 border border-white/20">
+                <div className="bg-[#52B788]/20 rounded-full p-3 w-fit">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#52B788" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
                 </div>
-              ) : (
-                <form onSubmit={(e) => { e.preventDefault(); setIsSubmitted(true); }} className="bg-white rounded-2xl p-6 sm:p-8 shadow-2xl shadow-black/20">
-                  <h3 className="font-serif font-bold text-lg text-[#0D1B0F] mb-6">무료 상담 신청</h3>
-                  <div className="space-y-4">
-                    {[
-                      { label: '담당자 성함 *', type: 'text', key: 'name' as const, placeholder: '홍길동', required: true },
-                      { label: '기관명 *', type: 'text', key: 'org' as const, placeholder: 'OO어린이집 / OO유치원', required: true },
-                      { label: '연락처 *', type: 'tel', key: 'phone' as const, placeholder: '010-0000-0000', required: true },
-                    ].map((f) => (
-                      <div key={f.key}>
-                        <label className="block text-sm font-medium text-gray-700 mb-1.5">{f.label}</label>
-                        <input
-                          type={f.type}
-                          required={f.required}
-                          value={form[f.key]}
-                          onChange={(e) => setForm({ ...form, [f.key]: e.target.value })}
-                          placeholder={f.placeholder}
-                          className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#2D6A4F]/30 focus:border-[#2D6A4F] transition-all"
-                        />
-                      </div>
-                    ))}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1.5">문의 내용</label>
-                      <textarea
-                        rows={3}
-                        value={form.message}
-                        onChange={(e) => setForm({ ...form, message: e.target.value })}
-                        placeholder="급식 인원, 특이사항, 시작 희망 시기 등을 알려주세요."
-                        className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#2D6A4F]/30 focus:border-[#2D6A4F] transition-all resize-none"
-                      />
-                    </div>
-                    <button type="submit" className="w-full bg-[#2D6A4F] hover:bg-[#1B4332] text-white font-semibold py-3.5 rounded-xl transition-all btn-primary">
-                      무료 상담 신청하기
-                    </button>
-                    <p className="text-center text-gray-400 text-xs">개인정보는 상담 목적으로만 사용됩니다.</p>
-                  </div>
-                </form>
-              )}
+                <h3 className="text-white font-bold text-xl mt-4">온라인 문의</h3>
+                <p className="text-white/70 text-sm mt-2">
+                  메뉴, 알레르기, 계약, 불편사항 등<br />모든 문의를 한 곳에서 접수합니다.
+                </p>
+                <Link
+                  href="/inquiry"
+                  className="block bg-[#52B788] hover:bg-[#3d8b5f] text-white rounded-xl px-6 py-3 mt-6 w-full text-center font-semibold transition-colors duration-200"
+                >
+                  문의하기 →
+                </Link>
+                <p className="text-white/40 text-xs mt-3 text-center">영업일 기준 1-2일 내 답변드립니다</p>
+              </div>
             </div>
           </div>
         </div>

@@ -75,7 +75,7 @@ export function PageFooterCTA() {
         ← 홈으로
       </Link>
       <Link
-        href="/contact"
+        href="/inquiry"
         className="inline-flex items-center gap-2 bg-[#F4A261] hover:bg-[#e8935a] text-white font-semibold px-6 py-3 rounded-xl transition-colors shadow-md"
       >
         문의하기 →
@@ -108,7 +108,7 @@ export function SiteFooter() {
         { label: '포토갤러리', href: '/gallery' },
         { label: '공지사항', href: '/notice' },
         { label: '1:1 문의', href: '/login' },
-        { label: '문의하기', href: '/contact' },
+        { label: '문의하기', href: '/inquiry' },
       ],
     },
   ];

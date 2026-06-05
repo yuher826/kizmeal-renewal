@@ -688,7 +688,7 @@ export default function FacilityPage() {
             궁금한 것은 온라인으로 편하게 물어보세요.
           </p>
           <Link
-            href="/contact"
+            href="/inquiry"
             className="inline-flex items-center gap-2 bg-[#F4A261] hover:bg-[#e8935a] text-white font-semibold px-10 py-4 rounded-xl transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5"
           >
             온라인으로 문의하기

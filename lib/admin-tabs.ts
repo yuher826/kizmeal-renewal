@@ -39,7 +39,7 @@ export const ADMIN_TABS: AdminTab[] = [
     icon: '⚙️',
     label: '운영관리',
     shortLabel: '운영관리',
-    description: '계약된 원의 운영, 식단 배포, 원 담당자 문의를 관리합니다',
+    description: '계약 원의 식단 배포와 운영 문의를 관리합니다',
     items: [
       { icon: '🏠', label: '대시보드', href: '/board/admin' },
       { icon: '🏫', label: '원 관리', href: '/board/admin/branches' },
