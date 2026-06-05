@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 import {
   PieChart, Pie, Cell, Tooltip as PieTooltip, Legend as PieLegend,
@@ -96,6 +97,13 @@ export default function AdminStatsPage() {
     <div className="min-h-screen bg-[#F6FAF6] font-sans">
       <header className="bg-white border-b border-gray-100 px-4 sm:px-6 h-16 hidden sm:flex items-center sticky top-0 z-10">
         <div>
+          <div className="flex items-center gap-1 text-xs text-gray-400 mb-0.5">
+            <Link href="/board/admin" className="hover:text-[#2D6A4F] transition-colors">소통채널</Link>
+            <span>›</span>
+            <span>운영관리</span>
+            <span>›</span>
+            <span className="text-[#2D6A4F] font-medium">통계</span>
+          </div>
           <h1 className="font-bold text-[#1C2B1E] text-base">통계</h1>
           <p className="text-gray-400 text-xs">문의 현황 · 처리율 · 월별 추이</p>
         </div>

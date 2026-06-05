@@ -79,6 +79,13 @@ export default function ServiceInquiriesPage() {
         <div className="flex items-center gap-3 min-w-0">
           <span className="text-2xl">🔵</span>
           <div className="min-w-0">
+            <div className="flex items-center gap-1 text-xs text-gray-400 mb-0.5">
+              <Link href="/board/admin" className="hover:text-[#2D6A4F] transition-colors">소통채널</Link>
+              <span>›</span>
+              <span>서비스문의</span>
+              <span>›</span>
+              <span className="text-[#2D6A4F] font-medium">서비스 문의</span>
+            </div>
             <h1 className="font-bold text-[#1C2B1E]">서비스 문의</h1>
             <p className="text-gray-400 text-xs">홈페이지 방문자의 도입/계약 문의</p>
           </div>

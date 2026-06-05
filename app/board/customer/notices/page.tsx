@@ -1,5 +1,8 @@
 'use client'
 
+import { useEffect, useState } from 'react'
+import { createClient } from '@/lib/supabase'
+
 type Notice = {
   id: string
   title: string
@@ -36,13 +39,35 @@ function NoticeRow({ n }: { n: Notice }) {
 }
 
 export default function CustomerNoticesPage() {
+  const [branchName, setBranchName] = useState<string | null>(null)
   const pinned = SAMPLE.filter(n => n.pinned)
   const normal = SAMPLE.filter(n => !n.pinned)
+
+  useEffect(() => {
+    const supabase = createClient()
+    async function load() {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      const { data: br } = await supabase.from('branches').select('name').eq('auth_id', user.id).maybeSingle()
+      if (br) { setBranchName(br.name || null); return }
+      const { data: mem } = await supabase.from('branch_members').select('branch_id').eq('auth_id', user.id).maybeSingle()
+      if (mem) {
+        const { data: b } = await supabase.from('branches').select('name').eq('id', mem.branch_id).maybeSingle()
+        if (b) setBranchName(b.name || null)
+      }
+    }
+    load()
+  }, [])
 
   return (
     <div className="min-h-screen bg-[#F6FAF6] font-sans">
       <header className="bg-white border-b border-gray-100 px-4 sm:px-6 h-16 hidden sm:flex items-center sticky top-0 z-10">
         <div>
+          <div className="flex items-center gap-1 text-xs text-gray-400 mb-0.5">
+            <span>{branchName || '소통채널'}</span>
+            <span>›</span>
+            <span className="text-[#2D6A4F] font-medium">공지사항</span>
+          </div>
           <h1 className="font-bold text-[#1C2B1E] text-base">공지사항</h1>
           <p className="text-gray-400 text-xs">키즈밀 본사 공지를 확인하세요</p>
         </div>

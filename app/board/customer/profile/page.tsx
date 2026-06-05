@@ -67,6 +67,11 @@ export default function CustomerProfilePage() {
     <div className="min-h-screen bg-[#F6FAF6] font-sans">
       <header className="bg-white border-b border-gray-100 px-4 sm:px-6 h-16 hidden sm:flex items-center sticky top-0 z-10">
         <div>
+          <div className="flex items-center gap-1 text-xs text-gray-400 mb-0.5">
+            <span>{loading ? '소통채널' : (branch?.name || '소통채널')}</span>
+            <span>›</span>
+            <span className="text-[#2D6A4F] font-medium">마이페이지</span>
+          </div>
           <h1 className="font-bold text-[#1C2B1E] text-base">마이페이지</h1>
           <p className="text-gray-400 text-xs">원 정보 및 계정 관리</p>
         </div>

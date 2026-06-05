@@ -239,13 +239,17 @@ export default function AdminContentPage() {
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 bg-gradient-to-br from-[#2D6A4F] to-[#52B788] rounded-xl flex items-center justify-center text-white font-bold text-sm">K</div>
           <div>
+            <div className="flex items-center gap-1 text-xs text-gray-400 mb-0.5">
+              <Link href="/board/admin" className="hover:text-[#2D6A4F] transition-colors">소통채널</Link>
+              <span>›</span>
+              <span>홈페이지&포털</span>
+              <span>›</span>
+              <span className="text-[#2D6A4F] font-medium">콘텐츠 관리</span>
+            </div>
             <h1 className="font-bold text-[#1C2B1E] text-sm">콘텐츠 관리</h1>
             <p className="text-gray-400 text-xs">건강정보지 · 신메뉴 · 레시피 · 식재료 · 갤러리</p>
           </div>
         </div>
-        <Link href="/board/admin" className="text-sm text-[#2D6A4F] font-medium hover:underline">
-          대시보드
-        </Link>
       </header>
 
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 space-y-5">

@@ -63,8 +63,15 @@ export default function AdminDietPage() {
     <div className="min-h-screen bg-[#F6FAF6] font-sans">
       <header className="bg-white border-b border-gray-100 px-4 sm:px-6 h-16 hidden sm:flex items-center justify-between sticky top-0 z-10">
         <div>
-          <h1 className="font-bold text-[#1C2B1E] text-base">식단표 관리</h1>
-          <p className="text-gray-400 text-xs">원별 프로파일 · 업로드 · PDF 배포</p>
+          <div className="flex items-center gap-1 text-xs text-gray-400 mb-0.5">
+            <Link href="/board/admin" className="hover:text-[#2D6A4F] transition-colors">소통채널</Link>
+            <span>›</span>
+            <span>운영관리</span>
+            <span>›</span>
+            <span className="text-[#2D6A4F] font-medium">식단표 배포</span>
+          </div>
+          <h1 className="font-bold text-[#1C2B1E] text-base">식단표 배포</h1>
+          <p className="text-gray-400 text-xs">원별 프로파일 설정 · 엑셀 업로드 · PDF 배포</p>
         </div>
         <div className="flex gap-2">
           <Link href="/board/admin/diet/templates"

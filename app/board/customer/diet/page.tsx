@@ -43,6 +43,7 @@ export default function CustomerDietPage() {
   const [snack,     setSnack]     = useState<SnackInfo | null>(null)
   const [allergyKids, setAllergyKids] = useState<AllergyKid[]>([])
   const [branchId,  setBranchId]  = useState<string | null>(null)
+  const [branchName, setBranchName] = useState<string | null>(null)
 
   const yearMonth = tab === 'this' ? thisMonth : lastMonth
   const pdf = pdfMap[yearMonth]
@@ -54,9 +55,10 @@ export default function CustomerDietPage() {
       if (!user) { setLoading(false); return }
 
       let bId: string | null = null
-      const { data: br } = await supabase.from('branches').select('id, meal_config').eq('auth_id', user.id).maybeSingle()
+      const { data: br } = await supabase.from('branches').select('id, name, meal_config').eq('auth_id', user.id).maybeSingle()
       if (br) {
         bId = br.id
+        setBranchName(br.name || null)
         const mc = br.meal_config as Record<string, unknown> | null
         if (mc && mc.간식 && typeof mc.간식 === 'object') {
           setSnack(mc.간식 as SnackInfo)
@@ -66,8 +68,9 @@ export default function CustomerDietPage() {
         const { data: mem } = await supabase.from('branch_members').select('branch_id').eq('auth_id', user.id).maybeSingle()
         if (mem) {
           bId = mem.branch_id
-          const { data: bData } = await supabase.from('branches').select('meal_config').eq('id', bId).maybeSingle()
+          const { data: bData } = await supabase.from('branches').select('name, meal_config').eq('id', bId).maybeSingle()
           if (bData) {
+            setBranchName(bData.name || null)
             const mc = bData.meal_config as Record<string, unknown> | null
             if (mc && mc.간식 && typeof mc.간식 === 'object') {
               setSnack(mc.간식 as SnackInfo)
@@ -123,6 +126,11 @@ export default function CustomerDietPage() {
     <div className="min-h-screen bg-[#F6FAF6] font-sans">
       <header className="bg-white border-b border-gray-100 px-4 sm:px-6 h-16 hidden sm:flex items-center sticky top-0 z-10">
         <div>
+          <div className="flex items-center gap-1 text-xs text-gray-400 mb-0.5">
+            <span>{branchName || '소통채널'}</span>
+            <span>›</span>
+            <span className="text-[#2D6A4F] font-medium">식단표</span>
+          </div>
           <h1 className="font-bold text-[#1C2B1E] text-base">식단표</h1>
           <p className="text-gray-400 text-xs">우리 원 월별 식단표</p>
         </div>

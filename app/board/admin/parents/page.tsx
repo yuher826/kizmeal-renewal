@@ -147,17 +147,23 @@ export default function AdminParentsPage() {
         </div>
       )}
       <header className="bg-white border-b border-gray-100 px-4 sm:px-6 py-4 hidden sm:flex items-center gap-3 sticky top-0 z-10">
-        <Link href="/board/admin" className="text-gray-400 hover:text-gray-600">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M19 12H5m7-7l-7 7 7 7" />
-          </svg>
-        </Link>
-        <h1 className="font-bold text-[#1C2B1E]">학부모 승인 관리</h1>
-        {counts.pending > 0 && (
-          <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
-            {counts.pending}
-          </span>
-        )}
+        <div>
+          <div className="flex items-center gap-1 text-xs text-gray-400 mb-0.5">
+            <Link href="/board/admin" className="hover:text-[#2D6A4F] transition-colors">소통채널</Link>
+            <span>›</span>
+            <span>홈페이지&포털</span>
+            <span>›</span>
+            <span className="text-[#2D6A4F] font-medium">학부모 승인</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <h1 className="font-bold text-[#1C2B1E]">학부모 승인</h1>
+            {counts.pending > 0 && (
+              <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                {counts.pending}
+              </span>
+            )}
+          </div>
+        </div>
       </header>
 
       <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 space-y-5">

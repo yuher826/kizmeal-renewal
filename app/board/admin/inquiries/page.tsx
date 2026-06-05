@@ -228,7 +228,14 @@ export default function AdminInquiriesPage() {
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 bg-gradient-to-br from-[#2D6A4F] to-[#52B788] rounded-xl flex items-center justify-center text-white font-bold text-sm">K</div>
           <div>
-            <Link href="/board/admin" className="font-bold text-[#1C2B1E] text-sm hover:text-[#2D6A4F]">운영 문의</Link>
+            <div className="flex items-center gap-1 text-xs text-gray-400 mb-0.5">
+              <Link href="/board/admin" className="hover:text-[#2D6A4F] transition-colors">소통채널</Link>
+              <span>›</span>
+              <span>운영관리</span>
+              <span>›</span>
+              <span className="text-[#2D6A4F] font-medium">운영 문의</span>
+            </div>
+            <span className="font-bold text-[#1C2B1E] text-sm">운영 문의</span>
             <p className="text-gray-400 text-xs">계약된 원 담당자의 실무 문의 및 컴플레인</p>
           </div>
         </div>

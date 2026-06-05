@@ -494,13 +494,18 @@ export default function AdminBranchesPage() {
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 bg-gradient-to-br from-[#2D6A4F] to-[#52B788] rounded-xl flex items-center justify-center text-white font-bold text-sm">K</div>
           <div>
-            <h1 className="font-bold text-[#1C2B1E] text-sm">지점/브랜드 관리</h1>
-            <p className="text-gray-400 text-xs">키즈밀 소통채널</p>
+            <div className="flex items-center gap-1 text-xs text-gray-400 mb-0.5">
+              <Link href="/board/admin" className="hover:text-[#2D6A4F] transition-colors">소통채널</Link>
+              <span>›</span>
+              <span>운영관리</span>
+              <span>›</span>
+              <span className="text-[#2D6A4F] font-medium">원 관리</span>
+            </div>
+            <h1 className="font-bold text-[#1C2B1E] text-sm">원 관리</h1>
+            <p className="text-gray-400 text-xs">계약 원의 정보와 계정을 관리합니다</p>
           </div>
         </div>
         <div className="hidden sm:flex items-center gap-3">
-          <Link href="/board/admin" className="text-sm text-[#2D6A4F] font-medium hover:underline">대시보드</Link>
-          <Link href="/board/admin/inquiries" className="text-sm text-[#2D6A4F] font-medium hover:underline">문의 관리</Link>
           <button onClick={handleLogout} className="text-xs text-gray-400 hover:text-gray-600">로그아웃</button>
         </div>
       </header>
