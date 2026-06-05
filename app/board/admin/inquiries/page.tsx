@@ -245,7 +245,6 @@ export default function AdminInquiriesPage() {
               미처리 {stats.unread}건
             </span>
           )}
-          <Link href="/board/admin" className="text-sm text-[#2D6A4F] font-medium hover:underline">대시보드</Link>
           <button onClick={handleLogout} className="text-xs text-gray-400 hover:text-gray-600">로그아웃</button>
         </div>
       </header>
