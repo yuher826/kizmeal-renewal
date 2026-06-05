@@ -32,7 +32,6 @@ function BarTopLabel(props: { x?: number; y?: number; width?: number; value?: nu
 export default function AdminDashboard() {
   const [adminName, setAdminName] = useState('')
   const [loading, setLoading] = useState(true)
-  const [pendingParents, setPendingParents] = useState(0)
   const [stats, setStats] = useState({ today: 0, pending: 0, inProgress: 0, todayResolved: 0 })
   const [avgResponse, setAvgResponse] = useState<string>('—')
   const [monthTotal, setMonthTotal] = useState(0)
@@ -60,12 +59,6 @@ export default function AdminDashboard() {
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
     const in60Days = new Date(now.getTime() + 60 * 86400000).toISOString().slice(0, 10)
     const today = now.toISOString().slice(0, 10)
-
-    const { count: parentPendingCount } = await supabase
-      .from('parents')
-      .select('*', { count: 'exact', head: true })
-      .eq('status', 'pending')
-    setPendingParents(parentPendingCount || 0)
 
     // 오늘 처리 필요 위젯 카운트
     const [complaintRes, allergyRes, parentInqRes] = await Promise.all([
@@ -198,16 +191,6 @@ export default function AdminDashboard() {
           </div>
         </Link>
         <div className="hidden sm:flex items-center gap-3">
-          <Link href="/board/admin/inquiries" className="text-sm text-[#2D6A4F] font-medium hover:underline">문의 관리</Link>
-          <Link href="/board/admin/branches" className="text-sm text-[#2D6A4F] font-medium hover:underline">가맹점 관리</Link>
-          <Link href="/board/admin/parents" className="relative text-sm text-[#2D6A4F] font-medium hover:underline inline-flex items-center gap-1.5">
-            학부모 승인
-            {pendingParents > 0 && (
-              <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-red-500 text-white text-[10px] font-bold">
-                {pendingParents > 99 ? '99+' : pendingParents}
-              </span>
-            )}
-          </Link>
           <button onClick={handleLogout} className="text-xs text-gray-400 hover:text-gray-600">로그아웃</button>
         </div>
       </header>
