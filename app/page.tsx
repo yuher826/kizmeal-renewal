@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import CustomerChannelSection from '@/components/CustomerChannelSection';
 
 // ── Image constants ──────────────────────────────────────────────
 const HERO_IMG =
@@ -399,47 +400,7 @@ export default function Home() {
       <WaveDivider from="#1B4332" to="#ffffff" />
 
       {/* ── 소통채널 ────────────────────────────────────── */}
-      <section className="py-24 bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-14">
-            <div className="section-divider" />
-            <p className="text-[#2D6A4F] text-sm font-semibold tracking-widest uppercase mb-3 anim anim-up">CUSTOMER CHANNEL</p>
-            <h2 className="font-serif font-bold text-3xl sm:text-4xl text-[#0D1B0F] mb-4 anim anim-up delay-100">
-              전화·카톡·문자, 이제 하나로
-            </h2>
-            <p className="text-gray-500 max-w-xl mx-auto text-base leading-relaxed anim anim-up delay-200">
-              키즈밀 전용 소통 채널에서 담당자와 직접 소통하세요.
-              모든 대화 기록이 안전하게 보관됩니다.
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-6 mb-12">
-            {[
-              { icon: '💬', title: '전용 채널', desc: '전화, 카톡, 문자를 하나의 채널로. 문의 내용이 자동으로 정리됩니다.' },
-              { icon: '🔔', title: '실시간 알림', desc: '담당자가 답변하면 즉시 알림. 중요한 메시지를 절대 놓치지 마세요.' },
-              { icon: '🔍', title: '히스토리 검색', desc: '지난 모든 대화를 검색하고 확인하세요. 계약서·식단표도 한 곳에서 관리.' },
-            ].map((item, i) => (
-              <div key={i} className={`text-center p-8 bg-[#F8FDF8] border border-[#E8F5E9] rounded-2xl food-card anim anim-up delay-${(i + 1) * 100}`}>
-                <div className="w-14 h-14 rounded-2xl bg-[#E8F5E9] flex items-center justify-center text-2xl mx-auto mb-4">
-                  {item.icon}
-                </div>
-                <h3 className="font-serif font-bold text-lg text-[#0D1B0F] mb-2">{item.title}</h3>
-                <p className="text-gray-500 text-sm leading-relaxed">{item.desc}</p>
-              </div>
-            ))}
-          </div>
-
-          <div className="text-center anim anim-up delay-400">
-            <Link
-              href="/login"
-              className="inline-flex items-center gap-2 bg-[#2D6A4F] hover:bg-[#1B4332] text-white font-semibold px-8 py-4 rounded-2xl transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5 btn-primary"
-            >
-              지금 시작하기
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" /></svg>
-            </Link>
-          </div>
-        </div>
-      </section>
+      <CustomerChannelSection />
 
       <WaveDivider from="#ffffff" to="#ffffff" />
 

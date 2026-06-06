@@ -222,4 +222,30 @@ body {
   .text-balance {
     text-wrap: balance;
   }
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* CustomerChannelSection */
+@keyframes channelProgressFill {
+  from { width: 0%; }
+  to   { width: 100%; }
+}
+@keyframes channelScreenIn {
+  from { opacity: 0; transform: translateY(5px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.channel-progress {
+  animation: channelProgressFill 3.8s linear forwards;
+}
+.channel-progress.paused {
+  animation-play-state: paused;
+}
+.channel-screen-in {
+  animation: channelScreenIn 0.3s ease forwards;
 }
