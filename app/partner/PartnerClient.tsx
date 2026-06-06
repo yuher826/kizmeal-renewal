@@ -49,26 +49,26 @@ const SERVICE_CARDS = [
 
 const FAQS = [
   {
-    q: '기존 카톡 소통은 어떻게 되나요?',
-    a: '기존 카톡과 병행 가능하며, 점진적으로 채널로 전환하시면 됩니다.',
+    q: '계약은 어떻게 진행되나요?',
+    a: '담당 영양사가 기관을 방문하거나 전화로 간단한 상담을 진행한 후, 계약서를 작성합니다. 계약 후 3일 이내에 시스템 세팅이 완료됩니다.',
   },
   {
-    q: '모바일에서도 사용 가능한가요?',
-    a: 'PC·태블릿·스마트폰 모든 기기에서 사용 가능합니다.',
+    q: '식단표는 어떻게 받을 수 있나요?',
+    a: '매월 말 다음 달 식단표를 전용 소통채널로 발송해드립니다. 학부모 포털에도 자동으로 공유되어 학부모님들이 직접 확인하실 수 있습니다.',
   },
   {
-    q: '담당자가 바뀌어도 기록이 유지되나요?',
-    a: '모든 대화와 파일이 암호화 영구 보관되어 담당자 변경 후에도 이어집니다.',
+    q: '배송 시간은 언제인가요?',
+    a: '기관과 협의된 시간에 맞춰 냉장 차량으로 정시 납품합니다. 주요 납품 시간은 오전 10~11시이며, 특별한 사정이 있을 경우 조율 가능합니다.',
   },
   {
-    q: '도입까지 얼마나 걸리나요?',
-    a: '계약 후 3일 이내 세팅 완료, 바로 사용 가능합니다.',
+    q: '위생 관리는 어떻게 하나요?',
+    a: 'HACCP 인증 시설에서 조리되며, 새벽 3시 식재료 입고부터 냉장 직배송까지 전 과정이 위생 기준에 따라 관리됩니다. 정기적인 위생 점검 결과를 공유해드립니다.',
   },
 ];
 
 // ── Component ─────────────────────────────────────────────────────
 export default function PartnerPageClient() {
-  const [openFaq, setOpenFaq] = useState<number | null>(null);
+  const [openIndex, setOpenIndex] = useState<number | null>(null);
   const [showFloat, setShowFloat] = useState(false);
 
   // Floating button
@@ -303,41 +303,40 @@ export default function PartnerPageClient() {
           </div>
 
           <div className="space-y-3">
-            {FAQS.map((faq, i) => (
-              <div
-                key={i}
-                className={`border rounded-xl overflow-hidden transition-colors duration-200 anim anim-up partner-anim delay-${(i % 3 + 1) * 100} ${
-                  openFaq === i ? 'border-[#2D6A4F]' : 'border-gray-100'
-                }`}
-              >
-                <button
-                  className="w-full flex items-center justify-between p-5 text-left bg-white hover:bg-[#F8FDF8] transition-colors"
-                  onClick={() => setOpenFaq(openFaq === i ? null : i)}
-                >
-                  <span className="font-semibold text-[#0D2016] text-sm sm:text-base pr-4">{faq.q}</span>
-                  <span
-                    className={`text-[#2D6A4F] transition-transform duration-300 flex-shrink-0 ${
-                      openFaq === i ? 'rotate-180' : ''
-                    }`}
-                  >
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </span>
-                </button>
-                <div
-                  style={{
-                    maxHeight: openFaq === i ? '200px' : '0',
-                    overflow: 'hidden',
-                    transition: 'max-height 0.4s ease',
-                  }}
-                >
-                  <div className="px-5 pb-5 text-gray-500 text-sm leading-relaxed border-t border-gray-50 pt-4">
-                    {faq.a}
+            {FAQS.map((faq, i) => {
+              const isOpen = openIndex === i;
+              return (
+                /* 애니메이션 래퍼: className 고정 → visible 클래스가 React 재렌더 시 지워지지 않음 */
+                <div key={i} className={`anim anim-up partner-anim delay-${(i % 3 + 1) * 100}`}>
+                  {/* 상태 기반 div: 애니메이션 클래스 없음 */}
+                  <div className={`border rounded-xl overflow-hidden transition-colors duration-200 ${isOpen ? 'border-[#2D6A4F]' : 'border-gray-100'}`}>
+                    <button
+                      type="button"
+                      className="w-full flex items-center justify-between p-5 text-left bg-white hover:bg-[#F8FDF8] transition-colors"
+                      onClick={() => setOpenIndex(isOpen ? null : i)}
+                    >
+                      <span className="font-semibold text-[#0D2016] text-sm sm:text-base pr-4">{faq.q}</span>
+                      <span className={`text-[#2D6A4F] transition-transform duration-300 flex-shrink-0 ${isOpen ? 'rotate-180' : ''}`}>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </span>
+                    </button>
+                    <div
+                      style={{
+                        maxHeight: isOpen ? '300px' : '0',
+                        overflow: 'hidden',
+                        transition: 'max-height 0.4s ease',
+                      }}
+                    >
+                      <div className="px-5 pb-5 text-gray-500 text-sm leading-relaxed border-t border-gray-50 pt-4">
+                        {faq.a}
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </section>
