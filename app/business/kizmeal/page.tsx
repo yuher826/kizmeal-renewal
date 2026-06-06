@@ -87,7 +87,7 @@ export default function Page() {
             키즈밀 급식은 어떤 점이 다른가요?
           </h2>
           <p className="text-white/80 text-base sm:text-lg leading-relaxed mb-4">
-            최고의 교육은 기관에서,<br />
+            최고의 교육은 고객사에서,<br />
             안전하고 바른 급식은 전문 기업 키즈밀이 제공해 드립니다.
           </p>
           <p className="text-white/65 text-base leading-relaxed max-w-2xl mx-auto mb-14">

@@ -44,7 +44,7 @@ export const ADMIN_TABS: AdminTab[] = [
       { icon: '🏠', label: '대시보드', href: '/board/admin' },
       { icon: '🏫', label: '원 관리', href: '/board/admin/branches' },
       { icon: '🍱', label: '식단표 배포', href: '/board/admin/diet' },
-      { icon: '📣', label: '가맹점 공지', href: '/board/admin/notices?type=branch' },
+      { icon: '📣', label: '고객사 공지', href: '/board/admin/notices?type=branch' },
       { icon: '🟠', label: '운영 문의', href: '/board/admin/inquiries' },
       { icon: '📊', label: '통계', href: '/board/admin/stats' },
     ],
@@ -87,6 +87,6 @@ export function getActiveAdminTab(pathname: string, type: string | null): AdminT
     return 'service'
   }
 
-  // 그 외 전부 운영관리 (대시보드, 원관리, 식단, 가맹점공지, 운영문의, 통계)
+  // 그 외 전부 운영관리 (대시보드, 원관리, 식단, 고객사공지, 운영문의, 통계)
   return 'ops'
 }

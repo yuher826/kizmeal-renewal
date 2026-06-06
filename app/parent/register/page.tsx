@@ -255,7 +255,7 @@ export default function ParentRegisterPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">원(가맹점) 선택 *</label>
+                  <label className="block text-xs text-gray-500 mb-1">원(고객사) 선택 *</label>
                   <select
                     value={child.branch_id}
                     onChange={e => updateChild(i, 'branch_id', e.target.value)}

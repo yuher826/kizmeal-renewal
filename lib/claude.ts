@@ -2,7 +2,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { CATEGORY_LABELS, type InquiryCategory } from './types'
 
 const SYSTEM_PROMPT = `당신은 키즈밀 고객 지원 담당자입니다. 키즈밀은 22년 경력의 친환경 아동 급식 전문 기업입니다.
-고객(가맹점)의 문의에 따뜻하고 전문적인 톤으로 답변해주세요.
+고객(고객사)의 문의에 따뜻하고 전문적인 톤으로 답변해주세요.
 - 반말 금지, 존댓말 필수
 - 이모지 1개 이하 사용
 - 간결하고 명확하게 답변
@@ -27,9 +27,9 @@ export async function generateReplyDraft(
 ): Promise<string> {
   const categoryLabel = CATEGORY_LABELS[category] || category
 
-  const userPrompt = `다음 가맹점 문의에 대한 답변 초안을 작성해주세요.
+  const userPrompt = `다음 고객사 문의에 대한 답변 초안을 작성해주세요.
 
-가맹점명: ${branchName || '가맹점'}
+고객사명: ${branchName || '고객사'}
 문의 분류: ${categoryLabel}
 문의 내용:
 ${inquiryContent}

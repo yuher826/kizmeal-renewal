@@ -225,13 +225,13 @@ export default function Home() {
             <p className="text-[#2D6A4F] text-sm font-semibold tracking-widest uppercase mb-3 anim anim-up">WHY KIZMEAL</p>
             <h2 className="font-serif font-bold text-3xl sm:text-4xl text-[#0D1B0F] mb-4 anim anim-up delay-100">키즈밀이 선택받는 이유</h2>
             <p className="text-gray-500 max-w-xl mx-auto text-base leading-relaxed anim anim-up delay-200">
-              22년의 운영 경험과 340개 이상의 계약 기관이 증명하는 신뢰, 키즈밀과 함께하세요.
+              22년의 운영 경험과 340개 이상의 계약 고객사가 증명하는 신뢰, 키즈밀과 함께하세요.
             </p>
           </div>
 
           <div className="grid md:grid-cols-3 gap-8">
             {[
-              { icon: '🥗', title: '영양사 전담 식단 설계', desc: '임상영양사 자격을 보유한 전담 영양사가 월별 식단을 설계하고 영양 분석 리포트를 제공합니다. 기관의 연령별 특성에 맞는 최적 식단을 구성합니다.', delay: '' },
+              { icon: '🥗', title: '영양사 전담 식단 설계', desc: '임상영양사 자격을 보유한 전담 영양사가 월별 식단을 설계하고 영양 분석 리포트를 제공합니다. 고객사의 연령별 특성에 맞는 최적 식단을 구성합니다.', delay: '' },
               { icon: '🔬', title: '철저한 위생 관리', desc: '식재료 입고부터 조리·포장까지 모든 과정을 국가 기준 위생 매뉴얼로 기록 관리합니다. 매월 위생 검사 결과를 투명하게 공개합니다.', delay: 'delay-200' },
               { icon: '🚛', title: '신선 냉장 직배송', desc: '조리 후 2시간 이내 전용 냉장차로 배송합니다. GPS 실시간 추적과 온도 로깅으로 식품 안전을 끝까지 책임집니다.', delay: 'delay-400' },
             ].map((card, i) => (

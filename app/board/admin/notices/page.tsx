@@ -35,7 +35,7 @@ export default function AdminNoticesPage() {
             <span>›</span>
             <span>{activeType === 'public' ? '홈페이지&포털' : '운영관리'}</span>
             <span>›</span>
-            <span className="text-[#2D6A4F] font-medium">{activeType === 'public' ? '공지사항' : '가맹점 공지'}</span>
+            <span className="text-[#2D6A4F] font-medium">{activeType === 'public' ? '공지사항' : '고객사 공지'}</span>
           </div>
           <h1 className="font-bold text-[#1C2B1E] text-base">공지사항</h1>
           <p className="text-gray-400 text-xs">
@@ -71,7 +71,7 @@ export default function AdminNoticesPage() {
                 : 'text-gray-500 hover:bg-gray-50'
             }`}
           >
-            📣 가맹점 공지
+            📣 고객사 공지
           </Link>
         </div>
 
@@ -108,7 +108,7 @@ export default function AdminNoticesPage() {
                 {normal.length === 0 ? (
                   <tr>
                     <td colSpan={4} className="px-5 py-10 text-center text-gray-400 text-sm">
-                      {activeType === 'public' ? '홈페이지 공지가 없습니다' : '가맹점 공지가 없습니다'}
+                      {activeType === 'public' ? '홈페이지 공지가 없습니다' : '고객사 공지가 없습니다'}
                     </td>
                   </tr>
                 ) : normal.map(n => (

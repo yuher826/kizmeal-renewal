@@ -10,7 +10,7 @@ function getPageTitle(pathname: string, searchParams: URLSearchParams): string {
   const type = searchParams.get('type')
   if (pathname.startsWith('/board/admin/notices')) {
     if (type === 'public') return '홈페이지 공지'
-    if (type === 'branch') return '가맹점 공지'
+    if (type === 'branch') return '고객사 공지'
     return '공지사항'
   }
   if (pathname.startsWith('/board/admin/content'))          return '콘텐츠 관리'

@@ -56,7 +56,7 @@ export default function DietDeployPage() {
       : p
     ))
     setDeploying(false)
-    flash(`✅ ${ids.length}개 원에 배포 완료! 가맹점에서 식단표를 확인할 수 있습니다.`)
+    flash(`✅ ${ids.length}개 원에 배포 완료! 고객사에서 식단표를 확인할 수 있습니다.`)
   }
 
   const deployed = pdfs.filter(p => p.status === 'deployed').length

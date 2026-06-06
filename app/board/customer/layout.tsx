@@ -8,7 +8,7 @@ export default async function BoardCustomerLayout({ children }: { children: Reac
 
   if (!user) redirect('/board/login')
 
-  // 가맹점(원) 또는 가맹점 멤버만 접근 허용
+  // 고객사(원) 또는 고객사 멤버만 접근 허용
   const { data: branchData } = await supabase
     .from('branches')
     .select('id')

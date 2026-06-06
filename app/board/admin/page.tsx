@@ -400,14 +400,14 @@ export default function AdminDashboard() {
               </div>
             ) : expiryList.length === 0 ? (
               <div className="px-6 py-8 text-center text-gray-400 text-sm">
-                60일 이내 만료 예정 가맹점 없음
+                60일 이내 만료 예정 고객사 없음
               </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
                     <tr className="bg-[#F8FDF8]">
-                      {['기관명', '브랜드', '만료일', 'D-Day', '식수', ''].map(h => (
+                      {['고객사명', '브랜드', '만료일', 'D-Day', '식수', ''].map(h => (
                         <th key={h} className="text-left px-5 py-3 text-xs font-bold text-gray-400 whitespace-nowrap">{h}</th>
                       ))}
                     </tr>

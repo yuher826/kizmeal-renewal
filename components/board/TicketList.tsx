@@ -62,7 +62,7 @@ export default function TicketList({ tickets, selectedId, onSelect }: Props) {
           </svg>
           <input
             type="text"
-            placeholder="기관명, 유형 검색"
+            placeholder="고객사명, 유형 검색"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full bg-[#F8FDF8] border border-gray-100 rounded-xl pl-8 pr-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-[#2D6A4F]/20 focus:border-[#2D6A4F]/40"

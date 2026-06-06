@@ -80,7 +80,7 @@ export default function BoardSidebar() {
         <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#2D6A4F] to-[#52B788] flex items-center justify-center text-white font-bold text-lg font-serif">K</div>
         <div>
           <p className="font-bold text-[#1C2B1E] text-sm leading-none">소통채널</p>
-          <p className="text-gray-400 text-xs mt-1">{role === 'admin' ? '관리자' : '가맹점'}</p>
+          <p className="text-gray-400 text-xs mt-1">{role === 'admin' ? '관리자' : '고객사'}</p>
         </div>
       </Link>
 
