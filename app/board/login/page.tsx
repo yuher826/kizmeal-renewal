@@ -26,10 +26,7 @@ export default function BoardLoginPage() {
       const uid = data.session.user.id
       const { data: adminRow } = await supabase.from('admins').select('id').eq('auth_id', uid).maybeSingle()
       if (adminRow) { router.replace('/board/admin'); return }
-      const { data: branchRow } = await supabase.from('branches').select('id').eq('auth_id', uid).maybeSingle()
-      if (branchRow) { router.replace('/board/dashboard'); return }
-      const { data: memberRow } = await supabase.from('branch_members').select('id').eq('auth_id', uid).maybeSingle()
-      if (memberRow) { router.replace('/board/dashboard'); return }
+      await supabase.auth.signOut()
     })
   }, [router])
 
