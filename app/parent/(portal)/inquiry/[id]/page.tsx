@@ -114,7 +114,7 @@ export default function ParentInquiryDetailPage() {
   const badge = inquiry ? (STATUS_BADGES[inquiry.status] || STATUS_BADGES.pending) : null
 
   return (
-    <div className="h-screen flex flex-col bg-[#F6FAF6]">
+    <div className="h-[calc(100vh-4rem)] mt-16 flex flex-col bg-[#F6FAF6]">
       {/* 헤더 */}
       <header className="bg-white border-b border-gray-100 px-4 py-3 flex items-center gap-3 flex-shrink-0">
         <Link href="/parent/inquiry" className="text-gray-400 hover:text-gray-600 flex-shrink-0">
