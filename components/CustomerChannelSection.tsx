@@ -46,10 +46,10 @@ const SLIDES = [
 ];
 
 const COUNTERS = [
-  { value: 49,   suffix: '개', label: '파트너 원' },
+  { fixed: '새벽 3시', label: '식재료 입고' },
   { value: 22,   suffix: '년', label: '급식 경력' },
   { value: 1200, suffix: '+', label: '월 처리 건수' },
-];
+] as const;
 
 // ── Helpers ──────────────────────────────────────────────────────
 function parseDesc(desc: string) {
@@ -337,12 +337,12 @@ function ScreenNotice() {
 const SCREENS = [ScreenChatList, ScreenFileTransfer, ScreenStatus, ScreenNotifications, ScreenSearch, ScreenNotice];
 
 // ── Counter Item ─────────────────────────────────────────────────
-function CounterItem({ value, suffix, label, active }: { value: number; suffix: string; label: string; active: boolean }) {
-  const count = useCountUp(value, 1500, active);
+function CounterItem({ fixed, value, suffix, label, active }: { fixed?: string; value?: number; suffix?: string; label: string; active: boolean }) {
+  const count = useCountUp(value ?? 0, 1500, !fixed && active);
   return (
     <div className="text-center">
       <div className="text-3xl sm:text-4xl font-bold font-serif text-[#1B5E3B] tabular-nums">
-        {count.toLocaleString()}{suffix}
+        {fixed ?? (count.toLocaleString() + (suffix ?? ''))}
       </div>
       <div className="text-xs sm:text-sm text-[#0D2016]/50 mt-1.5 font-medium tracking-wide">{label}</div>
     </div>
@@ -452,7 +452,13 @@ export default function CustomerChannelSection() {
                 className={`transition-all duration-700 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}
                 style={{ transitionDelay: `${300 + i * 100}ms` }}
               >
-                <CounterItem {...c} active={isVisible} />
+                <CounterItem
+                  fixed={'fixed' in c ? c.fixed : undefined}
+                  value={'value' in c ? c.value : undefined}
+                  suffix={'suffix' in c ? c.suffix : undefined}
+                  label={c.label}
+                  active={isVisible}
+                />
               </div>
             ))}
           </div>
