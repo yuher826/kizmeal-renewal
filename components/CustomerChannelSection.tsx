@@ -9,7 +9,7 @@ const DURATION = 3800;
 const SLIDES = [
   {
     num: '01', icon: '💬',
-    title: '49개 원과의 대화를 한 곳에서',
+    title: '모든 원과의 대화를 한 곳에서',
     desc: '전화·카톡 대신 [키즈밀 전용 채널] 하나로.\n어느 원인지 [절대 놓치지 않아요].',
     toast: '목동poly에서 새 메시지 2건',
   },
