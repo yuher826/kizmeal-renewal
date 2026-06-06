@@ -61,11 +61,10 @@ const REVIEWS = [
 ];
 
 const FAQS = [
-  { q: '최소 몇 명부터 계약이 가능한가요?', a: '10인 이상부터 계약 가능합니다. 소규모 어린이집도 맞춤 식단을 제공해드립니다. 5인 이상의 경우 협의 후 진행 가능하니 먼저 문의해 주세요.' },
-  { q: '알레르기 아이도 안전하게 먹을 수 있나요?', a: '네, 입소 시 보호자로부터 알레르기 정보를 제공받아 해당 식재료를 완전히 배제한 별도 식단을 구성합니다. 조리 시 교차오염 방지 프로세스도 철저히 준수합니다.' },
-  { q: '식단표를 미리 받아볼 수 있나요?', a: '매월 말 다음 달 식단표를 제공하며, 전용 앱을 통해 실시간으로 확인하실 수 있습니다. 부모님들께도 공유하실 수 있도록 PDF 형태로 발송해드립니다.' },
-  { q: '납품 시간은 어떻게 되나요?', a: '기관과 협의된 시간에 맞춰 냉장 차량으로 정시 납품합니다. 주요 납품 시간은 오전 10~11시이며, 특별한 사정이 있을 경우 조율 가능합니다.' },
-  { q: '계약 기간과 해지 조건은 어떻게 되나요?', a: '기본 계약 기간은 6개월이며, 1개월 전 사전 통보 시 해지 가능합니다. 특수한 사정(원 폐원, 휴원 등)의 경우 협의 후 조기 해지를 진행합니다.' },
+  { q: '계약은 어떻게 진행되나요?', a: '본사 운영개발팀에서 직접 연락드려 간단한 상담 후 계약서를 작성합니다. 계약 후 3일 이내 시스템 세팅이 완료됩니다.' },
+  { q: '식단표는 어떻게 받을 수 있나요?', a: '매월 학부모 포털과 이메일을 통해 자동 배포됩니다. 월초에 다음 달 식단표를 별도 요청 없이 받아보실 수 있습니다.' },
+  { q: '배송 시간은 언제인가요?', a: '새벽 3시부터 식재료 입고를 시작해 오전 10시 30분 이전에 모든 배송을 완료합니다. 18대 냉장 차량으로 신선도를 유지합니다.' },
+  { q: '식재료는 어떻게 관리되나요?', a: '모든 식재료는 친환경 인증 제품을 우선 사용하며, 냉장 차량 18대로 신선도를 유지해 배송합니다. 원산지 이력 추적이 가능한 식재료만 사용합니다.' },
 ];
 
 export default function Home() {
@@ -485,7 +484,7 @@ export default function Home() {
 
           <div className="space-y-3">
             {FAQS.map((faq, i) => (
-              <div key={i} className={`border rounded-xl overflow-hidden transition-all anim anim-up delay-${(i % 3 + 1) * 100} ${openFaq === i ? 'border-[#2D6A4F]' : 'border-gray-100'}`}>
+              <div key={i} className={`border rounded-xl overflow-hidden anim anim-up delay-${(i % 3 + 1) * 100} ${openFaq === i ? 'border-[#2D6A4F]' : 'border-gray-100'}`}>
                 <button
                   className="w-full flex items-center justify-between p-5 text-left bg-white hover:bg-[#F8FDF8] transition-colors"
                   onClick={() => setOpenFaq(openFaq === i ? null : i)}
@@ -495,7 +494,7 @@ export default function Home() {
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
                   </span>
                 </button>
-                <div className={`faq-content ${openFaq === i ? 'open' : ''}`}>
+                <div className={`overflow-hidden transition-[max-height] duration-300 ${openFaq === i ? 'max-h-96' : 'max-h-0'}`}>
                   <div className="px-5 pb-5 text-gray-500 text-sm leading-relaxed border-t border-gray-50 pt-4">{faq.a}</div>
                 </div>
               </div>
