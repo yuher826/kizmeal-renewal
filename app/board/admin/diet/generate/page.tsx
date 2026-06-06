@@ -4,25 +4,17 @@ import { useEffect, useState, useCallback } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
-import type { Branch } from '@/lib/types'
+import type { Branch, BranchProfile } from '@/lib/types'
 
-interface AllergyChild { name: string; allergens: number[] }
-interface ProfileData {
-  branch_type: string; snack_slots: string[]; allergy_children: AllergyChild[]
-}
 interface MenuItem { name: string; allergens: number[] }
 interface SectionRow { section: string; items: (MenuItem | null)[] }
 interface WeekData { weekNumber: number; sections: SectionRow[] }
 interface ParsedDiet { dietType: string; weeks: WeekData[] }
 
-interface BranchWithProfile extends Branch {
-  profile_data?: ProfileData
-}
-
 type GenStatus = 'pending' | 'running' | 'done' | 'error'
 
 interface BranchResult {
-  branch: BranchWithProfile
+  branch: Branch
   status: GenStatus
   pdfUrl?: string
   error?: string
@@ -35,8 +27,8 @@ const ALLERGEN_NAMES = [
   '복숭아', '토마토', '아황산류', '호두', '닭고기', '쇠고기', '오징어', '조개류', '잣',
 ]
 
-function detectAllergyWarnings(parsed: ParsedDiet, profile: ProfileData): string[] {
-  const children = profile.allergy_children || []
+function detectAllergyWarnings(parsed: ParsedDiet, branch_profiles?: BranchProfile): string[] {
+  const children = branch_profiles?.allergy_children || []
   if (!children.length) return []
 
   const warnings: string[] = []
@@ -82,20 +74,23 @@ export default function DietGeneratePage() {
     async function load() {
       const [uploadRes, branchRes] = await Promise.all([
         supabase.from('diet_uploads').select('parsed_data, diet_type').eq('id', uploadId).single(),
-        supabase.from('branches').select('*, brands(*), profile_data').eq('is_active', true).order('name'),
+        supabase.from('branches').select('*, brands(*), branch_profiles!branch_profiles_branch_id_fkey(*)').eq('is_active', true).order('name'),
       ])
 
       const pd = uploadRes.data?.parsed_data as ParsedDiet | null
 
       const filtered = (branchRes.data || []).filter(b => {
-        const prof = (b as BranchWithProfile).profile_data as ProfileData | undefined
-        return !uploadRes.data?.diet_type || !prof?.branch_type || prof.branch_type === uploadRes.data.diet_type
+        const bp = (b as Branch).branch_profiles
+        const uploadType = uploadRes.data?.diet_type
+        if (!uploadType) return true
+        const branchType = bp?.diet_plan_type === 'CONSIGNMENT' ? '위탁' : 'CK'
+        return branchType === uploadType
       })
 
       const results: BranchResult[] = filtered.map(b => {
-        const prof = ((b as BranchWithProfile).profile_data || {}) as ProfileData
-        const warnings = pd ? detectAllergyWarnings(pd, prof) : []
-        return { branch: b as BranchWithProfile, status: 'pending', allergyWarnings: warnings }
+        const bp = (b as Branch).branch_profiles
+        const warnings = pd ? detectAllergyWarnings(pd, bp) : []
+        return { branch: b as Branch, status: 'pending', allergyWarnings: warnings }
       })
       setBranches(results)
       setLoading(false)
@@ -233,13 +228,15 @@ export default function DietGeneratePage() {
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {branches.map(r => {
-                  const prof = r.branch.profile_data
-                  const slots = prof?.snack_slots?.length || 0
+                  const bp = r.branch.branch_profiles
+                  const slots = [bp?.snack_morning, bp?.snack_afternoon,
+                    bp?.snack_afterschool, bp?.snack_childcare, bp?.snack_teacher_extra]
+                    .filter(Boolean).length + (bp?.custom_snack_slots?.length || 0)
                   return (
                     <tr key={r.branch.id} className="hover:bg-[#F8FDF8]">
                       <td className="px-5 py-3 whitespace-nowrap">
                         <p className="text-sm font-semibold text-[#1C2B1E]">{r.branch.name}</p>
-                        <p className="text-xs text-gray-400">{prof?.branch_type || '—'}</p>
+                        <p className="text-xs text-gray-400">{bp?.diet_plan_type === 'CONSIGNMENT' ? '위탁' : 'CK'}</p>
                       </td>
                       <td className="px-5 py-3 text-xs text-gray-500">{slots}개</td>
                       <td className="px-5 py-3">

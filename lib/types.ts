@@ -139,6 +139,7 @@ export interface Branch {
   meal_config?: MealConfig | Record<string, unknown>
   must_change_password?: boolean
   assigned_admin_id?: string
+  branch_profiles?: BranchProfile
 }
 
 export interface BranchMember {
@@ -285,4 +286,32 @@ export interface WeeklyReport {
   avg_satisfaction?: number
   category_stats?: Record<string, number>
   created_at: string
+}
+
+export interface BranchProfileAllergyChild {
+  id: string
+  name: string
+  allergens: number[]
+  extra_allergies: string[]
+}
+
+export interface BranchProfile {
+  id?: string
+  branch_id: string
+  diet_plan_type: 'CK' | 'CONSIGNMENT'
+  snack_morning: boolean
+  snack_afternoon: boolean
+  snack_afterschool: boolean
+  snack_childcare: boolean
+  snack_teacher_extra: boolean
+  custom_snack_slots: { key: string; label: string }[]
+  nutritionist_name: string
+  nutritionist_email: string
+  distribution_email: string
+  special_notes: string
+  allergy_children: BranchProfileAllergyChild[]
+  pptx_template_id?: string
+  memo?: string
+  created_at?: string
+  updated_at?: string
 }

@@ -191,7 +191,7 @@ export default function AdminBranchesPage() {
     const { data: { user } } = await supabase.auth.getUser()
 
     const [branchRes, brandRes, adminRes, selfRes, inqRes] = await Promise.all([
-      supabase.from('branches').select('*, brands(*)').order('name', { ascending: true }),
+      supabase.from('branches').select('*, brands(*), branch_profiles!branch_profiles_branch_id_fkey(*)').order('name', { ascending: true }),
       supabase.from('brands').select('*').order('name'),
       supabase.from('admins').select('*').eq('is_active', true).order('name'),
       user
@@ -275,6 +275,24 @@ export default function AdminBranchesPage() {
         setCreateMsg(`오류: ${data.error}`)
       } else {
         setCreateMsg(data.emailSent ? '생성 완료! 이메일이 발송되었습니다.' : '생성 완료! (이메일 발송 실패 — 수동 전달 필요)')
+        if (data.branch?.id) {
+          const supabase = createClient()
+          await supabase.from('branch_profiles').upsert({
+            branch_id: data.branch.id,
+            diet_plan_type: form.diet_type === 'catering' ? 'CONSIGNMENT' : 'CK',
+            snack_morning: form.meal_config['오전'] || false,
+            snack_afternoon: form.meal_config['오후'] || false,
+            snack_afterschool: form.meal_config['방과후'] || false,
+            snack_childcare: form.meal_config['돌봄'] || false,
+            snack_teacher_extra: false,
+            custom_snack_slots: [],
+            nutritionist_name: '',
+            nutritionist_email: '',
+            distribution_email: '',
+            special_notes: '',
+            allergy_children: [],
+          }, { onConflict: 'branch_id' })
+        }
         await load()
         setTimeout(() => {
           setShowNewBranch(false)
@@ -792,7 +810,7 @@ export default function AdminBranchesPage() {
                         ['계약 시작', selectedBranch.contract_start || '—'],
                         ['계약 만료', selectedBranch.contract_end || '—'],
                         ['식수 인원', selectedBranch.meal_count ? `${selectedBranch.meal_count}명` : '—'],
-                        ['식단 타입', selectedBranch.diet_type === 'catering' ? '위탁' : 'CK'],
+                        ['식단 타입', selectedBranch.branch_profiles?.diet_plan_type === 'CONSIGNMENT' ? '위탁' : 'CK'],
                       ].map(([label, value]) => (
                         <div key={label} className="flex justify-between text-sm">
                           <span className="text-gray-400">{label}</span>
@@ -828,24 +846,23 @@ export default function AdminBranchesPage() {
                   )}
 
                   {slideTab === 'diet' && (() => {
-                    const mc = (selectedBranch.meal_config || {}) as Record<string, unknown>
-                    const hasNew = mc && typeof mc === 'object' && mc.간식
-                    const snack = hasNew ? mc.간식 as Record<string, unknown> : null
-                    const allergyKids = hasNew ? ((mc.알레르기아이 as unknown[]) || []).length : 0
-                    const slide = hasNew ? (mc.pptx슬라이드 as number) || 1 : null
-                    const notes = hasNew ? (mc.특이사항 as string) || '' : ''
-                    const snackBadges: string[] = snack
-                      ? [...(['오전', '오후', '방과후', '돌봄'] as const).filter(k => snack[k]), ...((snack.기타 as string[]) || [])]
-                      : []
+                    const bp = selectedBranch.branch_profiles
+                    const snackBadges = [
+                      bp?.snack_morning && '오전간식',
+                      bp?.snack_afternoon && '오후간식',
+                      bp?.snack_afterschool && '방과후간식',
+                      bp?.snack_childcare && '돌봄간식',
+                      bp?.snack_teacher_extra && '교.추',
+                      ...(bp?.custom_snack_slots?.map((s: {label:string}) => s.label) || []),
+                    ].filter(Boolean) as string[]
+                    const allergyKids = bp?.allergy_children?.length || 0
+                    const notes = bp?.special_notes || ''
                     return (
                       <>
                         <div className="flex gap-2 flex-wrap">
-                          <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${selectedBranch.diet_type === 'catering' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
-                            {selectedBranch.diet_type === 'catering' ? '위탁' : 'CK'}
+                          <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${bp?.diet_plan_type === 'CONSIGNMENT' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                            {bp?.diet_plan_type === 'CONSIGNMENT' ? '위탁' : 'CK'}
                           </span>
-                          {slide !== null && (
-                            <span className="text-xs bg-gray-100 text-gray-600 font-semibold px-2 py-0.5 rounded-full">Slide {slide}</span>
-                          )}
                           {allergyKids > 0 && (
                             <span className="text-xs bg-red-100 text-red-700 font-semibold px-2 py-0.5 rounded-full">⚠️ {allergyKids}명</span>
                           )}
@@ -1461,7 +1478,7 @@ export default function AdminBranchesPage() {
               )}
               {slideTab === 'contract' && (
                 <div className="space-y-3">
-                  {[['계약만료', selectedBranch.contract_end || '—'], ['식수', selectedBranch.meal_count ? `${selectedBranch.meal_count}명` : '—'], ['식단타입', selectedBranch.diet_type === 'catering' ? '위탁' : 'CK']].map(([l, v]) => (
+                  {[['계약만료', selectedBranch.contract_end || '—'], ['식수', selectedBranch.meal_count ? `${selectedBranch.meal_count}명` : '—'], ['식단타입', selectedBranch.branch_profiles?.diet_plan_type === 'CONSIGNMENT' ? '위탁' : 'CK']].map(([l, v]) => (
                     <div key={l} className="flex justify-between text-sm"><span className="text-gray-400">{l}</span><span className="font-medium">{v}</span></div>
                   ))}
                   <select value={selectedBranch.status || 'active'} onChange={e => handleStatusChange(selectedBranch.id, e.target.value)}
@@ -1471,21 +1488,22 @@ export default function AdminBranchesPage() {
                 </div>
               )}
               {slideTab === 'diet' && (() => {
-                const mc = (selectedBranch.meal_config || {}) as Record<string, unknown>
-                const hasNew = mc && typeof mc === 'object' && mc.간식
-                const snack = hasNew ? mc.간식 as Record<string, unknown> : null
-                const allergyKids = hasNew ? ((mc.알레르기아이 as unknown[]) || []).length : 0
-                const slide = hasNew ? (mc.pptx슬라이드 as number) || 1 : null
-                const snackBadges: string[] = snack
-                  ? [...(['오전', '오후', '방과후', '돌봄'] as const).filter(k => snack[k]), ...((snack.기타 as string[]) || [])]
-                  : []
+                const bp = selectedBranch.branch_profiles
+                const snackBadges = [
+                  bp?.snack_morning && '오전간식',
+                  bp?.snack_afternoon && '오후간식',
+                  bp?.snack_afterschool && '방과후간식',
+                  bp?.snack_childcare && '돌봄간식',
+                  bp?.snack_teacher_extra && '교.추',
+                  ...(bp?.custom_snack_slots?.map((s: {label:string}) => s.label) || []),
+                ].filter(Boolean) as string[]
+                const allergyKids = bp?.allergy_children?.length || 0
                 return (
                   <div className="space-y-3">
                     <div className="flex flex-wrap gap-2">
-                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${selectedBranch.diet_type === 'catering' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
-                        {selectedBranch.diet_type === 'catering' ? '위탁' : 'CK'}
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${bp?.diet_plan_type === 'CONSIGNMENT' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                        {bp?.diet_plan_type === 'CONSIGNMENT' ? '위탁' : 'CK'}
                       </span>
-                      {slide !== null && <span className="text-xs bg-gray-100 text-gray-600 font-semibold px-2 py-0.5 rounded-full">Slide {slide}</span>}
                       {allergyKids > 0 && <span className="text-xs bg-red-100 text-red-700 font-semibold px-2 py-0.5 rounded-full">⚠️ {allergyKids}명</span>}
                     </div>
                     {snackBadges.length > 0 ? (

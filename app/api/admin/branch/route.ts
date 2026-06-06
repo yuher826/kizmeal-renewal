@@ -64,6 +64,22 @@ export async function POST(request: Request) {
 
       if (branchError) return NextResponse.json({ error: branchError.message }, { status: 400 })
 
+      await supabase.from('branch_profiles').upsert({
+        branch_id: branch.id,
+        diet_plan_type: branchData.diet_type === 'catering' ? 'CONSIGNMENT' : 'CK',
+        snack_morning: branchData.meal_config?.['오전'] || false,
+        snack_afternoon: branchData.meal_config?.['오후'] || false,
+        snack_afterschool: branchData.meal_config?.['방과후'] || false,
+        snack_childcare: branchData.meal_config?.['돌봄'] || false,
+        snack_teacher_extra: false,
+        custom_snack_slots: [],
+        nutritionist_name: '',
+        nutritionist_email: '',
+        distribution_email: '',
+        special_notes: '',
+        allergy_children: [],
+      }, { onConflict: 'branch_id' })
+
       let emailSent = false
       try {
         await sendBranchAccountEmail(email, branchData.name, managerName, tempPassword)
