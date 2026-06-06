@@ -48,13 +48,15 @@ export default function ParentInquiryListPage() {
 
   return (
     <div className="min-h-screen bg-[#F6FAF6] pb-32">
-      <header className="bg-white border-b border-gray-100 px-4 py-4 flex items-center justify-between sticky top-0 z-10">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-gradient-to-br from-[#2D6A4F] to-[#52B788] rounded-xl flex items-center justify-center text-white font-bold text-sm shadow-sm">K</div>
-          <div>
-            <h1 className="font-bold text-[#1C2B1E] text-sm">1:1 문의</h1>
-            <p className="text-gray-400 text-xs">{parentName ? `${parentName} 님` : '급식 관련 문의'}</p>
-          </div>
+      <header className="bg-white border-b border-gray-100 px-4 py-4 flex items-center gap-3 sticky top-0 z-10">
+        <Link href="/parent/dashboard" className="text-gray-400 hover:text-gray-600">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 12H5m7-7l-7 7 7 7" />
+          </svg>
+        </Link>
+        <div>
+          <h1 className="font-bold text-[#1C2B1E] text-sm">1:1 문의</h1>
+          <p className="text-gray-400 text-xs">{parentName ? `${parentName} 님` : '급식 관련 문의'}</p>
         </div>
       </header>
 
