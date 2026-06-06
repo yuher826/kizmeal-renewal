@@ -11,7 +11,7 @@ const BEFORE_AFTER = [
   { before: '파일 찾기 어려움',  after: '키워드 즉시 검색' },
   { before: '처리 여부 불명확',  after: '접수→처리→완료 추적' },
   { before: '학부모 개별 연락',  after: '학부모 포털 자동 알림' },
-  { before: '식단표 수동 배포',  after: '자동 배포 (준비중)' },
+  { before: '식단표 수동 배포',  after: '식단표 자동 배포' },
 ];
 
 const STEPS = [
@@ -266,11 +266,11 @@ export default function PartnerPageClient() {
             </h2>
           </div>
 
-          <div className="grid sm:grid-cols-3 gap-6">
+          <div className="grid sm:grid-cols-3 gap-6 items-stretch">
             {SERVICE_CARDS.map((card, i) => (
               <div
                 key={i}
-                className={`relative rounded-2xl border p-6 transition-all duration-300 anim anim-up partner-anim delay-${(i + 1) * 100} ${
+                className={`relative rounded-2xl border p-6 transition-all duration-300 flex flex-col anim anim-up partner-anim delay-${(i + 1) * 100} ${
                   card.active
                     ? 'border-[#E8F5E9] bg-[#F8FDF8] hover:-translate-y-1 hover:shadow-lg'
                     : 'border-gray-200 bg-gray-50 opacity-60'
@@ -285,7 +285,7 @@ export default function PartnerPageClient() {
                   </span>
                 </div>
                 <h3 className="font-serif font-bold text-[#0D2016] text-lg mb-2">{card.title}</h3>
-                <p className="text-gray-500 text-sm leading-relaxed whitespace-pre-line">{card.desc}</p>
+                <p className="text-gray-500 text-sm leading-relaxed whitespace-pre-line flex-1">{card.desc}</p>
               </div>
             ))}
           </div>
@@ -306,7 +306,7 @@ export default function PartnerPageClient() {
             {FAQS.map((faq, i) => (
               <div
                 key={i}
-                className={`border rounded-xl overflow-hidden transition-all anim anim-up partner-anim delay-${(i % 3 + 1) * 100} ${
+                className={`border rounded-xl overflow-hidden transition-colors duration-200 anim anim-up partner-anim delay-${(i % 3 + 1) * 100} ${
                   openFaq === i ? 'border-[#2D6A4F]' : 'border-gray-100'
                 }`}
               >
@@ -325,7 +325,13 @@ export default function PartnerPageClient() {
                     </svg>
                   </span>
                 </button>
-                <div className={`faq-content ${openFaq === i ? 'open' : ''}`}>
+                <div
+                  style={{
+                    maxHeight: openFaq === i ? '200px' : '0',
+                    overflow: 'hidden',
+                    transition: 'max-height 0.4s ease',
+                  }}
+                >
                   <div className="px-5 pb-5 text-gray-500 text-sm leading-relaxed border-t border-gray-50 pt-4">
                     {faq.a}
                   </div>
