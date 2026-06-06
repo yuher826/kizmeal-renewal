@@ -29,10 +29,11 @@ const NAV: NavItem[] = [
   {
     key: 'business',
     label: '사업영역',
-    matchPrefixes: ['/business'],
+    matchPrefixes: ['/business', '/partner'],
     dropdown: [
       { icon: '🥗', label: 'KIZMEAL', href: '/business/kizmeal' },
       { icon: '🍱', label: 'ICANMEAL', href: '/business/icanmeal' },
+      { icon: '🤝', label: '파트너 서비스', href: '/partner' },
     ],
   },
   {
