@@ -133,8 +133,8 @@ export default function ParentRegisterPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F6FAF6] px-4 py-8">
-      <div className="max-w-md mx-auto">
+    <div className="bg-[#F6FAF6] min-h-screen">
+      <div className="max-w-md mx-auto px-4 pt-8 pb-20">
         <div className="text-center mb-6">
           <div className="w-14 h-14 bg-gradient-to-br from-[#2D6A4F] to-[#52B788] rounded-2xl flex items-center justify-center text-white text-xl font-bold mx-auto mb-3 shadow-lg">
             K
@@ -179,6 +179,7 @@ export default function ParentRegisterPage() {
                 value={phone}
                 onChange={e => setPhone(e.target.value)}
                 placeholder="010-0000-0000"
+                autoComplete="off"
                 className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#2D6A4F]"
               />
             </div>
