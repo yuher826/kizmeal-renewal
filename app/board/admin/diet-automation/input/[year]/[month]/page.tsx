@@ -694,6 +694,7 @@ export default function DietInputPage() {
 
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const monthDataRef  = useRef<MonthlyMenuData | null>(null)
+  const hasEditedRef  = useRef(false)
   useEffect(() => { monthDataRef.current = monthData }, [monthData])
 
   // ESC 키 → 패널 닫기
@@ -774,7 +775,7 @@ export default function DietInputPage() {
 
   // ── 자동저장 (3초 디바운스) ────────────────────────────────────────
   useEffect(() => {
-    if (!monthData || loading) return
+    if (!monthData || loading || !hasEditedRef.current) return
     if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current)
     autoSaveTimer.current = setTimeout(async () => {
       const data = monthDataRef.current
@@ -818,6 +819,7 @@ export default function DietInputPage() {
 
   // ── 하루치 업데이트 ─────────────────────────────────────────────────
   const updateDay = useCallback((date: string, day: DayMenuInput) => {
+    hasEditedRef.current = true
     setMonthData(prev => prev ? { ...prev, days: { ...prev.days, [date]: day } } : prev)
   }, [])
 
@@ -993,7 +995,7 @@ export default function DietInputPage() {
       <div className="bg-white border-b border-gray-100 px-4 py-2 flex items-center gap-3 shrink-0">
         <span className="text-xs text-gray-500 shrink-0">📌</span>
         <input type="text" value={monthData.month_note}
-          onChange={e => setMonthData({...monthData, month_note:e.target.value})}
+          onChange={e => { hasEditedRef.current = true; setMonthData({...monthData, month_note:e.target.value}) }}
           placeholder="이달 특이재료/메모"
           className="flex-1 min-w-0 text-xs border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-green-400" />
         <div className="flex items-center gap-2 shrink-0">
