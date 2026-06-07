@@ -887,7 +887,7 @@ export default function AdminBranchesPage() {
                         )}
                         <div className="pt-1">
                           <Link
-                            href={`/board/admin/diet/${selectedBranch.id}`}
+                            href={`/board/admin/diet/branch-profile/${selectedBranch.id}`}
                             className="block w-full text-center text-sm text-[#2D6A4F] border border-[#2D6A4F] rounded-xl py-2 font-medium hover:bg-[#F0F7F4] transition-colors"
                           >
                             프로파일 설정하기 →
@@ -1515,7 +1515,7 @@ export default function AdminBranchesPage() {
                     ) : (
                       <p className="text-xs text-gray-400">간식 구성 미설정</p>
                     )}
-                    <Link href={`/board/admin/diet/${selectedBranch.id}`}
+                    <Link href={`/board/admin/diet/branch-profile/${selectedBranch.id}`}
                       className="block w-full text-center text-sm bg-[#2D6A4F] text-white font-semibold py-2.5 rounded-xl hover:bg-[#1B4332] transition-colors">
                       프로파일 설정하기
                     </Link>

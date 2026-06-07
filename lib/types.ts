@@ -314,4 +314,32 @@ export interface BranchProfile {
   memo?: string
   created_at?: string
   updated_at?: string
+  // 신규 필드 (STEP A — add_branch_profiles_columns.sql 실행 후 활성화)
+  branch_full_name?: string
+  display_name?: string
+  short_code?: string
+  group_tag?: 'E' | 'P' | 'R' | 'SLP' | 'MB' | '기타'
+  contract_status?: 'active' | 'inactive'
+  contract_start_date?: string
+  contract_renew_date?: string
+  inactive_reason?: string
+  file_format?: 'pdf' | 'jpg' | 'ppt' | 'pdf+jpg'
+  slide_count?: 1 | 2 | 3 | 4
+  needs_english?: boolean
+  english_name?: string
+  snack_label?: string
+  childcare_label?: string
+  morning_snack_fixed?: boolean
+  morning_snack_fixed_menu?: string
+  is_elan?: boolean
+  is_ingpa?: boolean
+  has_dessert_fruit?: boolean
+  has_birthday_snack?: boolean
+  has_health_booklet?: boolean
+  has_yonder?: boolean
+  yonder_name?: string
+  is_table_15row?: boolean
+  direct_delivery?: boolean
+  special_note?: string
+  distribution_emails?: string[]
 }
