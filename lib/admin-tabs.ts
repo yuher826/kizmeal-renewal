@@ -43,7 +43,7 @@ export const ADMIN_TABS: AdminTab[] = [
     items: [
       { icon: '🏠', label: '대시보드', href: '/board/admin' },
       { icon: '🏫', label: '원 관리', href: '/board/admin/branches' },
-      { icon: '🍱', label: '식단표 배포', href: '/board/admin/diet' },
+      { icon: '🍱', label: '식단표 자동화', href: '/board/admin/diet-automation' },
       { icon: '📣', label: '고객사 공지', href: '/board/admin/notices?type=branch' },
       { icon: '🟠', label: '운영 문의', href: '/board/admin/inquiries' },
       { icon: '📊', label: '통계', href: '/board/admin/stats' },
