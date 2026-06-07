@@ -101,22 +101,26 @@ function getCellDisplay(day: DayMenuInput | undefined, field: string): CellDispl
     return { text: v || '', badges:[], isEmpty: !v }
   }
 
-  const item = (day as any)[field] as MenuItemInput | SnackItemInput | undefined
+  const dayRecord = day as unknown as Record<string, unknown>
+  const item = dayRecord[field]
   if (!item || typeof item !== 'object') return empty
+  const itemObj = item as Record<string, unknown>
 
-  const val  = (item as any).value as string || ''
-  const allergens = ((item as any).allergens || []) as AllergenNum[]
+  const val = (typeof itemObj.value === 'string' ? itemObj.value : '') || ''
+  const rawAllergens = Array.isArray(itemObj.allergens) ? itemObj.allergens : []
+  const allergens = rawAllergens as AllergenNum[]
   const badges = allergens.slice(0, 5).map(String)
 
   if (field.startsWith('snack')) {
-    const s = item as SnackItemInput
-    if (s.is_empty) return { text:'(미제공)', badges:[], isEmpty:false }
-    const cal = s.calories ? ` ${s.calories}K` : ''
+    const isEmptySnack = itemObj.is_empty === true
+    if (isEmptySnack) return { text:'(미제공)', badges:[], isEmpty:false }
+    const calNum = typeof itemObj.calories === 'number' ? itemObj.calories : 0
+    const cal = calNum ? ` ${calNum}K` : ''
     return { text: val ? val + cal : '', badges, isEmpty: !val }
   }
 
-  const m = item as MenuItemInput
-  if (m.is_empty) return { text:'(없음)', badges:[], isEmpty:false }
+  const isEmptyMenu = itemObj.is_empty === true
+  if (isEmptyMenu) return { text:'(없음)', badges:[], isEmpty:false }
   return { text: val, badges, isEmpty: !val }
 }
 
@@ -212,11 +216,20 @@ function MenuEditor({
   fieldKey: 'rice'|'soup'|'side1'|'side2'|'side3'|'kimchi'
   upd: (updates: Partial<DayMenuInput>) => void
 }) {
-  const item = (day as any)[fieldKey] as MenuItemInput
+  const menuMap: Record<typeof fieldKey, MenuItemInput> = {
+    rice: day.rice, soup: day.soup, side1: day.side1,
+    side2: day.side2, side3: day.side3, kimchi: day.kimchi,
+  }
+  const item = menuMap[fieldKey]
   const setItem = (next: MenuItemInput) => {
-    const patch: Partial<DayMenuInput> = {}
-    ;(patch as any)[fieldKey] = next
-    upd(patch)
+    switch (fieldKey) {
+      case 'rice':   upd({ rice:   next }); break
+      case 'soup':   upd({ soup:   next }); break
+      case 'side1':  upd({ side1:  next }); break
+      case 'side2':  upd({ side2:  next }); break
+      case 'side3':  upd({ side3:  next }); break
+      case 'kimchi': upd({ kimchi: next }); break
+    }
   }
 
   const isSoup  = fieldKey === 'soup'
@@ -293,12 +306,16 @@ function SnackEditor({
   upd: (updates: Partial<DayMenuInput>) => void
 }) {
   const [showOvr, setShowOvr] = useState(false)
-  const raw = (day as any)[fieldKey] as SnackItemInput | undefined
-  const s = raw ?? { value:'', allergens:[], calories:0 }
+  const snackMap: Record<typeof fieldKey, SnackItemInput | undefined> = {
+    snack_am: day.snack_am, snack_pm: day.snack_pm, snack_care: day.snack_care,
+  }
+  const s = snackMap[fieldKey] ?? { value:'', allergens:[], calories:0 }
   const setItem = (next: SnackItemInput) => {
-    const patch: Partial<DayMenuInput> = {}
-    ;(patch as any)[fieldKey] = next
-    upd(patch)
+    switch (fieldKey) {
+      case 'snack_am':   upd({ snack_am:   next }); break
+      case 'snack_pm':   upd({ snack_pm:   next }); break
+      case 'snack_care': upd({ snack_care: next }); break
+    }
   }
 
   const isCare  = fieldKey === 'snack_care'
@@ -420,19 +437,28 @@ function CaloriesEditor({
 
   return (
     <div className="space-y-2">
-      {CAL_FIELDS.map(f => (
-        <div key={f.key} className="flex items-center gap-2">
-          <span className="text-sm text-gray-600 w-20 shrink-0">{f.label}</span>
-          <input type="number" value={(day as any)[f.key] || ''}
-            onChange={e => {
-              const patch: Partial<DayMenuInput> = {}
-              ;(patch as any)[f.key] = Number(e.target.value)
-              upd(patch)
-            }}
-            className="flex-1 text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-yellow-400" />
-          <span className="text-xs text-gray-400 w-8 shrink-0">{f.unit}</span>
-        </div>
-      ))}
+      {CAL_FIELDS.map(f => {
+        const calMap: Record<typeof f.key, number> = {
+          calories: day.calories, carb: day.carb, protein: day.protein, fat: day.fat,
+        }
+        const handleChange = (v: number) => {
+          switch (f.key) {
+            case 'calories': upd({ calories: v }); break
+            case 'carb':     upd({ carb:     v }); break
+            case 'protein':  upd({ protein:  v }); break
+            case 'fat':      upd({ fat:      v }); break
+          }
+        }
+        return (
+          <div key={f.key} className="flex items-center gap-2">
+            <span className="text-sm text-gray-600 w-20 shrink-0">{f.label}</span>
+            <input type="number" value={calMap[f.key] || ''}
+              onChange={e => handleChange(Number(e.target.value))}
+              className="flex-1 text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-yellow-400" />
+            <span className="text-xs text-gray-400 w-8 shrink-0">{f.unit}</span>
+          </div>
+        )
+      })}
       <div className="flex items-center gap-2 pt-1 border-t border-gray-100">
         <span className="text-sm text-gray-600 w-20 shrink-0">잉파/엘란행</span>
         <input type="text" value={day.ellan_ingpa_row}
@@ -704,8 +730,14 @@ export default function DietInputPage() {
           .from('branch_profiles')
           .select('id, short_code, display_name, branch_full_name, group_tag, needs_english, snack_label, snack_childcare')
           .order('short_code')
+        type BranchRow = {
+          id?: string; short_code?: string; short_name?: string
+          display_name?: string; branch_full_name?: string
+          group_tag?: string; group_code?: string
+          needs_english?: boolean; snack_label?: string; snack_childcare?: boolean
+        }
         if (data && !cancelled) {
-          setBranches((data as any[]).map(b => ({
+          setBranches((data as BranchRow[]).map(b => ({
             id:                  b.id || '',
             short_name:          b.short_code || b.short_name || '',
             branch_name:         b.display_name || b.branch_full_name || '',
@@ -747,6 +779,8 @@ export default function DietInputPage() {
       }
     }, 3000)
     return () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current) }
+  // saveToDb is defined in component scope; monthDataRef keeps latest value — intentional omission
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [monthData, loading])
 
   // ── DB 저장 ────────────────────────────────────────────────────────
