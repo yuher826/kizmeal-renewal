@@ -154,6 +154,39 @@ function AllergenSelector({
   )
 }
 
+// ─── IME 안전 텍스트 입력 (한글 자모 분리 방지) ───────────────────────────
+type ImeInputProps = Omit<
+  React.InputHTMLAttributes<HTMLInputElement>,
+  'value' | 'onChange' | 'onCompositionStart' | 'onCompositionEnd'
+> & { value: string; onChange: (val: string) => void }
+
+function ImeInput({ value, onChange, ...rest }: ImeInputProps) {
+  const composingRef = useRef(false)
+  const [localVal, setLocalVal] = useState(value)
+
+  useEffect(() => {
+    if (!composingRef.current) setLocalVal(value)
+  }, [value])
+
+  return (
+    <input
+      {...rest}
+      value={localVal}
+      onChange={e => {
+        setLocalVal(e.target.value)
+        if (!composingRef.current) onChange(e.target.value)
+      }}
+      onCompositionStart={() => { composingRef.current = true }}
+      onCompositionEnd={e => {
+        composingRef.current = false
+        const val = (e.target as HTMLInputElement).value
+        setLocalVal(val)
+        onChange(val)
+      }}
+    />
+  )
+}
+
 // ─── Override 편집기 ─────────────────────────────────────────────────────
 function OverrideEditor({
   overrides, onChange,
@@ -239,8 +272,10 @@ function MenuEditor({
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2">
-        <input type="text" value={item.value}
-          onChange={e => setItem({...item,value:e.target.value})}
+        <ImeInput
+          type="text"
+          value={item.value}
+          onChange={val => setItem({...item, value: val})}
           placeholder={isSoup && item.is_empty ? '(없음)' : '메뉴명 입력'}
           disabled={!!item.is_empty}
           className={`flex-1 text-sm border rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-green-400
@@ -269,8 +304,10 @@ function MenuEditor({
           </div>
           {item.and_sauce && (
             <div className="space-y-1">
-              <input type="text" value={item.and_sauce.value}
-                onChange={e => setItem({...item,and_sauce:{...item.and_sauce!,value:e.target.value}})}
+              <ImeInput
+                type="text"
+                value={item.and_sauce.value}
+                onChange={val => setItem({...item, and_sauce:{...item.and_sauce!, value: val}})}
                 placeholder="소스명"
                 className="w-full text-xs border border-gray-300 rounded px-2 py-1" />
               <AllergenSelector selected={item.and_sauce.allergens}
@@ -324,8 +361,10 @@ function SnackEditor({
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2">
-        <input type="text" value={s.value}
-          onChange={e => setItem({...s,value:e.target.value})}
+        <ImeInput
+          type="text"
+          value={s.value}
+          onChange={val => setItem({...s, value: val})}
           placeholder={s.is_empty ? '(미제공)' : '간식명 입력'}
           disabled={!!s.is_empty}
           className={`flex-1 text-sm border rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-400
@@ -348,8 +387,10 @@ function SnackEditor({
           onChange={allergens => setItem({...s,allergens})} />
       )}
       {needsEn && !s.is_empty && (
-        <input type="text" value={s.value_en ?? ''}
-          onChange={e => setItem({...s,value_en:e.target.value})}
+        <ImeInput
+          type="text"
+          value={s.value_en ?? ''}
+          onChange={val => setItem({...s, value_en: val})}
           placeholder="영문명 (English)"
           className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-yellow-50" />
       )}
@@ -383,8 +424,10 @@ function DateHeaderEditor({
             className="w-4 h-4" /> 공휴일
         </label>
         {day.is_holiday && (
-          <input type="text" value={day.holiday_name ?? ''}
-            onChange={e => upd({holiday_name:e.target.value})}
+          <ImeInput
+            type="text"
+            value={day.holiday_name ?? ''}
+            onChange={val => upd({holiday_name: val})}
             placeholder="공휴일명"
             className="w-full text-sm border border-red-200 rounded-lg px-2 py-1.5 bg-red-50" />
         )}
@@ -396,8 +439,10 @@ function DateHeaderEditor({
             className="w-4 h-4" /> 휴원일
         </label>
         {day.is_self_closed && (
-          <input type="text" value={day.self_closed_reason ?? ''}
-            onChange={e => upd({self_closed_reason:e.target.value})}
+          <ImeInput
+            type="text"
+            value={day.self_closed_reason ?? ''}
+            onChange={val => upd({self_closed_reason: val})}
             placeholder="휴무 사유 (예: 전체 현장학습)"
             className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5" />
         )}
@@ -409,8 +454,10 @@ function DateHeaderEditor({
             className="w-4 h-4" /> 🏕 전체 소풍 (공통 도시락)
         </label>
         {day.is_picnic && (
-          <input type="text" value={day.picnic_menu ?? ''}
-            onChange={e => upd({picnic_menu:e.target.value})}
+          <ImeInput
+            type="text"
+            value={day.picnic_menu ?? ''}
+            onChange={val => upd({picnic_menu: val})}
             placeholder="도시락 메뉴 (예: 떡갈비주먹밥/치킨강정)"
             className="w-full text-xs border border-green-200 rounded-lg px-2 py-1.5 bg-green-50" />
         )}
@@ -461,8 +508,10 @@ function CaloriesEditor({
       })}
       <div className="flex items-center gap-2 pt-1 border-t border-gray-100">
         <span className="text-sm text-gray-600 w-20 shrink-0">잉파/엘란행</span>
-        <input type="text" value={day.ellan_ingpa_row}
-          onChange={e => upd({ellan_ingpa_row:e.target.value})}
+        <ImeInput
+          type="text"
+          value={day.ellan_ingpa_row}
+          onChange={val => upd({ellan_ingpa_row: val})}
           placeholder="후식과일"
           className="flex-1 text-sm border border-purple-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-purple-400 bg-purple-50" />
       </div>
@@ -690,6 +739,7 @@ export default function DietInputPage() {
   const [submitting,     setSubmitting]     = useState(false)
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle'|'saving'|'saved'|'error'>('idle')
   const [lastSaved,      setLastSaved]      = useState<Date | null>(null)
+  const [saveError,      setSaveError]      = useState<string | null>(null)
   const [showErrors,     setShowErrors]     = useState(false)
 
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -785,7 +835,11 @@ export default function DietInputPage() {
         await saveToDb(data)
         setAutoSaveStatus('saved')
         setLastSaved(new Date())
-      } catch {
+        setSaveError(null)
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        console.error('[자동저장 실패]', err)
+        setSaveError(msg)
         setAutoSaveStatus('error')
       }
     }, 3000)
@@ -832,8 +886,12 @@ export default function DietInputPage() {
       await saveToDb(monthData)
       setLastSaved(new Date())
       setAutoSaveStatus('saved')
-    } catch {
-      alert('저장 중 오류가 발생했습니다.')
+      setSaveError(null)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      console.error('[수동저장 실패]', err)
+      setSaveError(msg)
+      alert(`저장 중 오류가 발생했습니다.\n원인: ${msg}`)
     } finally {
       setSaving(false)
     }
@@ -949,7 +1007,10 @@ export default function DietInputPage() {
                 <span className="text-xs text-gray-400 animate-pulse">저장 중...</span>
               )}
               {autoSaveStatus === 'error' && (
-                <span className="text-xs text-red-500 cursor-pointer" onClick={handleSave}>✕ 저장 실패 (클릭하여 재시도)</span>
+                <span className="text-xs text-red-500 cursor-pointer leading-tight" onClick={handleSave}
+                  title={saveError ?? '저장 실패'}>
+                  ✕ 저장 실패 (클릭 재시도){saveError && ` — ${saveError.slice(0, 40)}`}
+                </span>
               )}
               <span className="text-[11px] text-gray-400">{inputCount}/{businessDays.length}일 ({completionRate}%)</span>
             </div>
