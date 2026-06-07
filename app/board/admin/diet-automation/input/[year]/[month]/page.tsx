@@ -75,7 +75,7 @@ function createEmptyDay(dateStr: string): DayMenuInput {
     side3:  { value:'', allergens:[], ingpa_exclude:false, is_dessert_prefix:false },
     kimchi: emptyMenu(),
     calories:0, carb:0, protein:0, fat:0,
-    ellan_ingpa_row: '후식과일',
+    ellan_ingpa_row: '',
     snack_am:   emptySnack(),
     snack_pm:   emptySnack(),
     snack_care: { value:'', allergens:[], calories:0, is_empty:false },
@@ -890,11 +890,15 @@ export default function DietInputPage() {
 
   function getWeekStatus(wn: number): 'complete'|'error'|'closed'|'empty' {
     const dates = weekGroups[wn] || []
-    const allClosed = dates.every(d => { const dy=monthData?.days[d]; return !dy||dy.is_holiday||dy.is_self_closed })
-    if (allClosed) return 'closed'
-    if (dates.some(d => (errorsByDate[d]?.length ?? 0) > 0)) return 'error'
-    if (!dates.some(d => monthData?.days[d]?.rice?.value?.trim())) return 'empty'
-    return 'complete'
+    const openDates = dates.filter(d => {
+      const dy = monthData?.days[d]
+      return dy && !dy.is_holiday && !dy.is_self_closed
+    })
+    if (openDates.length === 0) return 'closed'
+    const hasAnyInput = openDates.some(d => monthData?.days[d]?.rice?.value?.trim())
+    if (!hasAnyInput) return 'empty'
+    const hasErrors = openDates.some(d => (errorsByDate[d]?.length ?? 0) > 0)
+    return hasErrors ? 'error' : 'complete'
   }
 
   function jumpToDate(date: string) {
@@ -956,8 +960,8 @@ export default function DietInputPage() {
             className={`text-xs px-2.5 py-1.5 rounded-lg border transition-colors
               ${validation?.isValid
                 ? 'border-green-200 text-green-700 bg-green-50'
-                : 'border-red-200 text-red-700 bg-red-50 hover:bg-red-100'}`}>
-            {validation?.isValid ? '✅ OK' : `❌ ${validation?.errors.length ?? 0}개`}
+                : 'border-gray-200 text-gray-600 bg-gray-50 hover:bg-gray-100'}`}>
+            {validation?.isValid ? '✅ OK' : `📝 ${validation?.errors.length ?? 0}개`}
           </button>
           <button onClick={handleSave} disabled={saving}
             className="text-xs px-3 py-1.5 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-50 transition-colors">
@@ -1011,7 +1015,7 @@ export default function DietInputPage() {
       <div className="bg-white border-b border-gray-100 px-4 py-2 flex gap-1.5 shrink-0 overflow-x-auto">
         {weekNums.map(wn => {
           const st = getWeekStatus(wn)
-          const icon = st==='complete'?'✅':st==='error'?'❌':st==='closed'?'🔒':'○'
+          const icon = st==='complete'?'✅':st==='error'?'❌':st==='closed'?'🔒':null
           const wDates = weekGroups[wn] || []
           const firstD = wDates[0] ? new Date(wDates[0] + 'T12:00:00') : null
           const lastD  = wDates[wDates.length - 1] ? new Date(wDates[wDates.length - 1] + 'T12:00:00') : null
@@ -1024,7 +1028,7 @@ export default function DietInputPage() {
                 ${activeWeek===wn
                   ? 'bg-[#2D6A4F] text-white shadow-sm'
                   : 'bg-gray-100 text-gray-600 hover:bg-[#E8F5E9] hover:text-[#2D6A4F]'}`}>
-              <span>{icon}</span>
+              {icon && <span>{icon}</span>}
               <span>{wn}주</span>
               {dateRange && <span className="opacity-70 text-[10px]">{dateRange}</span>}
             </button>
