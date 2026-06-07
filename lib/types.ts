@@ -295,6 +295,120 @@ export interface BranchProfileAllergyChild {
   extra_allergies: string[]
 }
 
+// ═══════════════════════════════════════════════════════════════
+// 식단표 자동화 B-2 — 월별 식단 입력 타입
+// ═══════════════════════════════════════════════════════════════
+
+// ── 알레르기 ──────────────────────────────────────────────────
+export const ALLERGEN_LIST = [
+  { num: 1,  label: '난류(가금류)' },
+  { num: 2,  label: '우유' },
+  { num: 3,  label: '메밀' },
+  { num: 4,  label: '땅콩' },
+  { num: 5,  label: '대두' },
+  { num: 6,  label: '밀' },
+  { num: 7,  label: '고등어' },
+  { num: 8,  label: '게' },
+  { num: 9,  label: '새우' },
+  { num: 10, label: '돼지고기' },
+  { num: 11, label: '복숭아' },
+  { num: 12, label: '토마토' },
+  { num: 13, label: '아황산류' },
+  { num: 14, label: '호두' },
+  { num: 15, label: '닭고기' },
+  { num: 16, label: '쇠고기' },
+  { num: 17, label: '오징어' },
+  { num: 18, label: '조개류' },
+  { num: 19, label: '잣' },
+] as const
+
+export type AllergenNum = 1|2|3|4|5|6|7|8|9|10|11|12|13|14|15|16|17|18|19
+
+export const ALLERGEN_CIRCLE: Record<number, string> = {
+  1:'①',2:'②',3:'③',4:'④',5:'⑤',6:'⑥',7:'⑦',8:'⑧',9:'⑨',10:'⑩',
+  11:'⑪',12:'⑫',13:'⑬',14:'⑭',15:'⑮',16:'⑯',17:'⑰',18:'⑱',19:'⑲',
+}
+
+// ── 메뉴 항목 ─────────────────────────────────────────────────
+export interface MenuItemInput {
+  value: string
+  allergens: AllergenNum[]
+  and_sauce?: { value: string; allergens: AllergenNum[] }
+  ingpa_exclude?: boolean
+  is_dessert_prefix?: boolean
+  is_empty?: boolean
+}
+
+export interface OverrideItem {
+  target: string[]
+  type: 'replace' | 'exclude' | 'full_replace'
+  value?: string
+  allergens?: AllergenNum[]
+  exclude_targets?: string[]
+  menu_items?: string[]
+}
+
+export interface SnackItemInput {
+  value: string
+  allergens: AllergenNum[]
+  calories: number
+  value_en?: string
+  is_empty?: boolean
+  overrides?: OverrideItem[]
+}
+
+// ── 하루치 식단 ───────────────────────────────────────────────
+export interface DayMenuInput {
+  date: string
+  is_holiday: boolean
+  holiday_name?: string
+  is_self_closed: boolean
+  is_picnic: boolean
+  picnic_menu?: string
+  birthday_mark: boolean
+  rice:    MenuItemInput
+  soup:    MenuItemInput
+  side1:   MenuItemInput
+  side2?:  MenuItemInput
+  side3?:  MenuItemInput
+  kimchi:  MenuItemInput
+  calories: number
+  carb:    number
+  protein: number
+  fat:     number
+  ellan_ingpa_row: string
+  snack_am:    SnackItemInput
+  snack_pm:    SnackItemInput
+  snack_care?: SnackItemInput
+}
+
+// ── 월별 식단 전체 ────────────────────────────────────────────
+export interface MonthlyMenuData {
+  year: number
+  month: number
+  diet_type: 'CK' | 'consignment'
+  branch_id?: string
+  month_note: string
+  days: Record<string, DayMenuInput>
+  status: 'draft' | 'submitted' | 'approved' | 'deployed'
+}
+
+// ── 검증 ──────────────────────────────────────────────────────
+export interface ValidationError {
+  code: string
+  date?: string
+  field?: string
+  message: string
+}
+
+export interface MonthlyValidationResult {
+  isValid: boolean
+  errors: ValidationError[]
+  warnings: string[]
+}
+
+// ═══════════════════════════════════════════════════════════════
+
 export interface BranchProfile {
   id?: string
   branch_id: string

@@ -174,17 +174,22 @@ export default function DietAutomationPage() {
             </div>
           </div>
 
-          {/* 하단 안내 */}
-          <div className="mt-4 bg-amber-50 border border-amber-200 rounded-2xl p-4">
-            <p className="text-xs text-amber-700 font-medium mb-1">데모 모드</p>
-            <p className="text-xs text-amber-600 leading-relaxed">
-              현재 표시되는 숫자는 데모 데이터입니다. B-2 단계(식단 입력 웹폼)가 완성되면
-              실제 Supabase 데이터와 연동됩니다.
-            </p>
+          {/* 식단 입력 CTA */}
+          <div className="mt-4 bg-[#F6FAF6] border border-[#B7E4C7] rounded-2xl p-4 flex items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-bold text-[#1C2B1E] mb-0.5">📋 이번 달 CK 식단 입력</p>
+              <p className="text-xs text-gray-500">월별 식단을 직접 입력하고 검증 후 제출합니다</p>
+            </div>
+            <Link
+              href="/board/admin/diet-automation/input"
+              className="shrink-0 px-5 py-2.5 rounded-xl bg-[#2D6A4F] text-white text-sm font-semibold hover:bg-[#1B4332] transition-colors whitespace-nowrap"
+            >
+              식단 입력 →
+            </Link>
           </div>
 
           {/* 빠른 이동 */}
-          <div className="mt-4 flex flex-wrap gap-2">
+          <div className="mt-3 flex flex-wrap gap-2">
             <Link
               href="/board/admin/diet"
               className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white border border-gray-200 text-sm font-medium text-gray-700 hover:border-[#2D6A4F] hover:text-[#2D6A4F] transition-colors"
