@@ -98,7 +98,7 @@ export default function AdminDietPage() {
                 </p>
                 <div className="flex flex-wrap gap-1.5 mt-2">
                   {unset.map(b => (
-                    <Link key={b.id} href={`/board/admin/diet/${b.id}`}
+                    <Link key={b.id} href={`/board/admin/diet/branch-profile/${b.id}`}
                       className="text-xs bg-orange-100 hover:bg-orange-200 text-orange-700 font-medium px-2.5 py-1 rounded-full transition-colors">
                       {b.name} →
                     </Link>
@@ -202,7 +202,7 @@ export default function AdminDietPage() {
                       ))}
                     </div>
                   )}
-                  <Link href={`/board/admin/diet/${b.id}`}
+                  <Link href={`/board/admin/diet/branch-profile/${b.id}`}
                     className="inline-block text-xs bg-[#2D6A4F] hover:bg-[#1B4332] text-white font-medium px-3 py-1.5 rounded-lg transition-colors">
                     프로파일 설정
                   </Link>
@@ -276,7 +276,7 @@ export default function AdminDietPage() {
                           : <span className="text-xs bg-orange-100 text-orange-600 font-semibold px-2 py-0.5 rounded-full">미설정</span>}
                       </td>
                       <td className="px-4 py-3.5">
-                        <Link href={`/board/admin/diet/${b.id}`}
+                        <Link href={`/board/admin/diet/branch-profile/${b.id}`}
                           className="text-xs bg-[#2D6A4F] hover:bg-[#1B4332] text-white font-medium px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap">
                           프로파일 설정
                         </Link>
