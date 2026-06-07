@@ -357,29 +357,68 @@ export interface SnackItemInput {
   overrides?: OverrideItem[]
 }
 
+// ── 셀 선택 ───────────────────────────────────────────────────
+export interface CellSelection {
+  date: string
+  field: 'rice'|'soup'|'side1'|'side2'|'side3'|
+         'kimchi'|'calories'|'snack_am'|'snack_pm'|
+         'snack_care'|'ellan_ingpa_row'|'date_header'
+}
+
+// ── 원별 소풍·특별제공 ─────────────────────────────────────────
+export interface BranchPicnic {
+  target: string[]
+  menu: string
+  allergens: AllergenNum[]
+  calories: number
+}
+
+export interface SpecialProvision {
+  target: string[]
+  menu: string
+  allergens: AllergenNum[]
+  calories: number
+  note?: string
+}
+
+// ── 원 옵션 ───────────────────────────────────────────────────
+export interface BranchOption {
+  id: string
+  short_name: string
+  branch_name: string
+  group_code: string
+  is_dongtan_exception: boolean
+  snack_label: string
+  needs_english: boolean
+  has_care_snack: boolean
+}
+
 // ── 하루치 식단 ───────────────────────────────────────────────
 export interface DayMenuInput {
   date: string
   is_holiday: boolean
   holiday_name?: string
   is_self_closed: boolean
+  self_closed_reason?: string
   is_picnic: boolean
   picnic_menu?: string
   birthday_mark: boolean
-  rice:    MenuItemInput
-  soup:    MenuItemInput
-  side1:   MenuItemInput
-  side2?:  MenuItemInput
-  side3?:  MenuItemInput
-  kimchi:  MenuItemInput
+  rice:   MenuItemInput
+  soup:   MenuItemInput
+  side1:  MenuItemInput
+  side2:  MenuItemInput
+  side3:  MenuItemInput
+  kimchi: MenuItemInput
   calories: number
   carb:    number
   protein: number
   fat:     number
   ellan_ingpa_row: string
-  snack_am:    SnackItemInput
-  snack_pm:    SnackItemInput
+  snack_am:   SnackItemInput
+  snack_pm:   SnackItemInput
   snack_care?: SnackItemInput
+  special_provisions?: SpecialProvision[]
+  branch_picnics?: BranchPicnic[]
 }
 
 // ── 월별 식단 전체 ────────────────────────────────────────────
