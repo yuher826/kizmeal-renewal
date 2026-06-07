@@ -393,7 +393,7 @@ function DateHeaderEditor({
         <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
           <input type="checkbox" checked={day.is_self_closed}
             onChange={e => upd({is_self_closed:e.target.checked})}
-            className="w-4 h-4" /> 자체휴무
+            className="w-4 h-4" /> 휴원일
         </label>
         {day.is_self_closed && (
           <input type="text" value={day.self_closed_reason ?? ''}
@@ -500,7 +500,7 @@ function SidePanel({
     body = (
       <div className="text-center py-10 text-gray-400">
         <p className="text-3xl mb-2">{day.is_holiday ? '🏖️' : '🔒'}</p>
-        <p className="text-sm">{day.is_holiday ? (day.holiday_name || '공휴일') : '자체 휴무일'}</p>
+        <p className="text-sm">{day.is_holiday ? (day.holiday_name || '공휴일') : '휴원일'}</p>
         <p className="text-xs mt-1 text-gray-300">식단 없음 — 날짜 설정으로 변경 가능</p>
       </div>
     )
@@ -568,10 +568,14 @@ function WeekGrid({
               const day = days[date]
               const dateObj = new Date(date + 'T12:00:00')
               const isSel = selection?.date === date && selection?.field === 'date_header'
-              const hasErr = (errorsByDate[date]?.length ?? 0) > 0
               const isHol = day?.is_holiday
               const isCls = day?.is_self_closed
               const isBd  = day?.birthday_mark && !isHol && !isCls
+              const isClosedDay = isHol || isCls
+
+              const hasAnyInput = day?.rice?.value?.trim() || day?.soup?.value?.trim()
+              const hasErrors = (errorsByDate[date]?.length ?? 0) > 0
+              const isError = !isClosedDay && !!hasAnyInput && hasErrors
 
               let bg = 'bg-white hover:bg-green-50'
               if (isHol)      bg = 'bg-red-50 hover:bg-red-100'
@@ -582,7 +586,7 @@ function WeekGrid({
               return (
                 <th key={date} onClick={() => onCellClick({date, field:'date_header'})}
                   className={`border border-gray-200 px-1 py-2 text-center cursor-pointer transition-colors
-                    ${bg} ${hasErr ? 'outline outline-1 outline-red-400' : ''}`}
+                    ${bg} ${isError ? 'outline outline-1 outline-red-400' : ''}`}
                 >
                   <div className="text-xs font-semibold text-gray-700">
                     {dateObj.getMonth()+1}/{dateObj.getDate()}
@@ -590,12 +594,18 @@ function WeekGrid({
                   <div className={`text-[10px] ${isHol||isCls ? 'text-red-400' : 'text-gray-400'}`}>
                     {DAY_KR[dateObj.getDay()]}
                   </div>
-                  {hasErr && <div className="text-[9px] text-red-500">❌</div>}
+                  {isClosedDay ? (
+                    <div className="text-[9px] text-gray-400">🔒</div>
+                  ) : (
+                    <div className={`text-[9px] ${!hasAnyInput ? 'text-gray-400' : hasErrors ? 'text-red-500' : 'text-green-500'}`}>
+                      {!hasAnyInput ? '○' : hasErrors ? '❌' : '✅'}
+                    </div>
+                  )}
                   {isBd   && <div className="text-[10px]">🎂</div>}
                   {isHol  && day?.holiday_name && (
                     <div className="text-[9px] text-red-400 truncate max-w-[56px]">{day.holiday_name}</div>
                   )}
-                  {isCls  && <div className="text-[9px] text-gray-400">휴무</div>}
+                  {isCls  && <div className="text-[9px] text-gray-400">휴원일</div>}
                 </th>
               )
             })}
@@ -637,7 +647,7 @@ function WeekGrid({
                       {!unavail && (
                         <>
                           <div className="text-[11px] leading-tight line-clamp-2 break-all">
-                            {disp.text || (disp.isEmpty ? '—' : '')}
+                            {disp.text}
                           </div>
                           {disp.badges.length > 0 && (
                             <div className="flex flex-wrap gap-0.5 justify-center mt-0.5">
@@ -926,14 +936,14 @@ export default function DietInputPage() {
               📋 {year}년 {month}월 CK 식단 입력
             </h1>
             <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-              {autoSaveStatus === 'saving' && (
-                <span className="text-[11px] text-blue-500">저장 중...</span>
-              )}
               {autoSaveStatus === 'saved' && lastSaved && (
-                <span className="text-[11px] text-green-600">✓ {lastSaved.toLocaleTimeString()} 저장됨</span>
+                <span className="text-xs text-green-500">✓ 자동저장됨 {lastSaved.toLocaleTimeString()}</span>
+              )}
+              {autoSaveStatus === 'saving' && (
+                <span className="text-xs text-gray-400 animate-pulse">저장 중...</span>
               )}
               {autoSaveStatus === 'error' && (
-                <span className="text-[11px] text-red-500">저장 실패</span>
+                <span className="text-xs text-red-500 cursor-pointer" onClick={handleSave}>✕ 저장 실패 (클릭하여 재시도)</span>
               )}
               <span className="text-[11px] text-gray-400">{inputCount}/{businessDays.length}일 ({completionRate}%)</span>
             </div>
@@ -1000,13 +1010,21 @@ export default function DietInputPage() {
         {weekNums.map(wn => {
           const st = getWeekStatus(wn)
           const icon = st==='complete'?'✅':st==='error'?'❌':st==='closed'?'🔒':'○'
+          const wDates = weekGroups[wn] || []
+          const firstD = wDates[0] ? new Date(wDates[0] + 'T12:00:00') : null
+          const lastD  = wDates[wDates.length - 1] ? new Date(wDates[wDates.length - 1] + 'T12:00:00') : null
+          const dateRange = firstD && lastD
+            ? `${firstD.getMonth()+1}/${firstD.getDate()}~${lastD.getMonth()+1}/${lastD.getDate()}`
+            : ''
           return (
             <button key={wn} type="button" onClick={() => setActiveWeek(wn)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors shrink-0
+              className={`flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-medium transition-colors shrink-0
                 ${activeWeek===wn
                   ? 'bg-[#2D6A4F] text-white shadow-sm'
                   : 'bg-gray-100 text-gray-600 hover:bg-[#E8F5E9] hover:text-[#2D6A4F]'}`}>
-              {icon} {wn}주차
+              <span>{icon}</span>
+              <span>{wn}주</span>
+              {dateRange && <span className="opacity-70 text-[10px]">{dateRange}</span>}
             </button>
           )
         })}

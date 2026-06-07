@@ -1,10 +1,9 @@
 'use client'
 
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 import type { Branch, Brand, Admin, BranchStatus } from '@/lib/types'
-import * as XLSX from 'xlsx'
 
 // ── 확장 타입 ──────────────────────────────────────────────────
 interface ExtendedBranch extends Branch {
@@ -30,21 +29,6 @@ interface NewBranchForm {
   email: string
   manager_phone: string
   temp_password: string
-}
-
-interface ImportRow {
-  원이름: string
-  브랜드코드: string
-  'KOS ID': string
-  이메일: string
-  담당자명: string
-  연락처: string
-  주소: string
-  식단타입: string
-  계약시작: string
-  계약만료: string
-  식수인원: string
-  _duplicate?: boolean
 }
 
 type Tab = 'branches' | 'brands' | 'admins'
@@ -171,13 +155,6 @@ export default function AdminBranchesPage() {
   const [adminForm, setAdminForm] = useState({ name: '', email: '', role: 'general', temp_password: generateTempPassword() })
   const [creatingAdmin, setCreatingAdmin] = useState(false)
   const [adminMsg, setAdminMsg] = useState('')
-
-  // 엑셀 Import
-  const [showImport, setShowImport] = useState(false)
-  const [importRows, setImportRows] = useState<ImportRow[]>([])
-  const [importing, setImporting] = useState(false)
-  const [importMsg, setImportMsg] = useState('')
-  const fileRef = useRef<HTMLInputElement>(null)
 
   // 패널 액션 상태
   const [resetingPw, setResetingPw] = useState(false)
@@ -418,75 +395,6 @@ export default function AdminBranchesPage() {
     setDeactivating(false)
   }
 
-  // ── 엑셀 처리 ────────────────────────────────────────────────
-  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    const reader = new FileReader()
-    reader.onload = ev => {
-      const wb = XLSX.read(ev.target?.result as ArrayBuffer, { type: 'array' })
-      const ws = wb.Sheets[wb.SheetNames[0]]
-      const rows = XLSX.utils.sheet_to_json<ImportRow>(ws)
-      const existingEmails = new Set(branches.map(b => b.email?.toLowerCase()))
-      const existingKos = new Set(branches.map(b => b.kos_id?.toLowerCase()))
-      const marked = rows.map(r => ({
-        ...r,
-        _duplicate: existingEmails.has((r['이메일'] || '').toLowerCase()) ||
-                    existingKos.has((r['KOS ID'] || '').toLowerCase()),
-      }))
-      setImportRows(marked)
-    }
-    reader.readAsArrayBuffer(file)
-  }
-
-  function downloadTemplate() {
-    const ws = XLSX.utils.aoa_to_sheet([[
-      '원이름', '브랜드코드', 'KOS ID', '이메일', '담당자명', '연락처', '주소', '식단타입', '계약시작', '계약만료', '식수인원',
-    ]])
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, '지점목록')
-    XLSX.writeFile(wb, '지점_일괄등록_템플릿.xlsx')
-  }
-
-  async function handleBulkImport() {
-    const rows = importRows.filter(r => !r._duplicate)
-    if (rows.length === 0) { setImportMsg('등록할 항목 없음'); return }
-    setImporting(true)
-    setImportMsg('')
-    let ok = 0
-    let fail = 0
-    for (const row of rows) {
-      try {
-        const pw = generateTempPassword()
-        const res = await fetch('/api/admin/branch', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'create',
-            branchData: {
-              name: row['원이름'],
-              kos_id: row['KOS ID'],
-              address: row['주소'],
-              phone: row['연락처'],
-              owner_name: row['담당자명'],
-              diet_type: row['식단타입'] === 'catering' ? 'catering' : 'ck',
-              contract_start: row['계약시작'] || null,
-              contract_end: row['계약만료'] || null,
-              meal_count: parseInt(row['식수인원']) || 0,
-            },
-            email: row['이메일'],
-            tempPassword: pw,
-            managerName: row['담당자명'],
-          }),
-        })
-        if (res.ok) ok++; else fail++
-      } catch { fail++ }
-    }
-    setImportMsg(`완료: 성공 ${ok}건, 실패 ${fail}건`)
-    await load()
-    setImporting(false)
-  }
-
   async function handleStatusChange(branchId: string, status: string) {
     const res = await fetch('/api/admin/branch', {
       method: 'POST',
@@ -606,12 +514,6 @@ export default function AdminBranchesPage() {
                   </select>
                 </div>
                 <div className="flex gap-2">
-                  <button
-                    onClick={() => setShowImport(true)}
-                    className="px-4 py-2 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
-                  >
-                    엑셀 Import
-                  </button>
                   <button
                     onClick={openNewBranchModal}
                     className="px-4 py-2 rounded-xl bg-[#2D6A4F] hover:bg-[#1B4332] text-white text-sm font-semibold transition-colors"
@@ -1372,74 +1274,6 @@ export default function AdminBranchesPage() {
             >
               {creatingAdmin ? '생성 중...' : '관리자 계정 생성'}
             </button>
-          </div>
-        </div>
-      )}
-
-      {/* ── 엑셀 Import 모달 ──────────────────────────────────── */}
-      {showImport && (
-        <div className="fixed inset-0 bg-black/40 z-30 flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className="bg-white w-full sm:max-w-2xl sm:rounded-3xl rounded-t-3xl max-h-[90vh] flex flex-col">
-            <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100">
-              <h2 className="font-bold text-[#1C2B1E]">지점 일괄 등록 (엑셀)</h2>
-              <button onClick={() => { setShowImport(false); setImportRows([]); setImportMsg('') }} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">×</button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
-              <div className="flex flex-wrap gap-3">
-                <button onClick={downloadTemplate} className="px-4 py-2 rounded-xl border border-[#2D6A4F] text-[#2D6A4F] text-sm font-medium hover:bg-[#F0F7F4] transition-colors">
-                  템플릿 다운로드
-                </button>
-                <button onClick={() => fileRef.current?.click()} className="px-4 py-2 rounded-xl bg-[#2D6A4F] text-white text-sm font-medium hover:bg-[#1B4332] transition-colors">
-                  파일 업로드
-                </button>
-                <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleFileChange} className="hidden" />
-              </div>
-
-              {importRows.length > 0 && (
-                <div>
-                  <p className="text-sm text-gray-500 mb-2">
-                    총 {importRows.length}행 ({importRows.filter(r => r._duplicate).length}건 중복 — 빨간색)
-                  </p>
-                  <div className="overflow-x-auto rounded-xl border border-gray-100">
-                    <table className="w-full text-xs">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          {['원이름', '이메일', 'KOS ID', '식단타입', '계약만료'].map(h => (
-                            <th key={h} className="px-3 py-2 text-left font-semibold text-gray-400">{h}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-50">
-                        {importRows.map((row, i) => (
-                          <tr key={i} className={row._duplicate ? 'bg-red-50' : ''}>
-                            <td className="px-3 py-2 font-medium">{row['원이름']}{row._duplicate && <span className="ml-1 text-red-500">중복</span>}</td>
-                            <td className="px-3 py-2 text-gray-500">{row['이메일']}</td>
-                            <td className="px-3 py-2 text-gray-500">{row['KOS ID']}</td>
-                            <td className="px-3 py-2 text-gray-500">{row['식단타입'] || 'ck'}</td>
-                            <td className="px-3 py-2 text-gray-500">{row['계약만료']}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-
-              {importMsg && (
-                <div className={`px-4 py-3 rounded-xl text-sm ${importMsg.startsWith('오류') ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-700'}`}>{importMsg}</div>
-              )}
-            </div>
-
-            <div className="px-6 py-4 border-t border-gray-100">
-              <button
-                onClick={handleBulkImport}
-                disabled={importing || importRows.filter(r => !r._duplicate).length === 0}
-                className="w-full py-3 rounded-xl bg-[#2D6A4F] hover:bg-[#1B4332] disabled:opacity-40 text-white text-sm font-semibold transition-colors"
-              >
-                {importing ? '등록 중...' : `일괄 생성 (${importRows.filter(r => !r._duplicate).length}건)`}
-              </button>
-            </div>
           </div>
         </div>
       )}
