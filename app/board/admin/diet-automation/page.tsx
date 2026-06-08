@@ -74,9 +74,6 @@ export default function DietAutomationPage() {
         <div className="flex items-center gap-2 mb-1">
           <span className="text-2xl">🍱</span>
           <h1 className="text-xl sm:text-2xl font-bold text-[#1C2B1E]">식단표 자동화</h1>
-          <span className="ml-2 px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-xs font-medium">
-            데모
-          </span>
         </div>
         <p className="text-sm text-gray-500 ml-9">
           입력 → 검토 → 승인 → PPTX 생성 → 배포 전 과정을 한 곳에서 관리합니다
@@ -191,18 +188,18 @@ export default function DietAutomationPage() {
           {/* 빠른 이동 */}
           <div className="mt-3 flex flex-wrap gap-2">
             <Link
-              href="/board/admin/diet"
+              href="/board/admin/diet-automation/history"
               className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white border border-gray-200 text-sm font-medium text-gray-700 hover:border-[#2D6A4F] hover:text-[#2D6A4F] transition-colors"
             >
               <span>📋</span>
-              구 식단 목록
+              배포 이력
             </Link>
             <Link
-              href="/board/admin/branches"
+              href="/board/admin/diet/branch-profile"
               className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white border border-gray-200 text-sm font-medium text-gray-700 hover:border-[#2D6A4F] hover:text-[#2D6A4F] transition-colors"
             >
               <span>🏫</span>
-              원 관리
+              원 프로파일 설정
             </Link>
           </div>
         </div>

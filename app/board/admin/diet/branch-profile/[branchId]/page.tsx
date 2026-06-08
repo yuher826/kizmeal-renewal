@@ -9,7 +9,7 @@ import type { BranchProfile } from '@/lib/types'
 const ALLERGENS = [
   '난류', '우유', '메밀', '땅콩', '대두', '밀', '고등어',
   '게', '새우', '돼지고기', '복숭아', '토마토', '아황산류',
-  '호두', '닭고기', '쇠고기', '오징어', '조개류',
+  '호두', '닭고기', '쇠고기', '오징어', '조개류', '잣',
 ]
 
 interface AllergyChild {
@@ -369,6 +369,11 @@ export default function BranchProfilePage() {
       </header>
 
       <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6 space-y-5">
+
+        {/* ── 안내 문구 ── */}
+        <div className="bg-blue-50 border border-blue-100 rounded-2xl px-4 py-3 text-xs text-blue-700">
+          원별 PPTX 템플릿 타입, 배포 이메일, 특이사항을 설정하는 페이지입니다.
+        </div>
 
         {/* ── 섹션 1: 기본정보 ── */}
         <SectionCard title="섹션 1 — 기본정보">

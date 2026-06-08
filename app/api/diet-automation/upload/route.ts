@@ -283,6 +283,7 @@ function runValidations(
       }
 
       // ── 규칙3: 알러지 원문자 범위 (①~⑲ = 0x2460~0x2472) ────
+      // Enclosed Alphanumerics 범위(0x2460~0x24FF)만 검사 — 한글 등 일반 문자 스킵
       const allMenuText = [
         day.lunch.bap, day.lunch.guk,
         day.lunch.banchan1, day.lunch.banchan2, day.lunch.banchan3,
@@ -291,7 +292,7 @@ function runValidations(
       ].join('')
       for (const char of allMenuText) {
         const code = char.charCodeAt(0)
-        if (code >= 0x2473) { // ⑳ 이상
+        if (code >= 0x2460 && code <= 0x24FF && code >= 0x2473) { // ⑳ 이상 원문자
           errors.push({
             location: `${dayName} 메뉴`,
             message: `알러지 번호 범위 초과: '${char}' (⑳ 이상 사용 불가)`,
@@ -381,13 +382,15 @@ function runValidations(
         })
       }
 
-      // ── 규칙7: 생일간식 위치 ──────────────────────────────────
-      if (day.birthday_snack.trim() && !day.is_birthday) {
-        errors.push({
-          location: `${dayName} 생일간식`,
-          message: '생일간식이 입력되었으나 생일주 표시(🎂)가 없습니다',
-          suggestion: '생일간식은 생일주 금요일(🎂 표시된 열)에만 입력 가능합니다',
-        })
+      // ── 규칙7: 생일간식 위치 — 비어있으면 스킵, 값 있을 때만 검증
+      if (day.birthday_snack.trim()) {
+        if (!day.is_birthday) {
+          errors.push({
+            location: `${dayName} 생일간식`,
+            message: '생일간식이 입력되었으나 생일주 표시(🎂)가 없습니다',
+            suggestion: '생일간식은 생일주 금요일(🎂 표시된 열)에만 입력 가능합니다',
+          })
+        }
       }
     }
   }
