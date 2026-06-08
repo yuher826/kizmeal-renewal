@@ -174,17 +174,17 @@ export default function DietAutomationPage() {
             </div>
           </div>
 
-          {/* 식단 입력 CTA */}
+          {/* 식단 업로드 CTA */}
           <div className="mt-4 bg-[#F6FAF6] border border-[#B7E4C7] rounded-2xl p-4 flex items-center justify-between gap-4">
             <div>
-              <p className="text-sm font-bold text-[#1C2B1E] mb-0.5">📋 이번 달 CK 식단 입력</p>
-              <p className="text-xs text-gray-500">월별 식단을 직접 입력하고 검증 후 제출합니다</p>
+              <p className="text-sm font-bold text-[#1C2B1E] mb-0.5">📤 이번 달 CK 식단 업로드</p>
+              <p className="text-xs text-gray-500">기준폼 엑셀 파일을 업로드하여 식단을 등록합니다</p>
             </div>
             <Link
-              href="/board/admin/diet-automation/input"
+              href="/board/admin/diet-automation/upload"
               className="shrink-0 px-5 py-2.5 rounded-xl bg-[#2D6A4F] text-white text-sm font-semibold hover:bg-[#1B4332] transition-colors whitespace-nowrap"
             >
-              식단 입력 →
+              ↑ 엑셀 업로드
             </Link>
           </div>
 
