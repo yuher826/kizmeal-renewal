@@ -1,0 +1,210 @@
+{
+  "_comment": "Step 2-A 로컬 검증용 더미 데이터. 구조는 upload route 의 menu_data(weeks/days) 와 정합. 일본어 금지.",
+  "year": 2026,
+  "month": 6,
+  "menu": {
+    "year": 2026,
+    "month": 6,
+    "weeks": {
+      "1": {
+        "week_num": 1,
+        "is_skipped": false,
+        "days": [
+          {
+            "date": "2026-06-01", "is_holiday": false, "is_birthday": false,
+            "lunch": { "bap": "흑미밥", "guk": "미역국①", "banchan1": "불고기②⑤⑬", "banchan2": "시금치나물⑤[수지P-아욱나물]", "banchan3": "배추김치⑨", "banchan4": "", "banchan5": "", "nutrition": "466Kcal(탄59단16지23)", "special": "", "exception": "" },
+            "morning_snack": { "menu": "우유② 바나나", "nutrition": "130Kcal", "special": "", "exception": "" },
+            "afternoon_snack": { "menu": "치즈⑤ 크래커①", "nutrition": "120Kcal", "special": "", "exception": "" },
+            "care_snack": { "menu": "주먹밥①⑤", "nutrition": "150Kcal" },
+            "birthday_snack": ""
+          },
+          {
+            "date": "2026-06-02", "is_holiday": false, "is_birthday": false,
+            "lunch": { "bap": "백미밥", "guk": "된장찌개⑤⑥", "banchan1": "제육볶음⑤⑩⑬", "banchan2": "콩나물무침⑤", "banchan3": "깍두기⑨", "banchan4": "", "banchan5": "", "nutrition": "478Kcal(탄60단17지23)", "special": "", "exception": "" },
+            "morning_snack": { "menu": "두유⑤ 모닝빵①②", "nutrition": "135Kcal", "special": "", "exception": "" },
+            "afternoon_snack": { "menu": "고구마 우유②", "nutrition": "140Kcal", "special": "", "exception": "" },
+            "care_snack": { "menu": "치즈김밥①⑤", "nutrition": "160Kcal" },
+            "birthday_snack": ""
+          },
+          {
+            "date": "2026-06-03", "is_holiday": false, "is_birthday": false,
+            "lunch": { "bap": "보리밥", "guk": "콩나물국⑤", "banchan1": "닭갈비⑤⑬⑮", "banchan2": "감자조림", "banchan3": "오이무침", "banchan4": "총각김치⑨", "banchan5": "", "nutrition": "470Kcal(탄58단18지22)", "special": "", "exception": "" },
+            "morning_snack": { "menu": "요거트⑤ 블루베리", "nutrition": "125Kcal", "special": "", "exception": "" },
+            "afternoon_snack": { "menu": "찐옥수수 우유②", "nutrition": "145Kcal", "special": "", "exception": "" },
+            "care_snack": { "menu": "단호박샐러드①⑤", "nutrition": "155Kcal" },
+            "birthday_snack": ""
+          },
+          {
+            "date": "2026-06-04", "is_holiday": false, "is_birthday": false,
+            "lunch": { "bap": "현미밥", "guk": "북엇국⑤⑥", "banchan1": "돈까스①⑤⑩", "banchan2": "양배추샐러드⑤", "banchan3": "단무지⑬", "banchan4": "", "banchan5": "", "nutrition": "482Kcal(탄61단17지24)", "special": "", "exception": "" },
+            "morning_snack": { "menu": "우유② 카스텔라①②⑤", "nutrition": "138Kcal", "special": "", "exception": "" },
+            "afternoon_snack": { "menu": "사과 요거트⑤", "nutrition": "118Kcal", "special": "", "exception": "" },
+            "care_snack": { "menu": "감자전①⑤", "nutrition": "150Kcal" },
+            "birthday_snack": ""
+          },
+          {
+            "date": "2026-06-05", "is_holiday": false, "is_birthday": true,
+            "lunch": { "bap": "잡곡밥", "guk": "소고기무국⑬", "banchan1": "고등어구이⑤⑰", "banchan2": "도라지무침", "banchan3": "배추김치⑨", "banchan4": "", "banchan5": "", "nutrition": "474Kcal(탄59단18지22)", "special": "", "exception": "" },
+            "morning_snack": { "menu": "우유② 인절미⑬", "nutrition": "132Kcal", "special": "", "exception": "" },
+            "afternoon_snack": { "menu": "푸딩①②⑤ 딸기", "nutrition": "128Kcal", "special": "", "exception": "" },
+            "care_snack": { "menu": "유부초밥①⑤⑥", "nutrition": "158Kcal" },
+            "birthday_snack": "생일케이크①②⑤"
+          }
+        ]
+      },
+      "2": {
+        "week_num": 2,
+        "is_skipped": false,
+        "days": [
+          {
+            "date": "2026-06-08", "is_holiday": false, "is_birthday": false,
+            "lunch": { "bap": "흑미밥", "guk": "들깨무국⑤", "banchan1": "수육⑩ 쌈장⑤⑥", "banchan2": "느타리볶음", "banchan3": "배추김치⑨", "banchan4": "", "banchan5": "", "nutrition": "468Kcal(탄58단17지23)", "special": "", "exception": "" },
+            "morning_snack": { "menu": "우유② 호두과자①②⑤", "nutrition": "136Kcal", "special": "", "exception": "" },
+            "afternoon_snack": { "menu": "바나나 우유②", "nutrition": "130Kcal", "special": "", "exception": "" },
+            "care_snack": { "menu": "꼬마김밥①⑤", "nutrition": "155Kcal" },
+            "birthday_snack": ""
+          },
+          {
+            "date": "2026-06-09", "is_holiday": false, "is_birthday": false,
+            "lunch": { "bap": "백미밥", "guk": "미소된장국⑤⑥", "banchan1": "간장찜닭⑤⑬⑮", "banchan2": "브로콜리숙회", "banchan3": "깍두기⑨", "banchan4": "", "banchan5": "", "nutrition": "472Kcal(탄60단17지22)", "special": "", "exception": "" },
+            "morning_snack": { "menu": "두유⑤ 백설기", "nutrition": "128Kcal", "special": "", "exception": "" },
+            "afternoon_snack": { "menu": "방울토마토 치즈⑤", "nutrition": "115Kcal", "special": "", "exception": "" },
+            "care_snack": { "menu": "주먹밥①⑤", "nutrition": "150Kcal" },
+            "birthday_snack": ""
+          },
+          {
+            "date": "2026-06-10", "is_holiday": true, "is_birthday": false,
+            "lunch": { "bap": "", "guk": "", "banchan1": "", "banchan2": "", "banchan3": "", "banchan4": "", "banchan5": "", "nutrition": "", "special": "", "exception": "" },
+            "morning_snack": { "menu": "", "nutrition": "", "special": "", "exception": "" },
+            "afternoon_snack": { "menu": "", "nutrition": "", "special": "", "exception": "" },
+            "care_snack": { "menu": "", "nutrition": "" },
+            "birthday_snack": ""
+          },
+          {
+            "date": "2026-06-11", "is_holiday": false, "is_birthday": false,
+            "lunch": { "bap": "보리밥", "guk": "어묵국①⑤⑥", "banchan1": "메추리알장조림⑤⑥", "banchan2": "시금치나물⑤", "banchan3": "총각김치⑨", "banchan4": "", "banchan5": "", "nutrition": "476Kcal(탄61단16지23)", "special": "", "exception": "" },
+            "morning_snack": { "menu": "우유② 절편", "nutrition": "126Kcal", "special": "", "exception": "" },
+            "afternoon_snack": { "menu": "고구마말랭이 우유②", "nutrition": "142Kcal", "special": "", "exception": "" },
+            "care_snack": { "menu": "치즈김밥①⑤", "nutrition": "160Kcal" },
+            "birthday_snack": ""
+          },
+          {
+            "date": "2026-06-12", "is_holiday": false, "is_birthday": false,
+            "lunch": { "bap": "현미밥", "guk": "감자국", "banchan1": "닭볶음탕⑬⑮", "banchan2": "콩자반⑤", "banchan3": "배추김치⑨", "banchan4": "", "banchan5": "", "nutrition": "480Kcal(탄62단17지23)", "special": "", "exception": "" },
+            "morning_snack": { "menu": "요거트⑤ 그래놀라①", "nutrition": "134Kcal", "special": "", "exception": "" },
+            "afternoon_snack": { "menu": "배 우유②", "nutrition": "120Kcal", "special": "", "exception": "" },
+            "care_snack": { "menu": "단호박샐러드①⑤", "nutrition": "152Kcal" },
+            "birthday_snack": ""
+          }
+        ]
+      },
+      "3": {
+        "week_num": 3,
+        "is_skipped": false,
+        "days": [
+          {
+            "date": "2026-06-15", "is_holiday": false, "is_birthday": false,
+            "lunch": { "bap": "흑미밥", "guk": "유부장국①⑤⑥", "banchan1": "불고기②⑤⑬", "banchan2": "마늘종볶음", "banchan3": "배추김치⑨", "banchan4": "", "banchan5": "", "nutrition": "470Kcal(탄59단17지22)", "special": "", "exception": "" },
+            "morning_snack": { "menu": "우유② 약과①⑤⑥", "nutrition": "140Kcal", "special": "", "exception": "" },
+            "afternoon_snack": { "menu": "사과 치즈⑤", "nutrition": "118Kcal", "special": "", "exception": "" },
+            "care_snack": { "menu": "주먹밥①⑤", "nutrition": "150Kcal" },
+            "birthday_snack": ""
+          },
+          {
+            "date": "2026-06-16", "is_holiday": false, "is_birthday": false,
+            "lunch": { "bap": "백미밥", "guk": "콩나물국⑤", "banchan1": "생선까스①⑤⑰", "banchan2": "단호박조림", "banchan3": "깍두기⑨", "banchan4": "", "banchan5": "", "nutrition": "474Kcal(탄60단17지23)", "special": "", "exception": "" },
+            "morning_snack": { "menu": "두유⑤ 가래떡", "nutrition": "127Kcal", "special": "", "exception": "" },
+            "afternoon_snack": { "menu": "토마토 우유②", "nutrition": "116Kcal", "special": "", "exception": "" },
+            "care_snack": { "menu": "치즈김밥①⑤", "nutrition": "158Kcal" },
+            "birthday_snack": ""
+          },
+          {
+            "date": "2026-06-17", "is_holiday": false, "is_birthday": false,
+            "lunch": { "bap": "보리밥", "guk": "황태국⑤⑥", "banchan1": "돼지갈비찜⑤⑩⑬", "banchan2": "숙주나물⑤", "banchan3": "배추김치⑨", "banchan4": "", "banchan5": "", "nutrition": "484Kcal(탄61단18지24)", "special": "", "exception": "" },
+            "morning_snack": { "menu": "우유② 단팥빵①②⑤", "nutrition": "138Kcal", "special": "", "exception": "" },
+            "afternoon_snack": { "menu": "찐고구마 우유②", "nutrition": "144Kcal", "special": "", "exception": "" },
+            "care_snack": { "menu": "유부초밥①⑤⑥", "nutrition": "160Kcal" },
+            "birthday_snack": ""
+          },
+          {
+            "date": "2026-06-18", "is_holiday": false, "is_birthday": false,
+            "lunch": { "bap": "현미밥", "guk": "근대된장국⑤⑥", "banchan1": "치킨너겟①②⑤", "banchan2": "양배추찜", "banchan3": "단무지⑬", "banchan4": "", "banchan5": "", "nutrition": "478Kcal(탄62단16지23)", "special": "", "exception": "" },
+            "morning_snack": { "menu": "요거트⑤ 시리얼①", "nutrition": "133Kcal", "special": "", "exception": "" },
+            "afternoon_snack": { "menu": "참외 우유②", "nutrition": "121Kcal", "special": "", "exception": "" },
+            "care_snack": { "menu": "감자전①⑤", "nutrition": "150Kcal" },
+            "birthday_snack": ""
+          },
+          {
+            "date": "2026-06-19", "is_holiday": false, "is_birthday": false,
+            "lunch": { "bap": "잡곡밥", "guk": "소고기미역국⑤⑬", "banchan1": "삼치구이⑰", "banchan2": "고사리나물⑤", "banchan3": "배추김치⑨", "banchan4": "", "banchan5": "", "nutrition": "472Kcal(탄59단18지22)", "special": "", "exception": "" },
+            "morning_snack": { "menu": "우유② 꿀호떡①②⑤", "nutrition": "139Kcal", "special": "", "exception": "" },
+            "afternoon_snack": { "menu": "수박 요거트⑤", "nutrition": "119Kcal", "special": "", "exception": "" },
+            "care_snack": { "menu": "단호박샐러드①⑤", "nutrition": "153Kcal" },
+            "birthday_snack": ""
+          }
+        ]
+      },
+      "4": {
+        "week_num": 4,
+        "is_skipped": false,
+        "days": [
+          {
+            "date": "2026-06-22", "is_holiday": false, "is_birthday": false,
+            "lunch": { "bap": "흑미밥", "guk": "두부된장국⑤⑥", "banchan1": "간장불고기②⑤⑬", "banchan2": "애호박볶음", "banchan3": "배추김치⑨", "banchan4": "", "banchan5": "", "nutrition": "469Kcal(탄58단17지23)", "special": "", "exception": "" },
+            "morning_snack": { "menu": "우유② 바나나", "nutrition": "130Kcal", "special": "", "exception": "" },
+            "afternoon_snack": { "menu": "치즈⑤ 크래커①", "nutrition": "120Kcal", "special": "", "exception": "" },
+            "care_snack": { "menu": "주먹밥①⑤", "nutrition": "150Kcal" },
+            "birthday_snack": ""
+          },
+          {
+            "date": "2026-06-23", "is_holiday": false, "is_birthday": false,
+            "lunch": { "bap": "백미밥", "guk": "팽이장국①⑤⑥", "banchan1": "탕수육①⑤⑩", "banchan2": "청경채볶음", "banchan3": "깍두기⑨", "banchan4": "", "banchan5": "", "nutrition": "483Kcal(탄62단17지24)", "special": "", "exception": "" },
+            "morning_snack": { "menu": "두유⑤ 핫케이크①②⑤", "nutrition": "137Kcal", "special": "", "exception": "" },
+            "afternoon_snack": { "menu": "바나나 우유②", "nutrition": "131Kcal", "special": "", "exception": "" },
+            "care_snack": { "menu": "치즈김밥①⑤", "nutrition": "159Kcal" },
+            "birthday_snack": ""
+          },
+          {
+            "date": "2026-06-24", "is_holiday": false, "is_birthday": false,
+            "lunch": { "bap": "보리밥", "guk": "맑은무국", "banchan1": "코다리조림⑤⑰", "banchan2": "비름나물⑤", "banchan3": "배추김치⑨", "banchan4": "", "banchan5": "", "nutrition": "471Kcal(탄60단17지22)", "special": "", "exception": "" },
+            "morning_snack": { "menu": "요거트⑤ 바나나", "nutrition": "129Kcal", "special": "", "exception": "" },
+            "afternoon_snack": { "menu": "찐감자 우유②", "nutrition": "143Kcal", "special": "", "exception": "" },
+            "care_snack": { "menu": "유부초밥①⑤⑥", "nutrition": "157Kcal" },
+            "birthday_snack": ""
+          },
+          {
+            "date": "2026-06-25", "is_holiday": false, "is_birthday": false,
+            "lunch": { "bap": "현미밥", "guk": "시래기국⑤⑥", "banchan1": "데리야키치킨⑤⑬⑮", "banchan2": "콘샐러드⑤", "banchan3": "단무지⑬", "banchan4": "", "banchan5": "", "nutrition": "479Kcal(탄61단17지23)", "special": "", "exception": "" },
+            "morning_snack": { "menu": "우유② 카스텔라①②⑤", "nutrition": "138Kcal", "special": "", "exception": "" },
+            "afternoon_snack": { "menu": "사과 치즈⑤", "nutrition": "117Kcal", "special": "", "exception": "" },
+            "care_snack": { "menu": "감자전①⑤", "nutrition": "150Kcal" },
+            "birthday_snack": ""
+          },
+          {
+            "date": "2026-06-26", "is_holiday": false, "is_birthday": false,
+            "lunch": { "bap": "잡곡밥", "guk": "달걀국①⑤", "banchan1": "버섯불고기②⑤⑬", "banchan2": "취나물⑤", "banchan3": "배추김치⑨", "banchan4": "", "banchan5": "", "nutrition": "473Kcal(탄60단17지22)", "special": "", "exception": "" },
+            "morning_snack": { "menu": "우유② 약과①⑤⑥", "nutrition": "141Kcal", "special": "", "exception": "" },
+            "afternoon_snack": { "menu": "참외 요거트⑤", "nutrition": "122Kcal", "special": "", "exception": "" },
+            "care_snack": { "menu": "단호박샐러드①⑤", "nutrition": "154Kcal" },
+            "birthday_snack": ""
+          }
+        ]
+      },
+      "5": {
+        "week_num": 5,
+        "is_skipped": true,
+        "days": []
+      }
+    }
+  },
+  "branches": [
+    { "name": "목동E",   "template": "(목동ECC).pptx",      "type": "A",       "snack_label": "오전", "_sample": "타입A" },
+    { "name": "수지P",   "template": "(수지POLY).pptx",     "type": "B",       "snack_label": "간식", "_sample": "타입B (간식라벨+대괄호 대체 검증)" },
+    { "name": "강동E",   "template": "(강동ECC).pptx",      "type": "C",       "snack_label": "오전", "_sample": "타입C (15행 3행1세트)" },
+    { "name": "송파알티", "template": "(알티오라 송파).pptx", "type": "D",       "snack_label": "오전", "_sample": "타입D (S1=S2 동일)" },
+    { "name": "목동P",   "template": "(목동POLY).pptx",     "type": "E",       "snack_label": "간식", "_sample": "타입E (S2/S3 건드리지않음, 5주차만 오전라벨)" },
+    { "name": "일산P",   "template": "(일산POLY).pptx",     "type": "F",       "snack_label": "간식", "_sample": "타입F (영문슬라이드 한글유지)" },
+    { "name": "엘란",    "template": "(엘란어학원).pptx",    "type": "G",       "snack_label": "오전", "add_fruit": true, "fruit_text": "제철과일", "_sample": "타입G (S3/S4 알러지미표기 + 후식과일)" },
+    { "name": "송파E",   "template": "(송파ECC).pptx",      "type": "songpaE", "snack_label": "오전", "_sample": "타입송파E (S2 저녁=돌봄간식)" }
+  ]
+}

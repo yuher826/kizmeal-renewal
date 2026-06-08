@@ -1,0 +1,5 @@
+# 사용자 제공 템플릿(바이너리) / 생성 결과 / 파이썬 캐시
+templates/*.pptx
+output/*.pptx
+__pycache__/
+*.pyc
