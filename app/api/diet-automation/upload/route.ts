@@ -15,7 +15,7 @@ const VALID_BRANCHES = [
   '엘란','럭스','하남랜','송파랜','잉파','KPI','프랜시스',
   '찰리1호','찰리2호',
 ]
-const BRAND_CODES = ['P','E','R','SLP','MB']
+const BRAND_CODES = ['P','E','R','SLP','MB','알티']
 
 const REQUIRED_SHEETS = [
   '1주차','2주차','3주차','4주차','5주차',
