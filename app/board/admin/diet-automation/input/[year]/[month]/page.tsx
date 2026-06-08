@@ -742,10 +742,12 @@ export default function DietInputPage() {
   const [saveError,      setSaveError]      = useState<string | null>(null)
   const [showErrors,     setShowErrors]     = useState(false)
 
-  const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const monthDataRef  = useRef<MonthlyMenuData | null>(null)
-  const hasEditedRef  = useRef(false)
-  useEffect(() => { monthDataRef.current = monthData }, [monthData])
+  const autoSaveTimer  = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const monthDataRef   = useRef<MonthlyMenuData | null>(null)
+  const hasEditedRef   = useRef(false)
+  const activeWeekRef  = useRef(activeWeek)
+  useEffect(() => { monthDataRef.current  = monthData  }, [monthData])
+  useEffect(() => { activeWeekRef.current = activeWeek }, [activeWeek])
 
   // ESC 키 → 패널 닫기
   useEffect(() => {
@@ -859,7 +861,7 @@ export default function DietInputPage() {
   async function saveToDb(data: MonthlyMenuData, statusOverride?: string) {
     const supabase = createClient()
     const fields = {
-      year, month, diet_type:'CK', branch_id:null,
+      year, month, week_num: activeWeekRef.current, diet_type:'CK', branch_id:null,
       status: statusOverride ?? data.status,
       month_note: data.month_note,
       menu_data: data,
@@ -921,7 +923,7 @@ export default function DietInputPage() {
       const now = new Date().toISOString()
       const newData: MonthlyMenuData = { ...monthData, status:'submitted' }
       const fields = {
-        year, month, diet_type:'CK', branch_id:null,
+        year, month, week_num: activeWeek, diet_type:'CK', branch_id:null,
         status:'submitted', month_note:monthData.month_note,
         menu_data: newData, submitted_at: now, updated_at: now,
       }
