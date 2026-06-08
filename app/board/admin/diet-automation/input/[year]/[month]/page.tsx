@@ -837,8 +837,15 @@ export default function DietInputPage() {
         setLastSaved(new Date())
         setSaveError(null)
       } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err)
-        console.error('[자동저장 실패]', err)
+        const error = err as { code?: string; message?: string; details?: string; hint?: string }
+        console.error('저장 에러 상세:', {
+          code: error?.code,
+          message: error?.message,
+          details: error?.details,
+          hint: error?.hint,
+          full: JSON.stringify(error)
+        })
+        const msg = error?.message || error?.details || JSON.stringify(error)
         setSaveError(msg)
         setAutoSaveStatus('error')
       }
@@ -888,8 +895,15 @@ export default function DietInputPage() {
       setAutoSaveStatus('saved')
       setSaveError(null)
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      console.error('[수동저장 실패]', err)
+      const error = err as { code?: string; message?: string; details?: string; hint?: string }
+      console.error('저장 에러 상세:', {
+        code: error?.code,
+        message: error?.message,
+        details: error?.details,
+        hint: error?.hint,
+        full: JSON.stringify(error)
+      })
+      const msg = error?.message || error?.details || JSON.stringify(error)
       setSaveError(msg)
       alert(`저장 중 오류가 발생했습니다.\n원인: ${msg}`)
     } finally {
@@ -930,8 +944,17 @@ export default function DietInputPage() {
       setMonthData(newData)
       alert(`✅ ${year}년 ${month}월 식단 제출 완료!\n권팀장에게 검토 요청이 전송되었습니다.`)
       router.push('/board/admin/diet-automation')
-    } catch {
-      alert('제출 중 오류가 발생했습니다.')
+    } catch (err) {
+      const error = err as { code?: string; message?: string; details?: string; hint?: string }
+      console.error('저장 에러 상세:', {
+        code: error?.code,
+        message: error?.message,
+        details: error?.details,
+        hint: error?.hint,
+        full: JSON.stringify(error)
+      })
+      const msg = error?.message || error?.details || JSON.stringify(error)
+      alert(`제출 중 오류가 발생했습니다.\n원인: ${msg}`)
     } finally {
       setSubmitting(false)
     }
