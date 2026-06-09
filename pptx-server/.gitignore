@@ -8,3 +8,6 @@ __pycache__/
 _tmp_*.txt
 _run_result.txt
 _verify_result.txt
+
+# 엑셀 데이터 파일
+*.xlsx
