@@ -382,16 +382,19 @@ function runValidations(
         })
       }
 
-      // ── 규칙7: 생일간식 위치 — 비어있으면 스킵, 값 있을 때만 검증
-      if (day.birthday_snack.trim()) {
-        if (!day.is_birthday) {
-          errors.push({
-            location: `${dayName} 생일간식`,
-            message: '생일간식이 입력되었으나 생일주 표시(🎂)가 없습니다',
-            suggestion: '생일간식은 생일주 금요일(🎂 표시된 열)에만 입력 가능합니다',
-          })
-        }
-      }
+    }
+
+    // ── 규칙7: 생일간식 — 주 단위 검증 (병합 셀 파싱 오탐 방지)
+    // xlsx는 병합 셀 값을 첫 번째 열(보통 월요일)에만 저장하므로
+    // day 단위로 체크하면 birthday 마커가 없는 열에서 오탐 발생
+    const anyBirthdaySnack = week.days.some(d => d.birthday_snack.trim())
+    const anyBirthdayDay   = week.days.some(d => d.is_birthday)
+    if (anyBirthdaySnack && !anyBirthdayDay) {
+      errors.push({
+        location: `${weekLabel} 생일간식`,
+        message: '생일간식이 입력되었으나 생일주 표시(🎂)가 없습니다',
+        suggestion: '생일간식은 날짜 헤더에 🎂가 표시된 주에만 입력 가능합니다',
+      })
     }
   }
 
