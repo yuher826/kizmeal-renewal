@@ -209,7 +209,7 @@ export default function DietAutomationPage() {
   }
 
   // ── 재시도 ────────────────────────────────────────────────────
-  async function handleRetry(branchId: string | null, branchName: string) {
+  async function handleRetry(_branchId: string | null, branchName: string) {
     showToast(`${branchName} 재생성 중...`)
     try {
       const res = await fetch('/api/pptx/generate', {
@@ -652,7 +652,6 @@ export default function DietAutomationPage() {
                         const badge     = getFileBadge(row.branch_name)
                         const isManual  = MANUAL_PROCESS_CODES.has(row.branch_name)
                         const isJpgOnly = JPG_ONLY_CODES.has(row.branch_name)
-                        const _isPdfJpg = PDF_JPG_CODES.has(row.branch_name)
                         const isSep     = SEPARATE_CONTRACT_CODES.has(row.branch_name)
                         const isSuccess = row.status === 'success'
 
