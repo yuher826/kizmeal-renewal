@@ -94,19 +94,19 @@ def generate():
 
         raw_results = []
         for cfg in branches:
-            branch_name = cfg['name']
-            out_pptx = os.path.join(output_dir, f'{branch_name}_{year}{month:02d}.pptx')
+            branch_full_name = cfg['name']
+            out_pptx = os.path.join(output_dir, f'{branch_full_name}_{year}{month:02d}.pptx')
             try:
                 gen_pptx(cfg, menu_data, TEMPLATE_PATH, out_pptx, date_map=date_map)
                 raw_results.append({
-                    'branch_name': branch_name,
+                    'branch_full_name': branch_full_name,
                     'pptx_path':   out_pptx,
                     'status':      'success',
                     'error_msg':   '',
                 })
             except Exception as exc:
                 raw_results.append({
-                    'branch_name': branch_name,
+                    'branch_full_name': branch_full_name,
                     'pptx_path':   None,
                     'status':      'error',
                     'error_msg':   str(exc),
@@ -123,11 +123,11 @@ def generate():
         # 응답 조합
         results = []
         for r in raw_results:
-            bn   = r['branch_name']
+            bn   = r['branch_full_name']
             urls = upload_map.get(bn, {})
             results.append({
                 'branch_id':   branch_id_map.get(bn),
-                'branch_name': bn,
+                'branch_full_name': bn,
                 'pptx_url':    urls.get('pptx_url', ''),
                 'pdf_url':     urls.get('pdf_url',  ''),
                 'status':      r['status'],
@@ -184,7 +184,7 @@ def _get_branch_id_map():
 def _update_db(upload_map, branch_id_map, year, month, week_num):
     """
     weekly_menus 테이블에 pptx_url / pdf_url 업서트.
-    branch_id_map: {branch_name: branch_id(uuid)}
+    branch_id_map: {branch_full_name: branch_id(uuid)}
     """
     try:
         from supabase_uploader import get_supabase_client
@@ -193,8 +193,8 @@ def _update_db(upload_map, branch_id_map, year, month, week_num):
         print(f'[DB 업데이트 스킵] Supabase 클라이언트 오류: {exc}')
         return
 
-    for branch_name, urls in upload_map.items():
-        branch_id = branch_id_map.get(branch_name)
+    for branch_full_name, urls in upload_map.items():
+        branch_id = branch_id_map.get(branch_full_name)
         if not branch_id:
             continue
 
@@ -240,7 +240,7 @@ def _update_db(upload_map, branch_id_map, year, month, week_num):
                         'pdf_url':   pdf_url,
                     }).execute()
         except Exception as exc:
-            print(f'[DB 업데이트 오류] {branch_name}: {exc}')
+            print(f'[DB 업데이트 오류] {branch_full_name}: {exc}')
 
 
 # ════════════════════════════════════════════════════════════════════
@@ -516,19 +516,19 @@ def generate_from_json():
 
         raw_results = []
         for cfg in branch_cfgs:
-            branch_name = cfg['name']
-            out_pptx = os.path.join(output_dir, f'{branch_name}_{year}{month:02d}.pptx')
+            branch_full_name = cfg['name']
+            out_pptx = os.path.join(output_dir, f'{branch_full_name}_{year}{month:02d}.pptx')
             try:
                 gen_pptx(cfg, adapted_menu, TEMPLATE_PATH, out_pptx, date_map=date_map)
                 raw_results.append({
-                    'branch_name': branch_name,
+                    'branch_full_name': branch_full_name,
                     'pptx_path':   out_pptx,
                     'status':      'success',
                     'error_msg':   '',
                 })
             except Exception as exc:
                 raw_results.append({
-                    'branch_name': branch_name,
+                    'branch_full_name': branch_full_name,
                     'pptx_path':   None,
                     'status':      'error',
                     'error_msg':   str(exc),
@@ -545,11 +545,11 @@ def generate_from_json():
         # 응답 조합
         results = []
         for r in raw_results:
-            bn   = r['branch_name']
+            bn   = r['branch_full_name']
             urls = upload_map.get(bn, {})
             results.append({
                 'branch_id':   branch_id_map.get(bn),
-                'branch_name': bn,
+                'branch_full_name': bn,
                 'pptx_url':    urls.get('pptx_url', ''),
                 'pdf_url':     urls.get('pdf_url',  ''),
                 'status':      r['status'],
