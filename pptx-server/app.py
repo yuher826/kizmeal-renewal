@@ -126,12 +126,13 @@ def generate():
             bn   = r['branch_full_name']
             urls = upload_map.get(bn, {})
             results.append({
-                'branch_id':   branch_id_map.get(bn),
+                'branch_id':        branch_id_map.get(bn),
+                'branch_name':      bn,
                 'branch_full_name': bn,
-                'pptx_url':    urls.get('pptx_url', ''),
-                'pdf_url':     urls.get('pdf_url',  ''),
-                'status':      r['status'],
-                'error_msg':   r['error_msg'],
+                'pptx_url':         urls.get('pptx_url', ''),
+                'pdf_url':          urls.get('pdf_url',  ''),
+                'status':           r['status'],
+                'error_msg':        r['error_msg'],
             })
 
         succeeded = sum(1 for r in results if r['status'] == 'success')
@@ -170,9 +171,9 @@ def _get_branch_id_map():
     try:
         from supabase_uploader import get_supabase_client
         client = get_supabase_client()
-        rows = client.select('branch_profiles', 'branch_id,short_code')
+        rows = client.select('branch_profiles', 'id,short_code')
         return {
-            row['short_code']: row['branch_id']
+            row['short_code']: row['id']
             for row in rows
             if row.get('short_code')
         }
@@ -550,12 +551,13 @@ def generate_from_json():
             bn   = r['branch_full_name']
             urls = upload_map.get(bn, {})
             results.append({
-                'branch_id':   branch_id_map.get(bn),
+                'branch_id':        branch_id_map.get(bn),
+                'branch_name':      bn,
                 'branch_full_name': bn,
-                'pptx_url':    urls.get('pptx_url', ''),
-                'pdf_url':     urls.get('pdf_url',  ''),
-                'status':      r['status'],
-                'error_msg':   r['error_msg'],
+                'pptx_url':         urls.get('pptx_url', ''),
+                'pdf_url':          urls.get('pdf_url',  ''),
+                'status':           r['status'],
+                'error_msg':        r['error_msg'],
             })
 
         succeeded = sum(1 for r in results if r['status'] == 'success')
