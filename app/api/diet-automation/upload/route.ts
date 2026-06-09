@@ -194,6 +194,12 @@ function parseWeekSheet(
     }
   }
 
+  // xlsx(SheetJS)가 🎂 이모지를 누락하는 경우 보완:
+  // birthday_snack이 입력된 날은 is_birthday = true 로 자동 설정
+  for (const day of Object.values(dayMap)) {
+    if (day.birthday_snack.trim()) day.is_birthday = true
+  }
+
   return { week_num: weekNum, is_skipped: false, days: Object.values(dayMap) }
 }
 
