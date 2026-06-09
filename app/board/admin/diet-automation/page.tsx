@@ -182,9 +182,7 @@ export default function DietAutomationPage() {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({
-          year:     pptxYear,
-          month:    pptxMonth,
-          week_num: pptxWeekNum === 0 ? null : pptxWeekNum,
+          weekly_menu_id: menuRowId,
         }),
       })
       clearTimeout(wakeTimer)
@@ -200,6 +198,7 @@ export default function DietAutomationPage() {
           results:      data.results ?? [],
         })
         setGenStatus('done')
+        showToast(`${data.succeeded}개원 생성 완료! ✅`)
         await fetchMenuRow()
       }
     } catch (err) {
@@ -217,10 +216,7 @@ export default function DietAutomationPage() {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({
-          year:      pptxYear,
-          month:     pptxMonth,
-          week_num:  pptxWeekNum === 0 ? null : pptxWeekNum,
-          branch_id: branchId,
+          weekly_menu_id: menuRowId,
         }),
       })
       const data = await res.json()
