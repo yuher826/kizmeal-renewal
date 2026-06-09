@@ -202,7 +202,7 @@ def _init_table_cells(table, sections):
             lunch_tmpl = copy.deepcopy(src_txBody)
         elif 1 <= n <= 2 and snack_tmpl is None:
             snack_tmpl = copy.deepcopy(src_txBody)
-        if lunch_tmpl and snack_tmpl:
+        if lunch_tmpl is not None and snack_tmpl is not None:
             break
 
     # S3 처럼 snack_tmpl이 없으면 lunch_tmpl 에서 파생
