@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-import DietNotificationPanel from '@/components/board/DietNotificationPanel'
+import DietNotificationPanel, { type DietNotification } from '@/components/board/DietNotificationPanel'
 
 // ── 데모 데이터 (실제 Supabase 연동은 B-2 이후) ──────────────────
 const DEMO_STATS = {
@@ -122,8 +122,13 @@ export default function DietAutomationPage() {
   const [genResults, setGenResults] = useState<GenerationResults | null>(null)
 
   const [downloadingZip, setDownloadingZip] = useState(false)
+  const [deploying,      setDeploying]      = useState(false)
   const [sendingReview,  setSendingReview]  = useState(false)
   const [reviewSent,     setReviewSent]     = useState(false)
+
+  // ── 알림 상태 ─────────────────────────────────────────────────
+  const [notifications,        setNotifications]        = useState<DietNotification[]>([])
+  const [notificationsLoading, setNotificationsLoading] = useState(false)
 
   // ── weekly_menus 조회 ─────────────────────────────────────────
   const fetchMenuRow = useCallback(async () => {
@@ -228,6 +233,52 @@ export default function DietAutomationPage() {
     } catch (err) {
       showToast(`재시도 오류: ${err}`)
     }
+  }
+
+  // ── 이메일 배포 ───────────────────────────────────────────────
+  async function handleDeploy() {
+    if (!confirm(`${pptxYear}년 ${pptxMonth}월 식단표를 각 원 담당자 이메일로 발송합니다.\n계속하시겠습니까?`)) return
+    setDeploying(true)
+    try {
+      const res = await fetch('/api/pptx/deploy', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ year: pptxYear, month: pptxMonth }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        showToast(`배포 오류: ${data.error}`)
+      } else {
+        showToast(`배포 완료! ${data.sent}개원 발송 성공${data.failed > 0 ? `, ${data.failed}개 실패` : ''}`)
+        await fetchMenuRow()
+      }
+    } catch (err) {
+      showToast(`배포 오류: ${err}`)
+    } finally {
+      setDeploying(false)
+    }
+  }
+
+  // ── 알림 fetch ────────────────────────────────────────────────
+  async function fetchNotifications() {
+    setNotificationsLoading(true)
+    try {
+      const supabase = createClient()
+      const { data } = await supabase
+        .from('diet_notifications')
+        .select('id, type, title, message, branch_id, is_read, recipient_role, created_at')
+        .order('created_at', { ascending: false })
+        .limit(50)
+      setNotifications((data ?? []) as DietNotification[])
+    } finally {
+      setNotificationsLoading(false)
+    }
+  }
+
+  async function handleMarkRead(id: string) {
+    const supabase = createClient()
+    await supabase.from('diet_notifications').update({ is_read: true }).eq('id', id)
+    setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n))
   }
 
   // ── ZIP 다운로드 ──────────────────────────────────────────────
@@ -732,19 +783,46 @@ export default function DietAutomationPage() {
                   {downloadingZip ? '⏳ 다운로드 중...' : '📦 전체 ZIP 다운로드'}
                 </button>
 
-                {/* 권팀장 검토 요청 */}
-                <button
-                  type="button"
-                  onClick={handleReviewRequest}
-                  disabled={reviewSent || sendingReview}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#1565C0] text-white text-sm font-semibold hover:bg-[#0D47A1] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {sendingReview
-                    ? '⏳ 전송 중...'
-                    : reviewSent
-                    ? '✅ 검토 요청 완료'
-                    : '📩 권팀장 검토 요청'}
-                </button>
+                {/* 권팀장 검토 요청 (generated 상태) */}
+                {['generated', 'correction_requested'].includes(menuStatus ?? '') && (
+                  <button
+                    type="button"
+                    onClick={handleReviewRequest}
+                    disabled={reviewSent || sendingReview}
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#1565C0] text-white text-sm font-semibold hover:bg-[#0D47A1] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {sendingReview ? '⏳ 전송 중...' : reviewSent ? '✅ 검토 요청 완료' : '📩 권팀장 검토 요청'}
+                  </button>
+                )}
+
+                {/* 검토 중일 때: 검토 페이지 링크 */}
+                {menuStatus === 'review_requested' && (
+                  <Link
+                    href={`/board/admin/diet-automation/review?year=${pptxYear}&month=${pptxMonth}`}
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-orange-100 text-orange-700 text-sm font-semibold hover:bg-orange-200 transition-colors"
+                  >
+                    👀 검토 페이지로 이동
+                  </Link>
+                )}
+
+                {/* 승인 완료: 이메일 배포 버튼 */}
+                {menuStatus === 'approved' && (
+                  <button
+                    type="button"
+                    onClick={handleDeploy}
+                    disabled={deploying}
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#2E7D32] text-white text-sm font-semibold hover:bg-[#1B5E20] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {deploying ? '⏳ 발송 중...' : '📧 이메일 배포 시작'}
+                  </button>
+                )}
+
+                {/* 배포 완료 */}
+                {menuStatus === 'deployed' && (
+                  <span className="flex items-center gap-1.5 text-sm font-semibold text-[#2D6A4F]">
+                    🚀 배포 완료
+                  </span>
+                )}
               </div>
             )}
           </div>
@@ -754,8 +832,34 @@ export default function DietAutomationPage() {
 
       {tab === 'notifications' && (
         <div className="bg-white rounded-2xl border border-gray-100 p-4 sm:p-6">
-          <h2 className="text-sm font-bold text-[#1C2B1E] mb-4">알림 센터</h2>
-          <DietNotificationPanel notifications={[]} />
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-sm font-bold text-[#1C2B1E]">알림 센터</h2>
+            <button
+              type="button"
+              onClick={fetchNotifications}
+              disabled={notificationsLoading}
+              className="text-xs text-gray-400 hover:text-[#2D6A4F] transition-colors disabled:opacity-40"
+            >
+              {notificationsLoading ? '로딩 중...' : '↻ 새로고침'}
+            </button>
+          </div>
+          {notifications.length === 0 && !notificationsLoading ? (
+            <div className="flex flex-col items-center py-8">
+              <button
+                type="button"
+                onClick={fetchNotifications}
+                className="px-5 py-2.5 rounded-xl bg-[#F6FAF6] border border-[#B7E4C7] text-sm font-medium text-[#2D6A4F] hover:bg-[#E8F5E9] transition-colors mb-2"
+              >
+                알림 불러오기
+              </button>
+              <p className="text-xs text-gray-400">식단 관련 알림이 여기 표시됩니다</p>
+            </div>
+          ) : (
+            <DietNotificationPanel
+              notifications={notifications}
+              onMarkRead={handleMarkRead}
+            />
+          )}
         </div>
       )}
 
