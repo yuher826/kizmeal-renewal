@@ -652,7 +652,7 @@ export default function DietAutomationPage() {
                         const badge     = getFileBadge(row.branch_name)
                         const isManual  = MANUAL_PROCESS_CODES.has(row.branch_name)
                         const isJpgOnly = JPG_ONLY_CODES.has(row.branch_name)
-                        const isPdfJpg  = PDF_JPG_CODES.has(row.branch_name)
+                        const _isPdfJpg = PDF_JPG_CODES.has(row.branch_name)
                         const isSep     = SEPARATE_CONTRACT_CODES.has(row.branch_name)
                         const isSuccess = row.status === 'success'
 
