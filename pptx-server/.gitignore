@@ -3,3 +3,8 @@ templates/*.pptx
 output/*.pptx
 __pycache__/
 *.pyc
+
+# 임시 디버그 파일
+_tmp_*.txt
+_run_result.txt
+_verify_result.txt
