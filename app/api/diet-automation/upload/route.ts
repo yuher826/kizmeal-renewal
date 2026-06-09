@@ -601,6 +601,27 @@ export async function POST(req: NextRequest) {
         }],
       })
     }
+
+    // Excel Storage 업로드 (실패해도 파싱 결과 정상 반환)
+    try {
+      const excelBuffer = Buffer.from(await file.arrayBuffer())
+      const storagePath = `diet-excel/${year}/${month}/base_menu.xlsx`
+      const { error: uploadErr } = await dbClient.storage
+        .from('kizmeal-files')
+        .upload(storagePath, excelBuffer, {
+          contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          upsert: true,
+        })
+      if (!uploadErr) {
+        const { data: urlData } = dbClient.storage.from('kizmeal-files').getPublicUrl(storagePath)
+        await dbClient
+          .from('weekly_menus')
+          .update({ excel_url: urlData.publicUrl })
+          .eq('year', year).eq('month', month).eq('diet_type', 'CK').is('branch_id', null)
+      }
+    } catch (uploadException) {
+      console.error('Excel Storage 업로드 실패 (무시):', uploadException)
+    }
   }
 
   return NextResponse.json(result)

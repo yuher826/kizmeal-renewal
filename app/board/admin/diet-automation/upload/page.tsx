@@ -319,10 +319,10 @@ export default function DietUploadPage() {
                 {/* PPTX 생성 버튼 */}
                 <button
                   type="button"
-                  onClick={() => showToast('PPTX 생성 기능 준비 중입니다')}
+                  onClick={() => router.push('/board/admin/diet-automation')}
                   className="w-full py-3 rounded-xl bg-[#1565C0] text-white text-sm font-semibold hover:bg-[#0D47A1] transition-colors"
                 >
-                  🖨️ PPTX 생성 시작
+                  🖨️ PPTX 생성 페이지로 이동
                 </button>
               </div>
             ) : (
