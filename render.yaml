@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: kizmeal-pptx-server
+    env: python
+    rootDir: pptx-server
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --workers 1 --timeout 300 --bind 0.0.0.0:$PORT
+    envVars:
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: ALLOWED_ORIGIN
+        value: https://kizmeal-renewal.vercel.app
