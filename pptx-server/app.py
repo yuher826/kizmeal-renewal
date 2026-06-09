@@ -170,10 +170,10 @@ def _get_branch_id_map():
     try:
         from supabase_uploader import get_supabase_client
         client = get_supabase_client()
-        res = client.table('branch_profiles').select('branch_id, short_code').execute()
+        rows = client.select('branch_profiles', 'branch_id,short_code')
         return {
             row['short_code']: row['branch_id']
-            for row in (res.data or [])
+            for row in rows
             if row.get('short_code')
         }
     except Exception as exc:
@@ -203,7 +203,8 @@ def _update_db(upload_map, branch_id_map, year, month, week_num):
 
         try:
             if week_num is not None:
-                client.table('weekly_menus').upsert(
+                client.upsert(
+                    'weekly_menus',
                     {
                         'branch_id': branch_id,
                         'year':      year,
@@ -213,32 +214,33 @@ def _update_db(upload_map, branch_id_map, year, month, week_num):
                         'pdf_url':   pdf_url,
                     },
                     on_conflict='branch_id,year,month,week_num',
-                ).execute()
+                )
             else:
                 # week_num IS NULL: PostgreSQL unique 제약에서 NULL ≠ NULL이므로 직접 처리
-                existing = (
-                    client.table('weekly_menus')
-                    .select('id')
-                    .eq('branch_id', branch_id)
-                    .eq('year', year)
-                    .eq('month', month)
-                    .is_('week_num', 'null')
-                    .execute()
+                existing = client.select(
+                    'weekly_menus', 'id',
+                    filters={
+                        'branch_id': branch_id,
+                        'year':      year,
+                        'month':     month,
+                        'week_num':  None,
+                    },
                 )
-                if existing.data:
-                    client.table('weekly_menus').update({
-                        'pptx_url': pptx_url,
-                        'pdf_url':  pdf_url,
-                    }).eq('id', existing.data[0]['id']).execute()
+                if existing:
+                    client.update(
+                        'weekly_menus',
+                        {'pptx_url': pptx_url, 'pdf_url': pdf_url},
+                        filters={'id': existing[0]['id']},
+                    )
                 else:
-                    client.table('weekly_menus').insert({
+                    client.insert('weekly_menus', {
                         'branch_id': branch_id,
                         'year':      year,
                         'month':     month,
                         'week_num':  None,
                         'pptx_url':  pptx_url,
                         'pdf_url':   pdf_url,
-                    }).execute()
+                    })
         except Exception as exc:
             print(f'[DB 업데이트 오류] {branch_full_name}: {exc}')
 
@@ -398,14 +400,14 @@ def _get_branch_cfgs_from_db():
     try:
         from supabase_uploader import get_supabase_client
         client = get_supabase_client()
-        res = client.table('branch_profiles').select(
-            'short_code, display_name, distribution_email, distribution_emails,'
-            'slide_count, snack_morning, snack_afternoon, snack_childcare,'
-            'needs_english, has_yonder, has_dessert_fruit, file_format,'
-            'snack_label, morning_snack_fixed, morning_snack_fixed_menu,'
-            'contract_status'
-        ).eq('contract_status', 'active').execute()
-        profiles = res.data or []
+        profiles = client.select(
+            'branch_profiles',
+            'short_code,display_name,distribution_email,distribution_emails,'
+            'slide_count,snack_morning,snack_afternoon,snack_childcare,'
+            'needs_english,has_yonder,has_dessert_fruit,file_format,'
+            'snack_label,morning_snack_fixed,morning_snack_fixed_menu',
+            filters={'contract_status': 'active'},
+        )
     except Exception as exc:
         print(f'[branch_profiles 조회 오류] {exc}')
         return []

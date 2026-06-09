@@ -14,8 +14,12 @@ Supabase Storage 업로더
 ⚠️ 일본어 금지.
 """
 
+import json
 import os
 import re
+import urllib.error
+import urllib.parse
+import urllib.request
 
 from dotenv import load_dotenv
 
@@ -31,6 +35,99 @@ _MIME = {
 
 
 # ════════════════════════════════════════════════════════════════════
+# REST 클라이언트
+# ════════════════════════════════════════════════════════════════════
+class SupabaseREST:
+    """urllib.request 기반 Supabase REST/Storage 클라이언트."""
+
+    def __init__(self, url, key):
+        self._url = url.rstrip('/')
+        self._key = key
+
+    def _auth_headers(self):
+        return {
+            'apikey': self._key,
+            'Authorization': f'Bearer {self._key}',
+        }
+
+    def _call(self, method, url, data=None, extra_headers=None):
+        headers = {**self._auth_headers()}
+        if extra_headers:
+            headers.update(extra_headers)
+        body = json.dumps(data).encode() if data is not None else None
+        req = urllib.request.Request(url, data=body, headers=headers, method=method)
+        try:
+            with urllib.request.urlopen(req) as resp:
+                raw = resp.read()
+                return json.loads(raw.decode()) if raw else None
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode(errors='replace')
+            raise RuntimeError(f'HTTP {exc.code} {exc.reason}: {detail}') from exc
+
+    def select(self, table, columns='*', filters=None):
+        """SELECT — filters: {col: value} (value=None → IS NULL)"""
+        params = urllib.parse.urlencode({'select': columns})
+        for col, val in (filters or {}).items():
+            if val is None:
+                params += f'&{col}=is.null'
+            else:
+                params += f'&{col}=eq.{urllib.parse.quote(str(val), safe="")}'
+        url = f'{self._url}/rest/v1/{table}?{params}'
+        return self._call('GET', url, extra_headers={
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+        }) or []
+
+    def upsert(self, table, data, on_conflict=None):
+        """INSERT … ON CONFLICT DO UPDATE"""
+        url = f'{self._url}/rest/v1/{table}'
+        if on_conflict:
+            url += f'?on_conflict={urllib.parse.quote(on_conflict, safe="")}'
+        self._call('POST', url, data=data, extra_headers={
+            'Content-Type': 'application/json',
+            'Prefer': 'resolution=merge-duplicates,return=minimal',
+        })
+
+    def update(self, table, data, filters):
+        """PATCH 행 업데이트 — filters: {col: value}"""
+        params = '&'.join(
+            f'{col}=eq.{urllib.parse.quote(str(val), safe="")}'
+            for col, val in filters.items()
+        )
+        url = f'{self._url}/rest/v1/{table}?{params}'
+        self._call('PATCH', url, data=data, extra_headers={
+            'Content-Type': 'application/json',
+            'Prefer': 'return=minimal',
+        })
+
+    def insert(self, table, data):
+        """단순 INSERT"""
+        url = f'{self._url}/rest/v1/{table}'
+        self._call('POST', url, data=data, extra_headers={
+            'Content-Type': 'application/json',
+            'Prefer': 'return=minimal',
+        })
+
+    def upload_file(self, bucket, path, data, mime):
+        """Storage 파일 업로드 (upsert)"""
+        url = f'{self._url}/storage/v1/object/{bucket}/{path}'
+        req = urllib.request.Request(url, data=data, headers={
+            **self._auth_headers(),
+            'Content-Type': mime,
+            'x-upsert': 'true',
+        }, method='POST')
+        try:
+            with urllib.request.urlopen(req):
+                pass
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode(errors='replace')
+            raise RuntimeError(f'Storage upload HTTP {exc.code}: {detail}') from exc
+
+    def get_public_url(self, bucket, path):
+        return f'{self._url}/storage/v1/object/public/{bucket}/{path}'
+
+
+# ════════════════════════════════════════════════════════════════════
 # 클라이언트 싱글턴
 # ════════════════════════════════════════════════════════════════════
 def get_supabase_client():
@@ -40,8 +137,7 @@ def get_supabase_client():
         key = os.getenv('SUPABASE_SERVICE_KEY', '')
         if not url or not key:
             raise ValueError('SUPABASE_URL, SUPABASE_SERVICE_KEY 환경변수가 필요합니다.')
-        from supabase import create_client
-        _client = create_client(url, key)
+        _client = SupabaseREST(url, key)
     return _client
 
 
@@ -51,7 +147,7 @@ def get_supabase_client():
 def get_public_url(path):
     """Storage 버킷 내 path의 public URL 반환."""
     client = get_supabase_client()
-    return client.storage.from_(_BUCKET).get_public_url(path)
+    return client.get_public_url(_BUCKET, path)
 
 
 # ════════════════════════════════════════════════════════════════════
@@ -71,15 +167,8 @@ def _upload_one(client, local_path, storage_path):
 
     for attempt in range(2):
         try:
-            client.storage.from_(_BUCKET).upload(
-                storage_path,
-                data,
-                file_options={
-                    'content-type': mime,
-                    'upsert':       'true',
-                },
-            )
-            return get_public_url(storage_path)
+            client.upload_file(_BUCKET, storage_path, data, mime)
+            return client.get_public_url(_BUCKET, storage_path)
         except Exception as exc:
             if attempt == 0:
                 print(f'  [업로드 재시도] {storage_path}: {exc}')
