@@ -210,11 +210,15 @@ export async function POST(req: NextRequest) {
 
   const { data: current } = await db
     .from('diet_review_items')
-    .select('correction_count, memo_history, reviewed_by, approved_by')
+    .select('weekly_menu_id, correction_count, memo_history, reviewed_by, approved_by')
     .eq('id', item_id)
     .maybeSingle()
 
   if (!current) return NextResponse.json({ error: 'Item not found' }, { status: 404 })
+
+  if (adminRow.role === 'director' && review_status !== 'approved') {
+    return NextResponse.json({ error: '승인된 항목만 최종승인 가능' }, { status: 400 })
+  }
 
   const now     = new Date().toISOString()
   const history = Array.isArray(current.memo_history) ? [...current.memo_history] : []
@@ -267,11 +271,121 @@ export async function POST(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
+  // 모든 items가 final_approved면 weekly_menus.status → 'approved'
+  const { data: allMenuItems } = await db
+    .from('diet_review_items')
+    .select('approved_by')
+    .eq('weekly_menu_id', current.weekly_menu_id)
+  if (allMenuItems?.length && allMenuItems.every(i => i.approved_by !== null)) {
+    await db.from('weekly_menus').update({ status: 'approved' }).eq('id', current.weekly_menu_id)
+  }
+
   return NextResponse.json({
+    success: true,
     item: {
       ...updated,
       reviewed_by_name: adminRow.role !== 'director' ? adminRow.name : (current.reviewed_by ? null : adminRow.name),
       approved_by_name: adminRow.role === 'director'  ? adminRow.name : null,
     },
   })
+}
+
+// ── PATCH /api/diet-review ───────────────────────────────────────
+export async function PATCH(req: NextRequest) {
+  const supabase = createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const { data: adminRow } = await supabase
+    .from('admins')
+    .select('id, name, role')
+    .eq('auth_id', user.id)
+    .maybeSingle()
+
+  if (!adminRow) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+  const ALLOWED = ['super_admin', 'manager', 'director']
+  if (!ALLOWED.includes(adminRow.role)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  let body: {
+    item_ids:       string[]
+    review_status:  'approved' | 'correction_requested'
+    memo?:          string
+    memo_category?: string
+  }
+  try { body = await req.json() } catch {
+    return NextResponse.json({ error: '요청 형식 오류' }, { status: 400 })
+  }
+
+  const { item_ids, review_status, memo, memo_category } = body
+  if (!item_ids?.length || !review_status) {
+    return NextResponse.json({ error: 'item_ids, review_status가 필요합니다' }, { status: 400 })
+  }
+
+  if (adminRow.role === 'director' && review_status !== 'approved') {
+    return NextResponse.json({ error: '승인된 항목만 최종승인 가능' }, { status: 400 })
+  }
+
+  const serviceKey  = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+  const db = serviceKey ? createAdminClient(supabaseUrl, serviceKey) : supabase
+
+  const { data: items } = await db
+    .from('diet_review_items')
+    .select('id, weekly_menu_id, correction_count, memo_history')
+    .in('id', item_ids)
+
+  if (!items?.length) return NextResponse.json({ error: '항목을 찾을 수 없습니다' }, { status: 404 })
+
+  const now = new Date().toISOString()
+
+  await Promise.all(
+    items.map(async (item: {
+      id: string
+      weekly_menu_id: string
+      correction_count: number
+      memo_history: unknown[]
+    }) => {
+      const history: unknown[] = Array.isArray(item.memo_history) ? [...item.memo_history] : []
+      const updates: Record<string, unknown> = { review_status, updated_at: now }
+
+      if (adminRow.role === 'director') {
+        updates.approved_by = adminRow.id
+        updates.approved_at = now
+        history.push({ status: 'approved', at: now, by: adminRow.name })
+      } else {
+        updates.reviewed_by = adminRow.id
+        updates.reviewed_at = now
+        if (review_status === 'correction_requested') {
+          updates.correction_count  = (item.correction_count ?? 0) + 1
+          updates.memo              = memo ?? null
+          updates.memo_category     = memo_category ?? null
+          history.push({ status: 'correction_requested', memo, memo_category, at: now, by: adminRow.name })
+        } else if (review_status === 'approved') {
+          history.push({ status: 'approved', at: now, by: adminRow.name })
+        }
+      }
+      updates.memo_history = history
+
+      await db.from('diet_review_items').update(updates).eq('id', item.id)
+    }),
+  )
+
+  // 영향받은 weekly_menus별 status 체크
+  const menuIds = Array.from(new Set(items.map((i: { weekly_menu_id: string }) => i.weekly_menu_id)))
+  await Promise.all(
+    menuIds.map(async menuId => {
+      const { data: all } = await db
+        .from('diet_review_items')
+        .select('approved_by')
+        .eq('weekly_menu_id', menuId)
+      if (all?.length && all.every(i => i.approved_by !== null)) {
+        await db.from('weekly_menus').update({ status: 'approved' }).eq('id', menuId)
+      }
+    }),
+  )
+
+  return NextResponse.json({ success: true, updated_count: items.length })
 }

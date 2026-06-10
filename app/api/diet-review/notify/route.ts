@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
   if (!adminRow) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   let body: {
-    type:            'review_complete' | 'final_approved'
+    type:            'review_complete' | 'final_approved' | 'deployed'
     year:            number
     month:           number
     weekly_menu_id?: string
@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
     await db.from('diet_notifications').insert({
       type:           'review_complete',
       title:          `${body.year}년 ${body.month}월 식단표 검토 완료`,
-      message:        '매니저 검토가 완료되었습니다. 이사님의 최종 승인을 요청합니다.',
+      message:        `${adminRow.name}이(가) 검토를 완료했습니다. 최종 승인을 진행해주세요.`,
       recipient_role: 'director',
       weekly_menu_id: body.weekly_menu_id ?? null,
       year:           body.year,
@@ -42,8 +42,18 @@ export async function POST(req: NextRequest) {
   } else if (body.type === 'final_approved') {
     await db.from('diet_notifications').insert({
       type:           'final_approved',
-      title:          `${body.year}년 ${body.month}월 식단표 최종 승인 완료`,
-      message:        `이사님의 최종 승인이 완료되었습니다. (${adminRow.name ?? '이사님'})`,
+      title:          `${body.year}년 ${body.month}월 식단표 최종 승인`,
+      message:        `${adminRow.name}이(가) 최종 승인했습니다. 배포를 진행해주세요.`,
+      recipient_role: 'manager',
+      weekly_menu_id: body.weekly_menu_id ?? null,
+      year:           body.year,
+      month:          body.month,
+    })
+  } else if (body.type === 'deployed') {
+    await db.from('diet_notifications').insert({
+      type:           'deployed',
+      title:          `${body.year}년 ${body.month}월 식단표 배포 완료`,
+      message:        '이메일 배포가 완료되었습니다.',
       recipient_role: 'super_admin',
       weekly_menu_id: body.weekly_menu_id ?? null,
       year:           body.year,

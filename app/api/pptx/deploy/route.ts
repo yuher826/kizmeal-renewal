@@ -113,9 +113,24 @@ export async function POST(req: NextRequest) {
   const genResults = menuRow.generation_results as { results?: GenResult[] } | null
   let successResults = (genResults?.results ?? []).filter(r => r.status === 'success' && r.pdf_url)
 
+  // diet_review_items 조회: branch_ids 필터링 및 배포 후 memo_history 업데이트에 활용
+  type ReviewItemRow = { id: string; branch_id: string | null; branch_name: string; memo_history: unknown[] }
+  const { data: reviewItemsData } = await dbClient
+    .from('diet_review_items')
+    .select('id, branch_id, branch_name, memo_history')
+    .eq('weekly_menu_id', menuRow.id)
+  const reviewItemsByName = new Map<string, ReviewItemRow>(
+    (reviewItemsData ?? []).map((item: ReviewItemRow) => [item.branch_name, item]),
+  )
+
   // branch_ids 지정 시 해당 원만 부분 배포
   if (branch_ids && branch_ids.length > 0) {
-    successResults = successResults.filter(r => r.branch_id && branch_ids.includes(r.branch_id))
+    const allowedNames = new Set(
+      (reviewItemsData ?? [])
+        .filter((item: ReviewItemRow) => item.branch_id && branch_ids.includes(item.branch_id))
+        .map((item: ReviewItemRow) => item.branch_name),
+    )
+    successResults = successResults.filter(r => allowedNames.has(r.branch_name))
   }
 
   if (!successResults.length) {
@@ -136,6 +151,7 @@ export async function POST(req: NextRequest) {
 
   type SendResult = { branch_name: string; emails: string[]; success: boolean; error?: string }
   const sendResults: SendResult[] = []
+  const deployedBranchIds: string[] = []
 
   await Promise.all(
     successResults.map(async result => {
@@ -163,6 +179,17 @@ export async function POST(req: NextRequest) {
           html:    buildDietEmailHtml(displayName, year, month, result.pdf_url, result.pptx_url),
         })
         sendResults.push({ branch_name: result.branch_name, emails, success: true })
+        const ri = reviewItemsByName.get(result.branch_name)
+        if (ri) {
+          const hist = [
+            ...(Array.isArray(ri.memo_history) ? ri.memo_history : []),
+            { status: 'deployed', at: new Date().toISOString() },
+          ]
+          await dbClient.from('diet_review_items')
+            .update({ memo_history: hist, updated_at: new Date().toISOString() })
+            .eq('id', ri.id)
+          if (ri.branch_id) deployedBranchIds.push(ri.branch_id)
+        }
       } catch (err) {
         sendResults.push({ branch_name: result.branch_name, emails, success: false, error: String(err) })
       }
@@ -192,5 +219,16 @@ export async function POST(req: NextRequest) {
     month,
   })
 
-  return NextResponse.json({ success: failed === 0, sent, failed, results: sendResults })
+  // diet-review 워크플로우 배포 알림
+  await dbClient.from('diet_notifications').insert({
+    type:           'deployed',
+    title:          `${year}년 ${month}월 식단표 배포 완료`,
+    message:        '이메일 배포가 완료되었습니다.',
+    recipient_role: 'super_admin',
+    weekly_menu_id: menuRow.id,
+    year,
+    month,
+  })
+
+  return NextResponse.json({ success: failed === 0, sent, failed, results: sendResults, deployed_branch_ids: deployedBranchIds })
 }
