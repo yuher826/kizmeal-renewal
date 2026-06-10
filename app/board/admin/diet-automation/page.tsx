@@ -41,13 +41,14 @@ type ActionsProgress = {
 }
 
 type BranchMenuRow = {
-  id:           string
-  branch_id:    string
-  pptx_url:     string | null
-  pdf_url:      string | null
-  status:       string
-  short_code:   string | null
-  display_name: string | null
+  id:            string
+  branch_id:     string
+  pptx_url:      string | null
+  pdf_url:       string | null
+  status:        string
+  short_code:    string | null
+  display_name:  string | null
+  deploy_email:  string | null
 }
 
 // ── 헬퍼 ──────────────────────────────────────────────────────────────
@@ -101,6 +102,7 @@ function DietAutomationContent() {
   const [deploying,      setDeploying]      = useState(false)
   const [sendingReview,  setSendingReview]  = useState(false)
   const [reviewSent,     setReviewSent]     = useState(false)
+  const [compareIdx,     setCompareIdx]     = useState(0)
 
   // ── 알림 ─────────────────────────────────────────────────────────
   const [notifications,        setNotifications]        = useState<DietNotification[]>([])
@@ -129,19 +131,20 @@ function DietAutomationContent() {
         .not('branch_id', 'is', null),
       supabase
         .from('branch_profiles')
-        .select('branch_id, short_code, display_name')
+        .select('branch_id, short_code, display_name, distribution_email')
         .eq('contract_status', 'active'),
     ])
 
-    const profileMap = new Map<string, { short_code: string | null; display_name: string | null }>(
-      ((profileRes.data ?? []) as { branch_id: string; short_code: string | null; display_name: string | null }[])
-        .map(p => [p.branch_id, { short_code: p.short_code, display_name: p.display_name }])
+    const profileMap = new Map<string, { short_code: string | null; display_name: string | null; distribution_email: string | null }>(
+      ((profileRes.data ?? []) as { branch_id: string; short_code: string | null; display_name: string | null; distribution_email: string | null }[])
+        .map(p => [p.branch_id, { short_code: p.short_code, display_name: p.display_name, distribution_email: p.distribution_email }])
     )
 
     const rows: BranchMenuRow[] = ((menuRes.data ?? []) as { id: string; branch_id: string; pptx_url: string | null; pdf_url: string | null; status: string }[]).map(row => ({
       ...row,
-      short_code:   profileMap.get(row.branch_id)?.short_code   ?? null,
-      display_name: profileMap.get(row.branch_id)?.display_name ?? null,
+      short_code:   profileMap.get(row.branch_id)?.short_code          ?? null,
+      display_name: profileMap.get(row.branch_id)?.display_name        ?? null,
+      deploy_email: profileMap.get(row.branch_id)?.distribution_email  ?? null,
     }))
 
     setBranchMenuRows(rows)
@@ -391,9 +394,9 @@ function DietAutomationContent() {
   // ── 결과 행 헬퍼 ──────────────────────────────────────────────────
   function getFileBadge(branchName: string) {
     if (MANUAL_PROCESS_CODES.has(branchName)) return { label: '수동처리', color: '#E65100', bg: '#FFF3E0' }
-    if (JPG_ONLY_CODES.has(branchName))       return { label: 'JPG',      color: '#7B1FA2', bg: '#F3E5F5' }
-    if (PDF_JPG_CODES.has(branchName))        return { label: 'PDF+JPG',  color: '#1565C0', bg: '#E3F2FD' }
-    return { label: 'PDF', color: '#2E7D32', bg: '#E8F5E9' }
+    if (JPG_ONLY_CODES.has(branchName))       return { label: 'JPG',      color: '#633806', bg: '#FAEEDA' }
+    if (PDF_JPG_CODES.has(branchName))        return { label: 'PDF+JPG',  color: '#3C3489', bg: '#EEEDFE' }
+    return { label: 'PDF', color: '#27500A', bg: '#EAF3DE' }
   }
 
   // ── 계산값 ───────────────────────────────────────────────────────
@@ -411,23 +414,29 @@ function DietAutomationContent() {
   const totalBranchCount = actionsProgress?.total ?? 49
 
   // 통합 결과 rows (genResults 우선, 없으면 branchMenuRows)
-  const displayRows: { branchName: string; pptxUrl: string|null; pdfUrl: string|null; status: string; errorMsg?: string; branchId?: string|null }[] =
+  const displayRows: { branchName: string; pptxUrl: string|null; pdfUrl: string|null; status: string; errorMsg?: string; branchId?: string|null; deployEmail?: string|null; shortCode?: string|null }[] =
     genResults
       ? genResults.results.map(r => ({
-          branchName: r.branch_name,
-          pptxUrl:    r.pptx_url || null,
-          pdfUrl:     r.pdf_url  || null,
-          status:     r.status,
-          errorMsg:   r.error_msg,
-          branchId:   r.branch_id,
+          branchName:  r.branch_name,
+          pptxUrl:     r.pptx_url || null,
+          pdfUrl:      r.pdf_url  || null,
+          status:      r.status,
+          errorMsg:    r.error_msg,
+          branchId:    r.branch_id,
+          deployEmail: null,
+          shortCode:   null,
         }))
       : branchMenuRows.map(r => ({
-          branchName: r.short_code || r.branch_id.slice(0, 8),
-          pptxUrl:    r.pptx_url,
-          pdfUrl:     r.pdf_url,
-          status:     r.status === 'generated' ? 'success' : r.status,
-          branchId:   r.branch_id,
+          branchName:  r.short_code || r.branch_id.slice(0, 8),
+          pptxUrl:     r.pptx_url,
+          pdfUrl:      r.pdf_url,
+          status:      r.status === 'generated' ? 'success' : r.status,
+          branchId:    r.branch_id,
+          deployEmail: r.deploy_email,
+          shortCode:   r.short_code,
         }))
+
+  const compareRows = displayRows.filter(r => r.status === 'success')
 
   // 4단계 진행 현황
   const pptxDone = ['generated','review_requested','approved','deployed'].includes(menuStatus ?? '') || !!actionsProgress?.is_complete
@@ -836,21 +845,33 @@ function DietAutomationContent() {
             {/* 결과 테이블 */}
             {displayRows.length > 0 && (
               <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden mb-4 shadow-sm">
+                {/* 테이블 헤더 */}
                 <div className="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between">
-                  <span className="text-xs font-bold text-[#1C2B1E]">생성 결과</span>
-                  <span className="text-xs text-gray-400">{displayRows.length}개원</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-base font-medium text-[#1C2B1E]">생성 결과</span>
+                    <span className="text-xs text-gray-400 bg-gray-100 rounded-full px-2 py-0.5">{displayRows.length}개원</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleDownloadZip}
+                    disabled={downloadingZip}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-medium text-gray-600 hover:border-[#2D6A4F] hover:text-[#2D6A4F] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {downloadingZip ? '⏳' : '📦'} 전체 ZIP
+                  </button>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs">
                     <thead>
                       <tr className="bg-gray-50 border-b border-gray-100">
-                        <th className="text-center px-3 py-3 font-semibold text-gray-500 w-8">#</th>
-                        <th className="text-left   px-3 py-3 font-semibold text-gray-500">원명</th>
-                        <th className="text-center px-3 py-3 font-semibold text-gray-500">구분</th>
-                        <th className="text-center px-3 py-3 font-semibold text-gray-500">파일형식</th>
-                        <th className="text-center px-3 py-3 font-semibold text-gray-500">상태</th>
-                        <th className="text-center px-3 py-3 font-semibold text-gray-500">다운로드</th>
-                        <th className="text-center px-3 py-3 font-semibold text-gray-500">액션</th>
+                        <th className="text-center px-3 py-3 font-semibold text-gray-400 w-8">#</th>
+                        <th className="text-left   px-3 py-3 font-semibold text-gray-400">원명</th>
+                        <th className="text-center px-3 py-3 font-semibold text-gray-400">구분</th>
+                        <th className="text-center px-3 py-3 font-semibold text-gray-400">파일형식</th>
+                        <th className="text-center px-3 py-3 font-semibold text-gray-400">상태</th>
+                        <th className="text-left   px-3 py-3 font-semibold text-gray-400">배포이메일</th>
+                        <th className="text-center px-3 py-3 font-semibold text-gray-400">다운로드</th>
+                        <th className="text-center px-3 py-3 font-semibold text-gray-400">개별메일</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -861,14 +882,17 @@ function DietAutomationContent() {
                         const isSuccess = row.status === 'success' || row.status === 'generated'
                         const isError   = row.status === 'error'
                         const isProc    = !isSuccess && !isError
+                        const canSendMail = isSuccess && !!row.deployEmail &&
+                          (menuStatus === 'approved' || menuStatus === 'deployed')
+                        const mailLabel = menuStatus === 'deployed' ? '재발송' : '발송'
 
                         return (
                           <tr
                             key={`${row.branchName}-${idx}`}
-                            className={`border-b border-gray-50 transition-colors hover:bg-gray-50/80 ${
+                            className={`border-b border-gray-50 transition-colors hover:bg-[#E8F5E9] ${
                               isError ? 'bg-[#FEF2F2]'
                               : isProc ? 'bg-[#EFF6FF]'
-                              : 'bg-white'
+                              : idx % 2 === 0 ? 'bg-white' : 'bg-[#F8FBF9]'
                             }`}
                           >
                             {/* 번호 */}
@@ -880,8 +904,10 @@ function DietAutomationContent() {
                             {/* 구분 */}
                             <td className="text-center px-3 py-3">
                               <span
-                                className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold"
-                                style={isSep ? { color: '#616161', background: '#F5F5F5' } : { color: '#1565C0', background: '#E3F2FD' }}
+                                className="inline-block rounded-full px-2 py-0.5 text-xs font-medium"
+                                style={isSep
+                                  ? { color: '#444441', background: '#F1EFE8' }
+                                  : { color: '#0C447C', background: '#E6F1FB' }}
                               >
                                 {isSep ? '별도계약' : 'CK'}
                               </span>
@@ -890,7 +916,7 @@ function DietAutomationContent() {
                             {/* 파일형식 */}
                             <td className="text-center px-3 py-3">
                               <span
-                                className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold"
+                                className="inline-block rounded-full px-2 py-0.5 text-xs font-medium"
                                 style={{ color: badge.color, background: badge.bg }}
                               >
                                 {badge.label}
@@ -900,47 +926,66 @@ function DietAutomationContent() {
                             {/* 상태 */}
                             <td className="text-center px-3 py-3">
                               {isSuccess ? (
-                                <span className="text-green-600 font-bold">✅ 성공</span>
+                                <span className="text-green-600 font-medium">✅ 성공</span>
                               ) : isError ? (
-                                <span className="text-red-600 font-bold cursor-help" title={row.errorMsg}>❌ 실패</span>
+                                <span className="text-red-600 cursor-help" title={row.errorMsg}>❌ 실패</span>
                               ) : (
-                                <span className="text-blue-600 font-bold">🔄 생성중</span>
+                                <span className="inline-flex items-center gap-1 text-blue-600">
+                                  <span className="w-3 h-3 border border-blue-400 border-t-transparent rounded-full animate-spin" />
+                                  생성중
+                                </span>
                               )}
                             </td>
 
-                            {/* 다운로드 — URL 있으면 활성, 없으면 비활성 */}
+                            {/* 배포이메일 */}
+                            <td className="px-3 py-3">
+                              {row.deployEmail ? (
+                                <span className="text-xs text-gray-500 truncate max-w-[120px] block">
+                                  {row.deployEmail}
+                                </span>
+                              ) : (
+                                <span
+                                  className="inline-flex items-center gap-1 text-xs text-red-500 cursor-help"
+                                  title="원 프로파일에서 이메일을 설정해주세요"
+                                >
+                                  ⚠ 미설정
+                                </span>
+                              )}
+                            </td>
+
+                            {/* 다운로드 */}
                             <td className="text-center px-3 py-3">
                               {isManual ? (
                                 <span className="text-gray-300">—</span>
                               ) : (
                                 <div className="flex items-center justify-center gap-1 flex-wrap">
-                                  {/* PPTX */}
                                   {row.pptxUrl ? (
                                     <a
                                       href={row.pptxUrl}
                                       target="_blank"
                                       rel="noopener noreferrer"
-                                      className="px-2 py-1 rounded-lg border border-blue-200 text-[#1565C0] text-[10px] font-bold hover:bg-blue-50 transition-colors"
+                                      className="px-2 py-1 rounded text-[10px] font-medium transition-colors"
+                                      style={{ color: '#0C447C', background: '#E6F1FB' }}
                                     >
                                       PPTX
                                     </a>
                                   ) : (
-                                    <span className="px-2 py-1 rounded-lg border border-gray-100 text-gray-300 text-[10px] font-bold cursor-not-allowed">
+                                    <span className="px-2 py-1 rounded text-[10px] font-medium text-gray-300 bg-gray-50 cursor-not-allowed">
                                       PPTX
                                     </span>
                                   )}
-                                  {/* PDF */}
                                   {row.pdfUrl ? (
                                     <a
                                       href={row.pdfUrl}
                                       target="_blank"
                                       rel="noopener noreferrer"
-                                      className="px-2 py-1 rounded-lg border border-green-200 text-[#2E7D32] text-[10px] font-bold hover:bg-green-50 transition-colors"
+                                      className="px-2 py-1 rounded text-[10px] font-medium transition-colors"
+                                      style={{ color: '#27500A', background: '#EAF3DE' }}
                                     >
                                       PDF
                                     </a>
                                   ) : (
-                                    <span className="px-2 py-1 rounded-lg border border-gray-100 text-gray-300 text-[10px] font-bold cursor-not-allowed">
+                                    <span className="px-2 py-1 rounded text-[10px] font-medium text-gray-300 bg-gray-50 cursor-not-allowed">
                                       PDF
                                     </span>
                                   )}
@@ -948,28 +993,36 @@ function DietAutomationContent() {
                               )}
                             </td>
 
-                            {/* 액션 */}
+                            {/* 개별메일 */}
                             <td className="text-center px-3 py-3">
                               {isManual ? (
                                 <span className="text-gray-300">—</span>
+                              ) : canSendMail ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleResendSingle(row.branchName)}
+                                  title="이 원에만 개별 발송합니다"
+                                  className="px-2.5 py-1.5 rounded-lg bg-[#2D6A4F] text-white text-[10px] font-medium hover:bg-[#1B4332] transition-colors"
+                                >
+                                  {mailLabel}
+                                </button>
                               ) : isError ? (
                                 <button
                                   type="button"
                                   onClick={() => handleRetry(row.branchId ?? null, row.branchName)}
-                                  className="px-2.5 py-1.5 rounded-lg bg-amber-100 text-amber-700 text-[10px] font-bold hover:bg-amber-200 transition-colors"
+                                  className="px-2.5 py-1.5 rounded-lg bg-amber-100 text-amber-700 text-[10px] font-medium hover:bg-amber-200 transition-colors"
                                 >
                                   재시도
                                 </button>
-                              ) : isSuccess ? (
+                              ) : (
                                 <button
                                   type="button"
-                                  onClick={() => handleResendSingle(row.branchName)}
-                                  className="px-2.5 py-1.5 rounded-lg bg-blue-50 text-blue-600 text-[10px] font-bold hover:bg-blue-100 transition-colors"
+                                  disabled
+                                  title={!row.deployEmail ? '원 프로파일에서 이메일을 먼저 설정해주세요' : ''}
+                                  className="px-2.5 py-1.5 rounded-lg bg-gray-100 text-gray-300 text-[10px] font-medium opacity-40 cursor-not-allowed"
                                 >
-                                  ✉ 메일
+                                  {mailLabel}
                                 </button>
-                              ) : (
-                                <span className="text-gray-300">—</span>
                               )}
                             </td>
                           </tr>
@@ -981,59 +1034,150 @@ function DietAutomationContent() {
               </div>
             )}
 
+            {/* 원본 vs 생성본 비교 다운로드 */}
+            {canActivateBottom && compareRows.length > 0 && (
+              <div className="bg-white rounded-2xl border border-gray-100 p-6 mb-4 shadow-sm">
+                <div className="mb-4">
+                  <p className="text-sm font-bold text-[#1C2B1E]">원본 vs 생성본 비교 다운로드</p>
+                  <p className="text-xs text-gray-400 mt-1">원본 템플릿과 생성본을 나란히 다운로드해서 비교 확인해주세요</p>
+                </div>
+
+                {/* 원 선택 드롭다운 */}
+                <div className="flex items-center gap-2 mb-4">
+                  <span className="text-xs text-gray-500">원 선택</span>
+                  <select
+                    value={compareIdx}
+                    onChange={e => setCompareIdx(Number(e.target.value))}
+                    className="border border-gray-200 rounded-xl px-3 py-1.5 text-sm bg-white focus:outline-none focus:border-[#2D6A4F]"
+                  >
+                    {compareRows.map((row, i) => (
+                      <option key={i} value={i}>{row.branchName}</option>
+                    ))}
+                  </select>
+                  {compareRows.length > 1 && (
+                    <div className="flex items-center gap-1 ml-auto">
+                      <button
+                        type="button"
+                        onClick={() => setCompareIdx(i => (i - 1 + compareRows.length) % compareRows.length)}
+                        className="px-2.5 py-1.5 rounded-lg bg-gray-100 text-gray-500 text-xs font-medium hover:bg-gray-200 transition-colors"
+                      >← 이전</button>
+                      <span className="text-xs text-gray-400 px-1">{compareIdx + 1}/{compareRows.length}</span>
+                      <button
+                        type="button"
+                        onClick={() => setCompareIdx(i => (i + 1) % compareRows.length)}
+                        className="px-2.5 py-1.5 rounded-lg bg-gray-100 text-gray-500 text-xs font-medium hover:bg-gray-200 transition-colors"
+                      >다음 →</button>
+                    </div>
+                  )}
+                </div>
+
+                {compareRows[compareIdx] && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {/* 원본 템플릿 카드 */}
+                    <div className="border border-gray-200 rounded-xl p-4">
+                      <p className="text-xs font-bold text-gray-600 mb-1">📁 원본 템플릿</p>
+                      <p className="text-xs text-gray-400 mb-3">디자이너가 제작한 원본 파일이에요</p>
+                      <a
+                        href={`https://raw.githubusercontent.com/yuher826/kizmeal-renewal/master/pptx-server/templates/${compareRows[compareIdx].shortCode ?? compareRows[compareIdx].branchName}.pptx`}
+                        download
+                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gray-100 text-gray-700 text-xs font-semibold hover:bg-gray-200 transition-colors"
+                      >
+                        ⬇ 원본 템플릿 다운로드
+                      </a>
+                    </div>
+
+                    {/* 자동 생성본 카드 */}
+                    <div className="border border-[#B7E4C7] bg-[#F6FAF6] rounded-xl p-4">
+                      <p className="text-xs font-bold text-[#2D6A4F] mb-1">✨ 자동 생성본</p>
+                      <p className="text-xs text-gray-400 mb-3">자동 생성된 결과물이에요</p>
+                      <div className="flex flex-wrap gap-2">
+                        {compareRows[compareIdx].pptxUrl ? (
+                          <a
+                            href={compareRows[compareIdx].pptxUrl!}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#2D6A4F] text-white text-xs font-semibold hover:bg-[#1B4332] transition-colors"
+                          >
+                            ⬇ PPTX 다운로드
+                          </a>
+                        ) : (
+                          <span className="text-xs text-gray-400">PPTX 없음</span>
+                        )}
+                        {compareRows[compareIdx].pdfUrl && (
+                          <a
+                            href={compareRows[compareIdx].pdfUrl!}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#1565C0] text-white text-xs font-semibold hover:bg-[#0D47A1] transition-colors"
+                          >
+                            ⬇ PDF 다운로드
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* 하단 액션바 */}
             {canActivateBottom && (
-              <div className="bg-white rounded-2xl border border-gray-100 p-5 flex flex-wrap items-center gap-3 shadow-sm">
-                {/* ZIP 다운로드 */}
-                <button
-                  type="button"
-                  onClick={handleDownloadZip}
-                  disabled={downloadingZip}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#1C2B1E] text-white text-sm font-semibold hover:bg-black transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {downloadingZip ? '⏳ 다운로드 중...' : '📦 전체 ZIP 다운로드'}
-                </button>
+              <div className="bg-white rounded-2xl border border-gray-100 p-5 flex flex-wrap items-center justify-between gap-4 shadow-sm">
+                {/* 왼쪽: 상황별 안내 문구 */}
+                <p className="text-sm text-gray-500">
+                  {menuStatus === 'generated' && '검토 요청 후 승인되면 이메일 배포가 가능해요'}
+                  {menuStatus === 'correction_requested' && '수정 요청이 있습니다. 확인 후 재생성해주세요'}
+                  {menuStatus === 'review_requested' && '검토 진행 중입니다. 승인을 기다려주세요 ⏳'}
+                  {menuStatus === 'approved' && `승인 완료! 이제 ${totalActiveBranches ?? 49}개원에 이메일을 배포할 수 있어요 🎉`}
+                  {menuStatus === 'deployed' && '배포 완료! 필요시 개별 원에 재발송할 수 있어요 ✅'}
+                </p>
 
-                {/* 검토 요청 */}
-                {['generated','correction_requested'].includes(menuStatus ?? '') && (
-                  <button
-                    type="button"
-                    onClick={handleReviewRequest}
-                    disabled={reviewSent || sendingReview}
-                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#1565C0] text-white text-sm font-semibold hover:bg-[#0D47A1] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {sendingReview ? '⏳ 전송 중...' : reviewSent ? '✅ 검토 요청 완료' : '📩 권팀장 검토 요청'}
-                  </button>
-                )}
+                {/* 오른쪽: 상황별 버튼 */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  {/* 검토 요청 */}
+                  {['generated','correction_requested'].includes(menuStatus ?? '') && (
+                    <button
+                      type="button"
+                      onClick={handleReviewRequest}
+                      disabled={reviewSent || sendingReview}
+                      className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#2D6A4F] text-white text-sm font-semibold hover:bg-[#1B4332] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {sendingReview ? '⏳ 전송 중...' : reviewSent ? '✅ 검토 요청 완료' : '📩 검토 요청'}
+                    </button>
+                  )}
 
-                {/* 검토 페이지 이동 */}
-                {menuStatus === 'review_requested' && (
-                  <Link
-                    href={`/board/admin/diet-automation/review?year=${pptxYear}&month=${pptxMonth}`}
-                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-orange-100 text-orange-700 text-sm font-semibold hover:bg-orange-200 transition-colors"
-                  >
-                    👀 검토 페이지로 이동
-                  </Link>
-                )}
+                  {/* 검토 페이지 이동 */}
+                  {menuStatus === 'review_requested' && (
+                    <Link
+                      href={`/board/admin/diet-automation/review?year=${pptxYear}&month=${pptxMonth}`}
+                      className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-orange-300 text-orange-700 text-sm font-semibold hover:bg-orange-50 transition-colors"
+                    >
+                      👀 검토 페이지로 이동
+                    </Link>
+                  )}
 
-                {/* 승인 완료: 이메일 배포 */}
-                {menuStatus === 'approved' && (
-                  <button
-                    type="button"
-                    onClick={handleDeploy}
-                    disabled={deploying}
-                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#2E7D32] text-white text-sm font-semibold hover:bg-[#1B5E20] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    {deploying ? '⏳ 발송 중...' : '📧 이메일 배포 시작'}
-                  </button>
-                )}
+                  {/* 승인 완료: 일괄 발송 */}
+                  {menuStatus === 'approved' && (
+                    <button
+                      type="button"
+                      onClick={() => showToast('🚧 이메일 배포 기능 준비 중입니다. 곧 제공될 예정이에요!')}
+                      className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-[#2D6A4F] text-[#2D6A4F] text-sm font-semibold hover:bg-[#F6FAF6] transition-colors"
+                    >
+                      📧 {totalActiveBranches ?? 49}개원 일괄 발송
+                    </button>
+                  )}
 
-                {/* 배포 완료 */}
-                {menuStatus === 'deployed' && (
-                  <span className="flex items-center gap-1.5 text-sm font-semibold text-[#2D6A4F]">
-                    🚀 배포 완료
-                  </span>
-                )}
+                  {/* 배포 완료: 전체 재발송 */}
+                  {menuStatus === 'deployed' && (
+                    <button
+                      type="button"
+                      onClick={() => showToast('🚧 이메일 배포 기능 준비 중입니다. 곧 제공될 예정이에요!')}
+                      className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-gray-300 text-gray-600 text-sm font-semibold hover:bg-gray-50 transition-colors"
+                    >
+                      🔄 전체 재발송
+                    </button>
+                  )}
+                </div>
               </div>
             )}
           </div>

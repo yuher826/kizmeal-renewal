@@ -14,9 +14,9 @@ export default function BoardLayout({ children }: { children: React.ReactNode })
   }
 
   return (
-    <div className="min-h-screen bg-[#F0F4F0] lg:flex">
+    <div className="h-screen overflow-hidden bg-[#F0F4F0] flex">
       <BoardSidebar />
-      <div className="flex-1 min-w-0">{children}</div>
+      <div className="flex-1 h-full overflow-y-auto min-w-0">{children}</div>
     </div>
   )
 }

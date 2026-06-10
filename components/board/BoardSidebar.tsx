@@ -75,7 +75,7 @@ export default function BoardSidebar() {
   }
 
   return (
-    <aside className="hidden lg:flex lg:flex-col w-60 flex-shrink-0 bg-white border-r border-gray-100 sticky top-0 h-screen">
+    <aside className="hidden lg:flex lg:flex-col w-60 flex-shrink-0 bg-white border-r border-gray-100 h-full overflow-y-auto">
       <Link href={role === 'admin' ? '/board/admin' : '/board/dashboard'} className="flex items-center gap-2.5 px-5 h-16 border-b border-gray-100 hover:opacity-80 transition-opacity">
         <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#2D6A4F] to-[#52B788] flex items-center justify-center text-white font-bold text-lg font-serif">K</div>
         <div>
