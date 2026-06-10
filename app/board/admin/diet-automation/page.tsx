@@ -99,6 +99,7 @@ function DietAutomationContent() {
 
   // ── 액션 상태 ─────────────────────────────────────────────────────
   const [downloadingZip, setDownloadingZip] = useState(false)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [deploying,      setDeploying]      = useState(false)
   const [sendingReview,  setSendingReview]  = useState(false)
   const [reviewSent,     setReviewSent]     = useState(false)
@@ -274,6 +275,7 @@ function DietAutomationContent() {
   }
 
   // ── 이메일 배포 ────────────────────────────────────────────────────
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async function handleDeploy() {
     if (!confirm(`${pptxYear}년 ${pptxMonth}월 식단표를 각 원 담당자 이메일로 발송합니다.\n계속하시겠습니까?`)) return
     setDeploying(true)
