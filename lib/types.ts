@@ -495,4 +495,5 @@ export interface BranchProfile {
   direct_delivery?: boolean
   special_note?: string
   distribution_emails?: string[]
+  english_code?: string
 }

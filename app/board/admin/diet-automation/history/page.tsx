@@ -37,6 +37,12 @@ function formatDate(iso: string | null) {
   } catch { return iso }
 }
 
+function getActionLabel(status: string) {
+  if (['generated','review_requested','approved','correction_requested'].includes(status)) return '검토'
+  if (status === 'deployed') return '결과 보기'
+  return '바로가기'
+}
+
 export default function DietHistoryPage() {
   const [rows,    setRows]    = useState<HistoryRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -61,10 +67,10 @@ export default function DietHistoryPage() {
   return (
     <main className="min-h-screen bg-[#F6FAF6] px-4 sm:px-6 py-6 sm:py-8">
       {/* 헤더 */}
-      <div className="mb-6">
+      <div className="mb-8">
         <Link
           href="/board/admin/diet-automation"
-          className="text-gray-400 hover:text-gray-600 text-sm inline-block mb-2"
+          className="inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-[#2D6A4F] transition-colors mb-3"
         >
           ← 식단표 자동화
         </Link>
@@ -79,10 +85,13 @@ export default function DietHistoryPage() {
 
       {loading ? (
         <div className="flex items-center justify-center py-20">
-          <p className="text-gray-400 text-sm">로딩 중...</p>
+          <div className="flex items-center gap-3">
+            <span className="w-5 h-5 border-2 border-[#2D6A4F]/30 border-t-[#2D6A4F] rounded-full animate-spin" />
+            <p className="text-gray-400 text-sm">로딩 중...</p>
+          </div>
         </div>
       ) : rows.length === 0 ? (
-        <div className="bg-white rounded-2xl border border-gray-100 p-12 text-center">
+        <div className="bg-white rounded-2xl border border-gray-100 p-12 text-center shadow-sm">
           <p className="text-5xl mb-4">📋</p>
           <p className="text-sm font-medium text-gray-600 mb-1">아직 이력이 없습니다</p>
           <p className="text-xs text-gray-400 mb-6">엑셀 업로드 후 이력이 여기 표시됩니다</p>
@@ -94,35 +103,38 @@ export default function DietHistoryPage() {
           </Link>
         </div>
       ) : (
-        <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+        <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-100">
-                  <th className="text-left px-4 py-3 font-semibold text-gray-500">대상 월</th>
-                  <th className="text-center px-4 py-3 font-semibold text-gray-500">상태</th>
-                  <th className="text-center px-4 py-3 font-semibold text-gray-500">생성 결과</th>
-                  <th className="text-center px-4 py-3 font-semibold text-gray-500">배포일</th>
-                  <th className="text-center px-4 py-3 font-semibold text-gray-500">최근 수정</th>
-                  <th className="text-center px-4 py-3 font-semibold text-gray-500">바로가기</th>
+                  <th className="text-left   px-5 py-3.5 font-semibold text-gray-500">대상 월</th>
+                  <th className="text-center px-4 py-3.5 font-semibold text-gray-500">상태</th>
+                  <th className="text-center px-4 py-3.5 font-semibold text-gray-500">생성 결과</th>
+                  <th className="text-center px-4 py-3.5 font-semibold text-gray-500">배포일</th>
+                  <th className="text-center px-4 py-3.5 font-semibold text-gray-500">최근 수정</th>
+                  <th className="text-center px-4 py-3.5 font-semibold text-gray-500">바로가기</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((row, idx) => {
-                  const meta = STATUS_META[row.status] ?? { label: row.status, color: '#9E9E9E', bg: '#F5F5F5' }
-                  const gen  = row.generation_results
+                  const meta      = STATUS_META[row.status] ?? { label: row.status, color: '#9E9E9E', bg: '#F5F5F5' }
+                  const gen       = row.generation_results
+                  const isDeployed = row.status === 'deployed'
+                  const hubHref   = `/board/admin/diet-automation?year=${row.year}&month=${row.month}`
+
                   return (
                     <tr
                       key={row.id}
-                      className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}
+                      className={`border-b border-gray-50 transition-colors hover:bg-[#F6FAF6] ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}
                     >
                       {/* 대상 월 */}
-                      <td className="px-4 py-3">
+                      <td className="px-5 py-3.5">
                         <span className="font-bold text-[#1C2B1E]">{row.year}년 {row.month}월</span>
                       </td>
 
                       {/* 상태 */}
-                      <td className="text-center px-4 py-3">
+                      <td className="text-center px-4 py-3.5">
                         <span
                           className="inline-block px-2.5 py-1 rounded-full text-xs font-bold whitespace-nowrap"
                           style={{ color: meta.color, background: meta.bg }}
@@ -132,46 +144,47 @@ export default function DietHistoryPage() {
                       </td>
 
                       {/* 생성 결과 */}
-                      <td className="text-center px-4 py-3 text-xs text-gray-500">
-                        {gen
-                          ? <span>✅ {gen.succeeded}개{gen.failed > 0 && <span className="text-red-500 ml-1">❌ {gen.failed}개</span>}</span>
-                          : <span className="text-gray-300">-</span>
-                        }
+                      <td className="text-center px-4 py-3.5 text-xs text-gray-500">
+                        {gen ? (
+                          <span>
+                            <span className="text-green-600 font-medium">✅ {gen.succeeded}개</span>
+                            {gen.failed > 0 && <span className="text-red-500 ml-1">❌ {gen.failed}개</span>}
+                          </span>
+                        ) : (
+                          <span className="text-gray-300">-</span>
+                        )}
                       </td>
 
-                      {/* 배포일 */}
-                      <td className="text-center px-4 py-3 text-xs text-gray-500">
-                        {row.deployed_at
-                          ? <span className="text-[#2D6A4F] font-medium">{formatDate(row.deployed_at)}</span>
-                          : <span className="text-gray-300">-</span>
-                        }
+                      {/* 배포일 (deployed_at 없으면 '-') */}
+                      <td className="text-center px-4 py-3.5 text-xs">
+                        {isDeployed && row.deployed_at ? (
+                          <span className="text-[#2D6A4F] font-medium">{formatDate(row.deployed_at)}</span>
+                        ) : isDeployed ? (
+                          <span className="text-[#2D6A4F] font-medium">{formatDate(row.updated_at)}</span>
+                        ) : (
+                          <span className="text-gray-300">-</span>
+                        )}
                       </td>
 
                       {/* 최근 수정 */}
-                      <td className="text-center px-4 py-3 text-xs text-gray-400">
+                      <td className="text-center px-4 py-3.5 text-xs text-gray-400">
                         {formatDate(row.updated_at)}
                       </td>
 
-                      {/* 바로가기 */}
-                      <td className="text-center px-4 py-3">
-                        <div className="flex items-center justify-center gap-1.5">
-                          {['generated','review_requested','approved','correction_requested'].includes(row.status) && (
-                            <Link
-                              href={`/board/admin/diet-automation/review?year=${row.year}&month=${row.month}`}
-                              className="px-2.5 py-1 rounded-lg bg-orange-100 text-orange-700 text-[11px] font-bold hover:bg-orange-200 transition-colors"
-                            >
-                              검토
-                            </Link>
-                          )}
-                          {row.status === 'deployed' && gen && (
-                            <Link
-                              href={`/board/admin/diet-automation/review?year=${row.year}&month=${row.month}`}
-                              className="px-2.5 py-1 rounded-lg bg-[#E8F5E9] text-[#2E7D32] text-[11px] font-bold hover:bg-[#C8E6C9] transition-colors"
-                            >
-                              상세
-                            </Link>
-                          )}
-                        </div>
+                      {/* 바로가기 → 허브로 이동 */}
+                      <td className="text-center px-4 py-3.5">
+                        <Link
+                          href={hubHref}
+                          className={`inline-block px-3 py-1.5 rounded-lg text-[11px] font-bold transition-colors whitespace-nowrap ${
+                            isDeployed
+                              ? 'bg-[#E8F5E9] text-[#2E7D32] hover:bg-[#C8E6C9]'
+                              : ['generated','review_requested','approved','correction_requested'].includes(row.status)
+                                ? 'bg-orange-100 text-orange-700 hover:bg-orange-200'
+                                : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                          }`}
+                        >
+                          {getActionLabel(row.status)}
+                        </Link>
                       </td>
                     </tr>
                   )

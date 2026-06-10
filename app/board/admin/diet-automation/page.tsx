@@ -1,77 +1,19 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, Suspense } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import DietNotificationPanel, { type DietNotification } from '@/components/board/DietNotificationPanel'
 
-// ── 데모 데이터 (실제 Supabase 연동은 B-2 이후) ──────────────────
-const DEMO_STATS = {
-  totalBranches:      23,
-  pendingInput:        8,
-  pendingReview:       4,
-  deployedThisMonth:  12,
-}
-
-const STATUS_COLUMNS = [
-  { key: 'draft',                label: '작성 중',       color: '#9E9E9E', bg: '#F5F5F5',  count: 4 },
-  { key: 'input_complete',       label: '입력 완료',     color: '#1976D2', bg: '#E3F2FD',  count: 6 },
-  { key: 'reviewing',            label: '검토 중',       color: '#E65100', bg: '#FFF3E0',  count: 3 },
-  { key: 'correction_requested', label: '수정 요청',     color: '#C62828', bg: '#FFEBEE',  count: 1 },
-  { key: 'approved',             label: '승인 완료',     color: '#2E7D32', bg: '#E8F5E9',  count: 2 },
-  { key: 'generating',           label: 'PPTX 생성 중', color: '#6A1B9A', bg: '#F3E5F5',  count: 0 },
-  { key: 'generated',            label: '파일 준비 완료', color: '#00838F', bg: '#E0F7FA', count: 5 },
-  { key: 'deployed',             label: '배포 완료',     color: '#2D6A4F', bg: '#F6FAF6',  count: 12 },
-]
-
-const STAT_CARDS = [
-  {
-    label:    '계약원 현황',
-    value:    DEMO_STATS.totalBranches,
-    unit:     '개',
-    icon:     '🏫',
-    subLabel: '활성 계약원',
-    color:    '#2D6A4F',
-    bg:       '#F6FAF6',
-  },
-  {
-    label:    '이번달 입력 대기',
-    value:    DEMO_STATS.pendingInput,
-    unit:     '개',
-    icon:     '📝',
-    subLabel: '식단 미입력 원',
-    color:    '#1565C0',
-    bg:       '#E3F2FD',
-  },
-  {
-    label:    '검토·승인 대기',
-    value:    DEMO_STATS.pendingReview,
-    unit:     '개',
-    icon:     '👀',
-    subLabel: '검토/수정 요청 합산',
-    color:    '#E65100',
-    bg:       '#FFF3E0',
-  },
-  {
-    label:    '이번달 배포 완료',
-    value:    DEMO_STATS.deployedThisMonth,
-    unit:     '개',
-    icon:     '🚀',
-    subLabel: '이메일 발송 완료',
-    color:    '#2D6A4F',
-    bg:       '#E8F5E9',
-  },
-]
-
-// ── PPTX 관련 상수 ────────────────────────────────────────────────
+// ── 상수 ──────────────────────────────────────────────────────────────
 const SEPARATE_CONTRACT_CODES = new Set(['로티스', '잉글리쉬파크', '잉파', 'KIS', 'KPI', '송파MB'])
 const MANUAL_PROCESS_CODES    = new Set(['덕양P'])
 const JPG_ONLY_CODES          = new Set(['정발P'])
 const PDF_JPG_CODES           = new Set(['엘란'])
 
+// ── 타입 ──────────────────────────────────────────────────────────────
 type HubTab = 'workflow' | 'notifications'
-
 type PptxGenStatus = 'idle' | 'waking' | 'generating' | 'done' | 'error'
 
 type GenResult = {
@@ -98,6 +40,17 @@ type ActionsProgress = {
   is_complete: boolean
 }
 
+type BranchMenuRow = {
+  id:           string
+  branch_id:    string
+  pptx_url:     string | null
+  pdf_url:      string | null
+  status:       string
+  short_code:   string | null
+  display_name: string | null
+}
+
+// ── 헬퍼 ──────────────────────────────────────────────────────────────
 function formatGeneratedAt(iso: string) {
   try {
     const d = new Date(iso)
@@ -105,9 +58,12 @@ function formatGeneratedAt(iso: string) {
   } catch { return iso }
 }
 
-export default function DietAutomationPage() {
-  const router = useRouter()
-  const [tab, setTab] = useState<HubTab>('workflow')
+// ── 메인 컴포넌트 ──────────────────────────────────────────────────────
+function DietAutomationContent() {
+  const router       = useRouter()
+  const searchParams = useSearchParams()
+
+  const [tab,   setTab]   = useState<HubTab>('workflow')
   const [toast, setToast] = useState<string | null>(null)
 
   const showToast = useCallback((msg: string) => {
@@ -115,16 +71,18 @@ export default function DietAutomationPage() {
     setTimeout(() => setToast(null), 4000)
   }, [])
 
-  // ── PPTX 상태 ─────────────────────────────────────────────────
+  // ── 연/월 (URL 파라미터 또는 현재 날짜) ──────────────────────────────
   const now = new Date()
-  const [pptxYear,    setPptxYear]    = useState(now.getFullYear())
-  const [pptxMonth,   setPptxMonth]   = useState(now.getMonth() + 1)
-  const [pptxWeekNum, setPptxWeekNum] = useState(0) // 0 = 전체
+  const [pptxYear,    setPptxYear]    = useState(() => Number(searchParams.get('year'))  || now.getFullYear())
+  const [pptxMonth,   setPptxMonth]   = useState(() => Number(searchParams.get('month')) || (now.getMonth() + 1))
+  const [pptxWeekNum, setPptxWeekNum] = useState(0)
 
+  // ── 메뉴 row 상태 ─────────────────────────────────────────────────
   const [menuRowId,   setMenuRowId]   = useState<string | null>(null)
   const [menuStatus,  setMenuStatus]  = useState<string | null>(null)
   const [hasMenuData, setHasMenuData] = useState(false)
 
+  // ── PPTX 생성 상태 ────────────────────────────────────────────────
   const [genStatus,  setGenStatus]  = useState<PptxGenStatus>('idle')
   const [genError,   setGenError]   = useState<string | null>(null)
   const [genResults, setGenResults] = useState<GenerationResults | null>(null)
@@ -132,23 +90,71 @@ export default function DietAutomationPage() {
   const [actionsProgress, setActionsProgress] = useState<ActionsProgress | null>(null)
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
+  // Actions 흐름 브랜치 결과
+  const [branchMenuRows, setBranchMenuRows] = useState<BranchMenuRow[]>([])
+
+  // ── 통계 ─────────────────────────────────────────────────────────
+  const [totalActiveBranches, setTotalActiveBranches] = useState<number | null>(null)
+
+  // ── 액션 상태 ─────────────────────────────────────────────────────
   const [downloadingZip, setDownloadingZip] = useState(false)
   const [deploying,      setDeploying]      = useState(false)
   const [sendingReview,  setSendingReview]  = useState(false)
   const [reviewSent,     setReviewSent]     = useState(false)
 
-  // ── 알림 상태 ─────────────────────────────────────────────────
+  // ── 알림 ─────────────────────────────────────────────────────────
   const [notifications,        setNotifications]        = useState<DietNotification[]>([])
   const [notificationsLoading, setNotificationsLoading] = useState(false)
 
-  // ── weekly_menus 조회 ─────────────────────────────────────────
+  // ── DB 조회: 활성 계약원 수 ────────────────────────────────────────
+  const fetchStats = useCallback(async () => {
+    const supabase = createClient()
+    const { count } = await supabase
+      .from('branch_profiles')
+      .select('*', { count: 'exact', head: true })
+      .eq('contract_status', 'active')
+    setTotalActiveBranches(count ?? 0)
+  }, [])
+
+  // ── DB 조회: 브랜치 weekly_menus rows (Actions 흐름) ────────────────
+  const fetchBranchMenuRows = useCallback(async () => {
+    const supabase = createClient()
+    const [menuRes, profileRes] = await Promise.all([
+      supabase
+        .from('weekly_menus')
+        .select('id, branch_id, pptx_url, pdf_url, status')
+        .eq('year',      pptxYear)
+        .eq('month',     pptxMonth)
+        .eq('diet_type', 'CK')
+        .not('branch_id', 'is', null),
+      supabase
+        .from('branch_profiles')
+        .select('branch_id, short_code, display_name')
+        .eq('contract_status', 'active'),
+    ])
+
+    const profileMap = new Map<string, { short_code: string | null; display_name: string | null }>(
+      ((profileRes.data ?? []) as { branch_id: string; short_code: string | null; display_name: string | null }[])
+        .map(p => [p.branch_id, { short_code: p.short_code, display_name: p.display_name }])
+    )
+
+    const rows: BranchMenuRow[] = ((menuRes.data ?? []) as { id: string; branch_id: string; pptx_url: string | null; pdf_url: string | null; status: string }[]).map(row => ({
+      ...row,
+      short_code:   profileMap.get(row.branch_id)?.short_code   ?? null,
+      display_name: profileMap.get(row.branch_id)?.display_name ?? null,
+    }))
+
+    setBranchMenuRows(rows)
+  }, [pptxYear, pptxMonth])
+
+  // ── DB 조회: weekly_menus 공통 row ──────────────────────────────────
   const fetchMenuRow = useCallback(async () => {
     const supabase = createClient()
     const { data } = await supabase
       .from('weekly_menus')
       .select('id, status, menu_data, generation_results')
-      .eq('year', pptxYear)
-      .eq('month', pptxMonth)
+      .eq('year',      pptxYear)
+      .eq('month',     pptxMonth)
       .eq('diet_type', 'CK')
       .is('branch_id', null)
       .maybeSingle()
@@ -179,12 +185,19 @@ export default function DietAutomationPage() {
   }, [pptxYear, pptxMonth])
 
   useEffect(() => { fetchMenuRow() }, [fetchMenuRow])
+  useEffect(() => { fetchStats()   }, [fetchStats])
 
-  // ── PPTX 생성 (GitHub Actions 트리거) ────────────────────────
+  // done 상태가 되면 브랜치 결과 rows 로드
+  useEffect(() => {
+    if (genStatus === 'done') fetchBranchMenuRows()
+  }, [genStatus, fetchBranchMenuRows])
+
+  // ── PPTX 생성 (GitHub Actions 트리거) ─────────────────────────────
   async function handleGenerate() {
     setGenStatus('generating')
     setGenError(null)
     setActionsProgress(null)
+    setBranchMenuRows([])
 
     try {
       const res = await fetch('/api/pptx/trigger', {
@@ -197,64 +210,47 @@ export default function DietAutomationPage() {
         setGenError(data.error || 'GitHub Actions 트리거 오류')
         setGenStatus('error')
       }
-      // 성공 시 폴링은 아래 useEffect가 genStatus='generating' 감지해서 자동 시작
     } catch (err) {
       setGenError(String(err))
       setGenStatus('error')
     }
   }
 
-  // ── Actions 진행 폴링 (genStatus='generating' 동안 3초마다) ──
+  // ── Actions 진행 폴링 (genStatus='generating' 동안 3초마다) ──────────
   useEffect(() => {
     if (genStatus !== 'generating') {
-      if (pollingRef.current) {
-        clearInterval(pollingRef.current)
-        pollingRef.current = null
-      }
+      if (pollingRef.current) { clearInterval(pollingRef.current); pollingRef.current = null }
       return
     }
 
     const poll = async () => {
       try {
-        const res = await fetch(
-          `/api/pptx/actions-status?year=${pptxYear}&month=${pptxMonth}`,
-        )
+        const res = await fetch(`/api/pptx/actions-status?year=${pptxYear}&month=${pptxMonth}`)
         if (!res.ok) return
         const data: ActionsProgress = await res.json()
         setActionsProgress(data)
         if (data.is_complete) {
           setGenStatus('done')
           await fetchMenuRow()
-          showToast(
-            `생성 완료! ${data.generated}개 성공${data.error > 0 ? `, ${data.error}개 실패` : ''} ✅`,
-          )
+          await fetchBranchMenuRows()
+          showToast(`생성 완료! ${data.generated}개 성공${data.error > 0 ? `, ${data.error}개 실패` : ''} ✅`)
         }
-      } catch {
-        // 폴링 오류는 무시하고 계속
-      }
+      } catch { /* 폴링 오류 무시 */ }
     }
 
     poll()
     pollingRef.current = setInterval(poll, 3000)
+    return () => { if (pollingRef.current) { clearInterval(pollingRef.current); pollingRef.current = null } }
+  }, [genStatus, pptxYear, pptxMonth, fetchMenuRow, fetchBranchMenuRows, showToast])
 
-    return () => {
-      if (pollingRef.current) {
-        clearInterval(pollingRef.current)
-        pollingRef.current = null
-      }
-    }
-  }, [genStatus, pptxYear, pptxMonth, fetchMenuRow, showToast])
-
-  // ── 재시도 ────────────────────────────────────────────────────
+  // ── 재시도 (수정 금지) ─────────────────────────────────────────────
   async function handleRetry(_branchId: string | null, branchName: string) {
     showToast(`${branchName} 재생성 중...`)
     try {
       const res = await fetch('/api/pptx/generate', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({
-          weekly_menu_id: menuRowId,
-        }),
+        body:    JSON.stringify({ weekly_menu_id: menuRowId }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -268,7 +264,13 @@ export default function DietAutomationPage() {
     }
   }
 
-  // ── 이메일 배포 ───────────────────────────────────────────────
+  // ── 단일 원 메일 재발송 (확인 모달) ────────────────────────────────
+  async function handleResendSingle(branchName: string) {
+    if (!confirm(`${branchName}에만 식단표를 재발송하시겠습니까?`)) return
+    showToast(`${branchName} 재발송은 준비 중입니다`)
+  }
+
+  // ── 이메일 배포 ────────────────────────────────────────────────────
   async function handleDeploy() {
     if (!confirm(`${pptxYear}년 ${pptxMonth}월 식단표를 각 원 담당자 이메일로 발송합니다.\n계속하시겠습니까?`)) return
     setDeploying(true)
@@ -292,40 +294,31 @@ export default function DietAutomationPage() {
     }
   }
 
-  // ── 알림 fetch ────────────────────────────────────────────────
-  async function fetchNotifications() {
-    setNotificationsLoading(true)
-    try {
-      const supabase = createClient()
-      const { data } = await supabase
-        .from('diet_notifications')
-        .select('id, type, title, message, branch_id, is_read, recipient_role, created_at')
-        .order('created_at', { ascending: false })
-        .limit(50)
-      setNotifications((data ?? []) as DietNotification[])
-    } finally {
-      setNotificationsLoading(false)
-    }
-  }
-
-  async function handleMarkRead(id: string) {
-    const supabase = createClient()
-    await supabase.from('diet_notifications').update({ is_read: true }).eq('id', id)
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n))
-  }
-
-  // ── ZIP 다운로드 ──────────────────────────────────────────────
+  // ── ZIP 다운로드 (genResults 또는 branchMenuRows) ─────────────────
   async function handleDownloadZip() {
-    if (!genResults) return
     setDownloadingZip(true)
     try {
-      const files = genResults.results
-        .filter(r => r.status === 'success')
-        .map(r => ({
-          branch_name: r.branch_name,
-          pptx_url:    r.pptx_url || undefined,
-          pdf_url:     r.pdf_url  || undefined,
-        }))
+      let files: { branch_name: string; pptx_url?: string; pdf_url?: string }[] = []
+
+      if (genResults) {
+        files = genResults.results
+          .filter(r => r.status === 'success')
+          .map(r => ({
+            branch_name: r.branch_name,
+            pptx_url:    r.pptx_url || undefined,
+            pdf_url:     r.pdf_url  || undefined,
+          }))
+      } else if (branchMenuRows.length > 0) {
+        files = branchMenuRows
+          .filter(r => r.pptx_url || r.pdf_url)
+          .map(r => ({
+            branch_name: r.short_code || r.branch_id.slice(0, 8),
+            pptx_url:    r.pptx_url   || undefined,
+            pdf_url:     r.pdf_url    || undefined,
+          }))
+      }
+
+      if (!files.length) { showToast('다운로드할 파일이 없습니다'); return }
 
       const res = await fetch('/api/pptx/download-zip', {
         method:  'POST',
@@ -347,16 +340,13 @@ export default function DietAutomationPage() {
     }
   }
 
-  // ── 검토 요청 ─────────────────────────────────────────────────
+  // ── 검토 요청 ──────────────────────────────────────────────────────
   async function handleReviewRequest() {
     if (!menuRowId || reviewSent || sendingReview) return
     setSendingReview(true)
     try {
       const supabase = createClient()
-      await supabase
-        .from('weekly_menus')
-        .update({ status: 'review_requested' })
-        .eq('id', menuRowId)
+      await supabase.from('weekly_menus').update({ status: 'review_requested' }).eq('id', menuRowId)
       await supabase.from('diet_notifications').insert({
         type:           'review_request',
         title:          `${pptxYear}년 ${pptxMonth}월 식단표 PPTX 검토 요청`,
@@ -376,7 +366,29 @@ export default function DietAutomationPage() {
     }
   }
 
-  // ── 결과 행 렌더링 헬퍼 ───────────────────────────────────────
+  // ── 알림 ──────────────────────────────────────────────────────────
+  async function fetchNotifications() {
+    setNotificationsLoading(true)
+    try {
+      const supabase = createClient()
+      const { data } = await supabase
+        .from('diet_notifications')
+        .select('id, type, title, message, branch_id, is_read, recipient_role, created_at')
+        .order('created_at', { ascending: false })
+        .limit(50)
+      setNotifications((data ?? []) as DietNotification[])
+    } finally {
+      setNotificationsLoading(false)
+    }
+  }
+
+  async function handleMarkRead(id: string) {
+    const supabase = createClient()
+    await supabase.from('diet_notifications').update({ is_read: true }).eq('id', id)
+    setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n))
+  }
+
+  // ── 결과 행 헬퍼 ──────────────────────────────────────────────────
   function getFileBadge(branchName: string) {
     if (MANUAL_PROCESS_CODES.has(branchName)) return { label: '수동처리', color: '#E65100', bg: '#FFF3E0' }
     if (JPG_ONLY_CODES.has(branchName))       return { label: 'JPG',      color: '#7B1FA2', bg: '#F3E5F5' }
@@ -384,15 +396,94 @@ export default function DietAutomationPage() {
     return { label: 'PDF', color: '#2E7D32', bg: '#E8F5E9' }
   }
 
+  // ── 계산값 ───────────────────────────────────────────────────────
   const isGenerating = genStatus === 'waking' || genStatus === 'generating'
+
   const canActivateBottom =
     ['generated','review_requested','approved','deployed'].includes(menuStatus ?? '') &&
-    (!!genResults || !!actionsProgress?.is_complete)
+    (!!genResults || !!actionsProgress?.is_complete || branchMenuRows.length > 0)
+
+  const generatedThisMonth =
+    actionsProgress?.generated
+    ?? genResults?.succeeded
+    ?? branchMenuRows.filter(r => r.status === 'generated').length
+
+  const totalBranchCount = actionsProgress?.total ?? 49
+
+  // 통합 결과 rows (genResults 우선, 없으면 branchMenuRows)
+  const displayRows: { branchName: string; pptxUrl: string|null; pdfUrl: string|null; status: string; errorMsg?: string; branchId?: string|null }[] =
+    genResults
+      ? genResults.results.map(r => ({
+          branchName: r.branch_name,
+          pptxUrl:    r.pptx_url || null,
+          pdfUrl:     r.pdf_url  || null,
+          status:     r.status,
+          errorMsg:   r.error_msg,
+          branchId:   r.branch_id,
+        }))
+      : branchMenuRows.map(r => ({
+          branchName: r.short_code || r.branch_id.slice(0, 8),
+          pptxUrl:    r.pptx_url,
+          pdfUrl:     r.pdf_url,
+          status:     r.status === 'generated' ? 'success' : r.status,
+          branchId:   r.branch_id,
+        }))
+
+  // 4단계 진행 현황
+  const pptxDone = ['generated','review_requested','approved','deployed'].includes(menuStatus ?? '') || !!actionsProgress?.is_complete
+  const progressSteps = [
+    {
+      key:    'upload',
+      label:  '엑셀 업로드',
+      icon:   '📤',
+      done:   hasMenuData,
+      active: false,
+      error:  false,
+      text:   hasMenuData ? '완료' : '미완료',
+    },
+    {
+      key:    'generate',
+      label:  'PPTX 생성',
+      icon:   '🖨️',
+      done:   pptxDone && genStatus !== 'error',
+      active: genStatus === 'generating',
+      error:  genStatus === 'error',
+      text:   genStatus === 'generating'
+        ? `${actionsProgress ? `${actionsProgress.generated + actionsProgress.error}/${actionsProgress.total}` : '...'}개 진행 중`
+        : pptxDone
+          ? `${generatedThisMonth}개 완료`
+          : genStatus === 'error'
+            ? '오류 발생'
+            : '대기 중',
+    },
+    {
+      key:    'review',
+      label:  '검토·승인',
+      icon:   '👀',
+      done:   ['review_requested','approved','deployed'].includes(menuStatus ?? ''),
+      active: false,
+      error:  false,
+      text:   menuStatus === 'approved' ? '승인 완료'
+              : menuStatus === 'review_requested' ? '검토 중'
+              : menuStatus === 'deployed' ? '완료'
+              : '대기 중',
+    },
+    {
+      key:    'deploy',
+      label:  '배포',
+      icon:   '🚀',
+      done:   menuStatus === 'deployed',
+      active: false,
+      error:  false,
+      text:   menuStatus === 'deployed' ? '완료' : '대기 중',
+    },
+  ]
 
   return (
     <main className="min-h-screen bg-[#F6FAF6] px-4 sm:px-6 py-6 sm:py-8">
-      {/* ── 헤더 ────────────────────────────────────────────────────────── */}
-      <div className="mb-6">
+
+      {/* ── 헤더 ──────────────────────────────────────────────────────── */}
+      <div className="mb-8">
         <div className="flex items-center gap-2 mb-1">
           <span className="text-2xl">🍱</span>
           <h1 className="text-xl sm:text-2xl font-bold text-[#1C2B1E]">식단표 자동화</h1>
@@ -402,31 +493,69 @@ export default function DietAutomationPage() {
         </p>
       </div>
 
-      {/* ── 통계 카드 4개 ────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-        {STAT_CARDS.map(c => (
-          <div
-            key={c.label}
-            className="rounded-2xl p-4 flex flex-col gap-1"
-            style={{ background: c.bg }}
-          >
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-xs font-medium text-gray-500">{c.label}</span>
-              <span className="text-lg leading-none">{c.icon}</span>
-            </div>
-            <div className="flex items-baseline gap-1">
-              <span className="text-2xl font-bold" style={{ color: c.color }}>
-                {c.value}
-              </span>
-              <span className="text-sm font-medium" style={{ color: c.color }}>{c.unit}</span>
-            </div>
-            <span className="text-[11px] text-gray-400">{c.subLabel}</span>
+      {/* ── 통계 카드 4개 (실제 DB 연동) ──────────────────────────────── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
+        {/* 활성 계약원 */}
+        <div className="rounded-2xl p-5 flex flex-col gap-1" style={{ background: '#F6FAF6', border: '1px solid #B7E4C7' }}>
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-xs font-medium text-gray-500">활성 계약원</span>
+            <span className="text-lg leading-none">🏫</span>
           </div>
-        ))}
+          <div className="flex items-baseline gap-1">
+            <span className="text-2xl font-bold text-[#2D6A4F]">
+              {totalActiveBranches === null ? '—' : totalActiveBranches}
+            </span>
+            <span className="text-sm font-medium text-[#2D6A4F]">개</span>
+          </div>
+          <span className="text-[11px] text-gray-400">contract_status = active</span>
+        </div>
+
+        {/* 이번달 생성 완료 */}
+        <div className="rounded-2xl p-5 flex flex-col gap-1" style={{ background: '#E3F2FD', border: '1px solid #BBDEFB' }}>
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-xs font-medium text-gray-500">이번달 생성</span>
+            <span className="text-lg leading-none">🖨️</span>
+          </div>
+          <div className="flex items-baseline gap-1">
+            <span className="text-2xl font-bold text-[#1565C0]">{generatedThisMonth}</span>
+            <span className="text-sm font-medium text-[#1565C0]">/ {totalBranchCount}개</span>
+          </div>
+          <span className="text-[11px] text-gray-400">{pptxYear}년 {pptxMonth}월</span>
+        </div>
+
+        {/* 검토·승인 상태 */}
+        <div className="rounded-2xl p-5 flex flex-col gap-1" style={{ background: '#FFF3E0', border: '1px solid #FFE0B2' }}>
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-xs font-medium text-gray-500">검토·승인</span>
+            <span className="text-lg leading-none">👀</span>
+          </div>
+          <div className="flex items-baseline gap-1">
+            <span className="text-2xl font-bold text-[#E65100]">
+              {menuStatus === 'approved' ? '승인' : menuStatus === 'review_requested' ? '검토중' : '—'}
+            </span>
+          </div>
+          <span className="text-[11px] text-gray-400">
+            {menuStatus === 'correction_requested' ? '수정 요청됨' : `이번달 상태`}
+          </span>
+        </div>
+
+        {/* 배포 상태 */}
+        <div className="rounded-2xl p-5 flex flex-col gap-1" style={{ background: menuStatus === 'deployed' ? '#E8F5E9' : '#F5F5F5', border: `1px solid ${menuStatus === 'deployed' ? '#A5D6A7' : '#E0E0E0'}` }}>
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-xs font-medium text-gray-500">배포</span>
+            <span className="text-lg leading-none">🚀</span>
+          </div>
+          <div className="flex items-baseline gap-1">
+            <span className="text-2xl font-bold" style={{ color: menuStatus === 'deployed' ? '#2D6A4F' : '#9E9E9E' }}>
+              {menuStatus === 'deployed' ? '완료' : '대기'}
+            </span>
+          </div>
+          <span className="text-[11px] text-gray-400">{pptxYear}년 {pptxMonth}월</span>
+        </div>
       </div>
 
-      {/* ── 탭 바 ──────────────────────────────────────────────────────── */}
-      <div className="flex gap-1 mb-4 bg-white rounded-2xl p-1 border border-gray-100 w-fit">
+      {/* ── 탭 바 ─────────────────────────────────────────────────────── */}
+      <div className="flex gap-1 mb-6 bg-white rounded-2xl p-1 border border-gray-100 w-fit shadow-sm">
         {([
           { key: 'workflow',      label: '워크플로우', icon: '📋' },
           { key: 'notifications', label: '알림',       icon: '🔔' },
@@ -447,51 +576,55 @@ export default function DietAutomationPage() {
         ))}
       </div>
 
-      {/* ── 탭 콘텐츠 ──────────────────────────────────────────────────── */}
+      {/* ── 탭 콘텐츠 ─────────────────────────────────────────────────── */}
       {tab === 'workflow' && (
         <div>
-          {/* 워크플로우 칸반 */}
-          <div className="overflow-x-auto pb-4">
-            <div className="flex gap-3 min-w-max">
-              {STATUS_COLUMNS.map(col => (
+
+          {/* ── 이번 달 진행 현황 (4단계) ─────────────────────────────── */}
+          <div className="bg-white rounded-2xl border border-gray-100 p-6 mb-6 shadow-sm">
+            <p className="text-xs font-bold text-gray-500 mb-4 uppercase tracking-wide">이번 달 진행 현황</p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {progressSteps.map((step, idx) => (
                 <div
-                  key={col.key}
-                  className="w-36 rounded-2xl border border-gray-100 bg-white overflow-hidden flex-shrink-0"
+                  key={step.key}
+                  className={`relative rounded-xl p-4 border transition-colors ${
+                    step.error
+                      ? 'bg-red-50 border-red-200'
+                      : step.active
+                        ? 'bg-blue-50 border-blue-200'
+                        : step.done
+                          ? 'bg-[#E8F5E9] border-[#A5D6A7]'
+                          : 'bg-gray-50 border-gray-100'
+                  }`}
                 >
-                  <div
-                    className="px-3 py-2.5 text-center"
-                    style={{ background: col.bg }}
-                  >
-                    <p
-                      className="text-xs font-bold leading-snug"
-                      style={{ color: col.color }}
-                    >
-                      {col.label}
-                    </p>
-                    <p
-                      className="text-2xl font-bold mt-1"
-                      style={{ color: col.color }}
-                    >
-                      {col.count}
-                    </p>
-                    <p className="text-[10px] text-gray-400">개</p>
+                  {idx < progressSteps.length - 1 && (
+                    <span className="hidden sm:block absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 text-gray-300 text-xs z-10">›</span>
+                  )}
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <span className="text-base">{step.icon}</span>
+                    <span className={`text-[10px] font-bold uppercase tracking-wide ${
+                      step.error ? 'text-red-500' : step.active ? 'text-blue-600' : step.done ? 'text-[#2D6A4F]' : 'text-gray-400'
+                    }`}>
+                      {step.label}
+                    </span>
                   </div>
-                  <div className="px-3 py-4 text-center">
-                    {col.count === 0 ? (
-                      <p className="text-[11px] text-gray-300">없음</p>
-                    ) : (
-                      <p className="text-[11px] text-gray-400 leading-relaxed">
-                        B-2 구현 후<br />원 목록 표시
-                      </p>
-                    )}
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-base">
+                      {step.error ? '❌' : step.active ? '🔄' : step.done ? '✅' : '⬜'}
+                    </span>
+                    <span className={`text-xs font-semibold ${
+                      step.error ? 'text-red-600' : step.active ? 'text-blue-700' : step.done ? 'text-[#2D6A4F]' : 'text-gray-400'
+                    }`}>
+                      {step.text}
+                    </span>
                   </div>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* 식단 업로드 CTA */}
-          <div className="mt-4 bg-[#F6FAF6] border border-[#B7E4C7] rounded-2xl p-4 flex items-center justify-between gap-4">
+          {/* ── 식단 업로드 CTA ──────────────────────────────────────── */}
+          <div className="bg-[#F6FAF6] border border-[#B7E4C7] rounded-2xl p-5 flex items-center justify-between gap-4 mb-4 shadow-sm">
             <div>
               <p className="text-sm font-bold text-[#1C2B1E] mb-0.5">📤 이번 달 CK 식단 업로드</p>
               <p className="text-xs text-gray-500">기준폼 엑셀 파일을 업로드하여 식단을 등록합니다</p>
@@ -504,35 +637,35 @@ export default function DietAutomationPage() {
             </Link>
           </div>
 
-          {/* 빠른 이동 */}
-          <div className="mt-3 flex flex-wrap gap-2">
+          {/* ── 빠른 이동 링크 ──────────────────────────────────────── */}
+          <div className="flex flex-wrap gap-2 mb-8">
             <Link
               href="/board/admin/diet-automation/history"
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white border border-gray-200 text-sm font-medium text-gray-700 hover:border-[#2D6A4F] hover:text-[#2D6A4F] transition-colors"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white border border-gray-200 text-sm font-medium text-gray-700 hover:border-[#2D6A4F] hover:text-[#2D6A4F] transition-colors shadow-sm"
             >
               <span>📋</span>
               배포 이력
             </Link>
             <Link
               href="/board/admin/diet/branch-profile"
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white border border-gray-200 text-sm font-medium text-gray-700 hover:border-[#2D6A4F] hover:text-[#2D6A4F] transition-colors"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white border border-gray-200 text-sm font-medium text-gray-700 hover:border-[#2D6A4F] hover:text-[#2D6A4F] transition-colors shadow-sm"
             >
               <span>🏫</span>
               원 프로파일 설정
             </Link>
           </div>
 
-          {/* ══════════════════════════════════════════════════════════════ */}
-          {/* PPTX 자동생성 섹션                                            */}
-          {/* ══════════════════════════════════════════════════════════════ */}
-          <div className="mt-6">
-            <div className="flex items-center gap-2 mb-3">
+          {/* ════════════════════════════════════════════════════════════ */}
+          {/* PPTX 자동생성 섹션                                          */}
+          {/* ════════════════════════════════════════════════════════════ */}
+          <div>
+            <div className="flex items-center gap-2 mb-4">
               <span className="text-xl">🖨️</span>
               <h2 className="text-sm font-bold text-[#1C2B1E]">PPTX 자동 생성</h2>
             </div>
 
             {/* 컨트롤 카드 */}
-            <div className="bg-white rounded-2xl border border-gray-100 p-4 mb-3">
+            <div className="bg-white rounded-2xl border border-gray-100 p-6 mb-4 shadow-sm">
               <div className="flex flex-wrap items-end gap-3">
                 {/* 연도 */}
                 <div className="flex flex-col gap-1">
@@ -591,12 +724,10 @@ export default function DietAutomationPage() {
 
               {/* menu_data 없음 경고 */}
               {!hasMenuData && (
-                <div className="mt-3 flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl p-3">
+                <div className="mt-4 flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl p-3">
                   <span className="text-sm mt-0.5">⚠️</span>
                   <div>
-                    <p className="text-xs font-bold text-amber-800">
-                      엑셀을 먼저 업로드해주세요
-                    </p>
+                    <p className="text-xs font-bold text-amber-800">엑셀을 먼저 업로드해주세요</p>
                     <p className="text-xs text-amber-700 mt-0.5">
                       {pptxYear}년 {pptxMonth}월 식단 데이터가 없습니다.{' '}
                       <button
@@ -612,16 +743,16 @@ export default function DietAutomationPage() {
               )}
             </div>
 
-            {/* 상태 표시 영역 */}
-            <div className="mb-3">
+            {/* 상태 표시 */}
+            <div className="mb-4">
               {genStatus === 'idle' && (
-                <div className="bg-gray-50 rounded-2xl border border-gray-100 p-4 text-center">
+                <div className="bg-gray-50 rounded-2xl border border-gray-100 p-5 text-center">
                   <p className="text-sm text-gray-400">생성 버튼을 눌러 PPTX 생성을 시작하세요</p>
                 </div>
               )}
 
               {genStatus === 'waking' && (
-                <div className="bg-orange-50 rounded-2xl border border-orange-200 p-4 flex items-center gap-3">
+                <div className="bg-orange-50 rounded-2xl border border-orange-200 p-5 flex items-center gap-3">
                   <span className="text-xl animate-spin inline-block">🟠</span>
                   <div>
                     <p className="text-sm font-bold text-orange-700">GitHub Actions 실행 준비 중...</p>
@@ -631,7 +762,7 @@ export default function DietAutomationPage() {
               )}
 
               {genStatus === 'generating' && (
-                <div className="bg-blue-50 rounded-2xl border border-blue-200 p-4">
+                <div className="bg-blue-50 rounded-2xl border border-blue-200 p-5">
                   <div className="flex items-center gap-3 mb-3">
                     <span className="text-xl animate-spin inline-block">🔵</span>
                     <div>
@@ -667,7 +798,7 @@ export default function DietAutomationPage() {
               )}
 
               {genStatus === 'done' && (
-                <div className="bg-green-50 rounded-2xl border border-green-200 p-4 flex items-center gap-3">
+                <div className="bg-green-50 rounded-2xl border border-green-200 p-5 flex items-center gap-3">
                   <span className="text-xl">🟢</span>
                   <div>
                     {genResults ? (
@@ -675,9 +806,7 @@ export default function DietAutomationPage() {
                         <p className="text-sm font-bold text-green-700">
                           완료! 성공 {genResults.succeeded}개 / 실패 {genResults.failed}개
                         </p>
-                        <p className="text-xs text-green-600 mt-0.5">
-                          {formatGeneratedAt(genResults.generated_at)} 생성
-                        </p>
+                        <p className="text-xs text-green-600 mt-0.5">{formatGeneratedAt(genResults.generated_at)} 생성</p>
                       </>
                     ) : actionsProgress ? (
                       <>
@@ -694,7 +823,7 @@ export default function DietAutomationPage() {
               )}
 
               {genStatus === 'error' && (
-                <div className="bg-red-50 rounded-2xl border border-red-200 p-4 flex items-start gap-3">
+                <div className="bg-red-50 rounded-2xl border border-red-200 p-5 flex items-start gap-3">
                   <span className="text-xl">🔴</span>
                   <div>
                     <p className="text-sm font-bold text-red-700">생성 오류</p>
@@ -705,62 +834,61 @@ export default function DietAutomationPage() {
             </div>
 
             {/* 결과 테이블 */}
-            {genResults && genResults.results.length > 0 && (
-              <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden mb-3">
-                <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+            {displayRows.length > 0 && (
+              <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden mb-4 shadow-sm">
+                <div className="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between">
                   <span className="text-xs font-bold text-[#1C2B1E]">생성 결과</span>
-                  <span className="text-xs text-gray-400">{genResults.results.length}개원</span>
+                  <span className="text-xs text-gray-400">{displayRows.length}개원</span>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs">
                     <thead>
                       <tr className="bg-gray-50 border-b border-gray-100">
-                        <th className="text-center px-3 py-2.5 font-semibold text-gray-500 w-8">#</th>
-                        <th className="text-left   px-3 py-2.5 font-semibold text-gray-500">원명</th>
-                        <th className="text-center px-3 py-2.5 font-semibold text-gray-500">구분</th>
-                        <th className="text-center px-3 py-2.5 font-semibold text-gray-500">파일형식</th>
-                        <th className="text-center px-3 py-2.5 font-semibold text-gray-500">상태</th>
-                        <th className="text-center px-3 py-2.5 font-semibold text-gray-500">다운로드</th>
-                        <th className="text-center px-3 py-2.5 font-semibold text-gray-500">액션</th>
+                        <th className="text-center px-3 py-3 font-semibold text-gray-500 w-8">#</th>
+                        <th className="text-left   px-3 py-3 font-semibold text-gray-500">원명</th>
+                        <th className="text-center px-3 py-3 font-semibold text-gray-500">구분</th>
+                        <th className="text-center px-3 py-3 font-semibold text-gray-500">파일형식</th>
+                        <th className="text-center px-3 py-3 font-semibold text-gray-500">상태</th>
+                        <th className="text-center px-3 py-3 font-semibold text-gray-500">다운로드</th>
+                        <th className="text-center px-3 py-3 font-semibold text-gray-500">액션</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {genResults.results.map((row, idx) => {
-                        const badge     = getFileBadge(row.branch_name)
-                        const isManual  = MANUAL_PROCESS_CODES.has(row.branch_name)
-                        const isJpgOnly = JPG_ONLY_CODES.has(row.branch_name)
-                        const isSep     = SEPARATE_CONTRACT_CODES.has(row.branch_name)
-                        const isSuccess = row.status === 'success'
+                      {displayRows.map((row, idx) => {
+                        const badge     = getFileBadge(row.branchName)
+                        const isManual  = MANUAL_PROCESS_CODES.has(row.branchName)
+                        const isSep     = SEPARATE_CONTRACT_CODES.has(row.branchName)
+                        const isSuccess = row.status === 'success' || row.status === 'generated'
+                        const isError   = row.status === 'error'
+                        const isProc    = !isSuccess && !isError
 
                         return (
                           <tr
-                            key={row.branch_name}
-                            className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}
+                            key={`${row.branchName}-${idx}`}
+                            className={`border-b border-gray-50 transition-colors hover:bg-gray-50/80 ${
+                              isError ? 'bg-[#FEF2F2]'
+                              : isProc ? 'bg-[#EFF6FF]'
+                              : 'bg-white'
+                            }`}
                           >
                             {/* 번호 */}
-                            <td className="text-center px-3 py-2.5 text-gray-400">{idx + 1}</td>
+                            <td className="text-center px-3 py-3 text-gray-400">{idx + 1}</td>
 
                             {/* 원명 */}
-                            <td className="px-3 py-2.5 font-medium text-[#1C2B1E] whitespace-nowrap">
-                              {row.branch_name}
-                            </td>
+                            <td className="px-3 py-3 font-medium text-[#1C2B1E] whitespace-nowrap">{row.branchName}</td>
 
                             {/* 구분 */}
-                            <td className="text-center px-3 py-2.5">
+                            <td className="text-center px-3 py-3">
                               <span
                                 className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold"
-                                style={
-                                  isSep
-                                    ? { color: '#616161', background: '#F5F5F5' }
-                                    : { color: '#1565C0', background: '#E3F2FD' }
-                                }
+                                style={isSep ? { color: '#616161', background: '#F5F5F5' } : { color: '#1565C0', background: '#E3F2FD' }}
                               >
                                 {isSep ? '별도계약' : 'CK'}
                               </span>
                             </td>
 
                             {/* 파일형식 */}
-                            <td className="text-center px-3 py-2.5">
+                            <td className="text-center px-3 py-3">
                               <span
                                 className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold"
                                 style={{ color: badge.color, background: badge.bg }}
@@ -770,67 +898,78 @@ export default function DietAutomationPage() {
                             </td>
 
                             {/* 상태 */}
-                            <td className="text-center px-3 py-2.5">
+                            <td className="text-center px-3 py-3">
                               {isSuccess ? (
                                 <span className="text-green-600 font-bold">✅ 성공</span>
-                              ) : row.status === 'error' ? (
-                                <span
-                                  className="text-red-600 font-bold cursor-help"
-                                  title={row.error_msg}
-                                >
-                                  ❌ 실패
-                                </span>
+                              ) : isError ? (
+                                <span className="text-red-600 font-bold cursor-help" title={row.errorMsg}>❌ 실패</span>
                               ) : (
                                 <span className="text-blue-600 font-bold">🔄 생성중</span>
                               )}
                             </td>
 
-                            {/* 다운로드 */}
-                            <td className="text-center px-3 py-2.5">
+                            {/* 다운로드 — URL 있으면 활성, 없으면 비활성 */}
+                            <td className="text-center px-3 py-3">
                               {isManual ? (
-                                <span className="text-gray-300 text-[10px]">—</span>
-                              ) : isSuccess ? (
-                                <div className="flex items-center justify-center gap-1">
-                                  {row.pptx_url && (
+                                <span className="text-gray-300">—</span>
+                              ) : (
+                                <div className="flex items-center justify-center gap-1 flex-wrap">
+                                  {/* PPTX */}
+                                  {row.pptxUrl ? (
                                     <a
-                                      href={row.pptx_url}
+                                      href={row.pptxUrl}
                                       target="_blank"
                                       rel="noopener noreferrer"
-                                      className="px-2 py-1 rounded-lg bg-[#E3F2FD] text-[#1565C0] text-[10px] font-bold hover:bg-[#BBDEFB] transition-colors"
+                                      className="px-2 py-1 rounded-lg border border-blue-200 text-[#1565C0] text-[10px] font-bold hover:bg-blue-50 transition-colors"
                                     >
                                       PPTX
                                     </a>
+                                  ) : (
+                                    <span className="px-2 py-1 rounded-lg border border-gray-100 text-gray-300 text-[10px] font-bold cursor-not-allowed">
+                                      PPTX
+                                    </span>
                                   )}
-                                  {(row.pdf_url && !isJpgOnly) && (
+                                  {/* PDF */}
+                                  {row.pdfUrl ? (
                                     <a
-                                      href={row.pdf_url}
+                                      href={row.pdfUrl}
                                       target="_blank"
                                       rel="noopener noreferrer"
-                                      className="px-2 py-1 rounded-lg bg-[#E8F5E9] text-[#2E7D32] text-[10px] font-bold hover:bg-[#C8E6C9] transition-colors"
+                                      className="px-2 py-1 rounded-lg border border-green-200 text-[#2E7D32] text-[10px] font-bold hover:bg-green-50 transition-colors"
                                     >
                                       PDF
                                     </a>
+                                  ) : (
+                                    <span className="px-2 py-1 rounded-lg border border-gray-100 text-gray-300 text-[10px] font-bold cursor-not-allowed">
+                                      PDF
+                                    </span>
                                   )}
                                 </div>
-                              ) : (
-                                <span className="text-gray-300 text-[10px]">—</span>
                               )}
                             </td>
 
                             {/* 액션 */}
-                            <td className="text-center px-3 py-2.5">
+                            <td className="text-center px-3 py-3">
                               {isManual ? (
-                                <span className="text-gray-300 text-[10px]">—</span>
-                              ) : !isSuccess ? (
+                                <span className="text-gray-300">—</span>
+                              ) : isError ? (
                                 <button
                                   type="button"
-                                  onClick={() => handleRetry(row.branch_id, row.branch_name)}
-                                  className="px-2.5 py-1 rounded-lg bg-amber-100 text-amber-700 text-[10px] font-bold hover:bg-amber-200 transition-colors"
+                                  onClick={() => handleRetry(row.branchId ?? null, row.branchName)}
+                                  className="px-2.5 py-1.5 rounded-lg bg-amber-100 text-amber-700 text-[10px] font-bold hover:bg-amber-200 transition-colors"
                                 >
                                   재시도
                                 </button>
+                              ) : isSuccess ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleResendSingle(row.branchName)}
+                                  className="px-2.5 py-1.5 rounded-lg bg-blue-50 text-blue-600 text-[10px] font-bold hover:bg-blue-100 transition-colors"
+                                >
+                                  ✉ 메일
+                                </button>
                               ) : (
-                                <span className="text-gray-300 text-[10px]">—</span>
+                                <span className="text-gray-300">—</span>
                               )}
                             </td>
                           </tr>
@@ -842,10 +981,10 @@ export default function DietAutomationPage() {
               </div>
             )}
 
-            {/* 하단 액션 바 */}
+            {/* 하단 액션바 */}
             {canActivateBottom && (
-              <div className="bg-white rounded-2xl border border-gray-100 p-4 flex flex-wrap items-center gap-3">
-                {/* 전체 ZIP 다운로드 */}
+              <div className="bg-white rounded-2xl border border-gray-100 p-5 flex flex-wrap items-center gap-3 shadow-sm">
+                {/* ZIP 다운로드 */}
                 <button
                   type="button"
                   onClick={handleDownloadZip}
@@ -855,8 +994,8 @@ export default function DietAutomationPage() {
                   {downloadingZip ? '⏳ 다운로드 중...' : '📦 전체 ZIP 다운로드'}
                 </button>
 
-                {/* 권팀장 검토 요청 (generated 상태) */}
-                {['generated', 'correction_requested'].includes(menuStatus ?? '') && (
+                {/* 검토 요청 */}
+                {['generated','correction_requested'].includes(menuStatus ?? '') && (
                   <button
                     type="button"
                     onClick={handleReviewRequest}
@@ -867,7 +1006,7 @@ export default function DietAutomationPage() {
                   </button>
                 )}
 
-                {/* 검토 중일 때: 검토 페이지 링크 */}
+                {/* 검토 페이지 이동 */}
                 {menuStatus === 'review_requested' && (
                   <Link
                     href={`/board/admin/diet-automation/review?year=${pptxYear}&month=${pptxMonth}`}
@@ -877,7 +1016,7 @@ export default function DietAutomationPage() {
                   </Link>
                 )}
 
-                {/* 승인 완료: 이메일 배포 버튼 */}
+                {/* 승인 완료: 이메일 배포 */}
                 {menuStatus === 'approved' && (
                   <button
                     type="button"
@@ -903,7 +1042,7 @@ export default function DietAutomationPage() {
       )}
 
       {tab === 'notifications' && (
-        <div className="bg-white rounded-2xl border border-gray-100 p-4 sm:p-6">
+        <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-sm font-bold text-[#1C2B1E]">알림 센터</h2>
             <button
@@ -935,12 +1074,27 @@ export default function DietAutomationPage() {
         </div>
       )}
 
-      {/* ── 토스트 ─────────────────────────────────────────────────────── */}
+      {/* ── 토스트 ───────────────────────────────────────────────────── */}
       {toast && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-gray-800 text-white text-sm rounded-2xl px-5 py-3 shadow-lg z-50 whitespace-nowrap">
           {toast}
         </div>
       )}
     </main>
+  )
+}
+
+export default function DietAutomationPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-[#F6FAF6] flex items-center justify-center">
+        <div className="flex items-center gap-3">
+          <span className="w-6 h-6 border-2 border-[#2D6A4F]/30 border-t-[#2D6A4F] rounded-full animate-spin" />
+          <p className="text-gray-400 text-sm">로딩 중...</p>
+        </div>
+      </div>
+    }>
+      <DietAutomationContent />
+    </Suspense>
   )
 }

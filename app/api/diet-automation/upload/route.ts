@@ -567,45 +567,49 @@ export async function POST(req: NextRequest) {
     const url        = process.env.NEXT_PUBLIC_SUPABASE_URL!
     const dbClient   = serviceKey ? createAdminClient(url, serviceKey) : supabase
 
-    // 기존 데이터 삭제
-    await dbClient
+    // 기존 row 확인 (있으면 UPDATE, 없으면 INSERT — unique constraint 회피)
+    const { data: existingRow } = await dbClient
       .from('weekly_menus')
-      .delete()
-      .eq('year', year).eq('month', month).eq('diet_type', 'CK').is('branch_id', null)
+      .select('id')
+      .eq('year', year)
+      .eq('month', month)
+      .eq('diet_type', 'CK')
+      .is('branch_id', null)
+      .maybeSingle()
 
-    // 신규 삽입
-    const { error: insertError } = await dbClient
-      .from('weekly_menus')
-      .insert({
-        year,
-        month,
-        diet_type:  'CK',
-        branch_id:  null,
-        week_num:   null,
-        status:     'draft',
-        menu_data: {
-          source:  'excel_upload',
-          year,
-          month,
-          weeks:   weeks.reduce((acc, w) => { acc[w.week_num] = w; return acc }, {} as Record<number, ParsedWeek>),
-          dosirak,
-        },
-        updated_at: new Date().toISOString(),
-      })
+    const menuData = {
+      source: 'excel_upload',
+      year,
+      month,
+      weeks: weeks.reduce((acc, w) => { acc[w.week_num] = w; return acc }, {} as Record<number, ParsedWeek>),
+      dosirak,
+    }
 
-    if (insertError) {
-      console.error('DB insert error:', {
-        code:    insertError.code,
-        message: insertError.message,
-        details: insertError.details,
-        hint:    insertError.hint,
-      })
+    let saveError
+    if (existingRow) {
+      const { error } = await dbClient
+        .from('weekly_menus')
+        .update({ status: 'draft', menu_data: menuData, updated_at: new Date().toISOString() })
+        .eq('id', existingRow.id)
+      saveError = error
+    } else {
+      const { error } = await dbClient
+        .from('weekly_menus')
+        .insert({
+          year, month, diet_type: 'CK', branch_id: null, week_num: null,
+          status: 'draft', menu_data: menuData, updated_at: new Date().toISOString(),
+        })
+      saveError = error
+    }
+
+    if (saveError) {
+      console.error('DB save error:', saveError)
       return NextResponse.json({
         ...result,
         success: false,
         errors: [{
           location:   'DB 저장',
-          message:    insertError.message || 'DB 저장 오류',
+          message:    saveError.message || 'DB 저장 오류',
           suggestion: '관리자에게 문의해주세요',
         }],
       })

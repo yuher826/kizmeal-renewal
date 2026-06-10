@@ -22,6 +22,7 @@ interface FormState {
   branch_full_name: string
   display_name: string
   short_code: string
+  english_code: string
   group_tag: 'E' | 'P' | 'R' | 'SLP' | 'MB' | '기타' | ''
   contract_status: 'active' | 'inactive'
   contract_start_date: string
@@ -61,6 +62,7 @@ const defaultForm = (): FormState => ({
   branch_full_name: '',
   display_name: '',
   short_code: '',
+  english_code: '',
   group_tag: '',
   contract_status: 'active',
   contract_start_date: '',
@@ -101,6 +103,7 @@ function profileToForm(p: BranchProfile): FormState {
     branch_full_name: p.branch_full_name || '',
     display_name: p.display_name || '',
     short_code: p.short_code || '',
+    english_code: p.english_code || '',
     group_tag: (p.group_tag as FormState['group_tag']) || '',
     contract_status: p.contract_status || 'active',
     contract_start_date: p.contract_start_date || '',
@@ -252,6 +255,7 @@ export default function BranchProfilePage() {
       branch_full_name: form.branch_full_name || null,
       display_name: form.display_name || null,
       short_code: form.short_code || null,
+      english_code: form.english_code || null,
       group_tag: form.group_tag || null,
       contract_status: form.contract_status,
       contract_start_date: form.contract_start_date || null,
@@ -298,7 +302,7 @@ export default function BranchProfilePage() {
     if (error) {
       flash('저장 실패: ' + error.message, false)
     } else {
-      flash('저장되었습니다!')
+      flash('원 프로파일이 저장되었습니다 ✅')
     }
     setSaving(false)
   }
@@ -347,23 +351,30 @@ export default function BranchProfilePage() {
 
       {/* 헤더 */}
       <header className="bg-white border-b border-gray-100 px-4 sm:px-6 h-16 flex items-center sticky top-0 z-10">
-        <div className="max-w-2xl mx-auto w-full">
-          <div className="flex items-center gap-1 text-xs text-gray-400 mb-0.5">
-            <Link href="/board/admin" className="hover:text-[#2D6A4F] transition-colors">관리자</Link>
-            <span>›</span>
-            <Link href="/board/admin/branches" className="hover:text-[#2D6A4F] transition-colors">원 관리</Link>
-            <span>›</span>
-            <span className="text-gray-500">{branchName}</span>
-            <span>›</span>
-            <span className="text-[#2D6A4F] font-medium">프로파일 설정</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <h1 className="font-bold text-[#1C2B1E] text-sm">{branchName || '원 프로파일 설정'}</h1>
-            {form.contract_status === 'active' ? (
-              <span className="text-xs bg-green-100 text-green-700 font-semibold px-2 py-0.5 rounded-full">활성</span>
-            ) : (
-              <span className="text-xs bg-gray-100 text-gray-500 font-semibold px-2 py-0.5 rounded-full">비활성</span>
-            )}
+        <div className="max-w-2xl mx-auto w-full flex items-center gap-3">
+          <Link
+            href="/board/admin/diet-automation"
+            className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-xl bg-gray-50 hover:bg-[#E8F5E9] text-gray-500 hover:text-[#2D6A4F] transition-colors"
+            aria-label="뒤로가기"
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M10 12L6 8l4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </Link>
+          <div className="min-w-0">
+            <div className="flex items-center gap-1 text-xs text-gray-400 mb-0.5">
+              <Link href="/board/admin/diet-automation" className="hover:text-[#2D6A4F] transition-colors">식단표 자동화</Link>
+              <span>›</span>
+              <span className="text-[#2D6A4F] font-medium">원 프로파일 설정</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <h1 className="font-bold text-[#1C2B1E] text-sm truncate">{branchName || '원 프로파일 설정'}</h1>
+              {form.contract_status === 'active' ? (
+                <span className="text-xs bg-green-100 text-green-700 font-semibold px-2 py-0.5 rounded-full flex-shrink-0">활성</span>
+              ) : (
+                <span className="text-xs bg-gray-100 text-gray-500 font-semibold px-2 py-0.5 rounded-full flex-shrink-0">비활성</span>
+              )}
+            </div>
           </div>
         </div>
       </header>
@@ -412,6 +423,20 @@ export default function BranchProfilePage() {
               value={form.short_code}
               onChange={e => set('short_code', e.target.value)}
               placeholder="예: 목동E"
+              className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#2D6A4F]"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1.5">
+              영문 코드
+              <span className="ml-1 text-gray-400 font-normal">(영문 파일명/디렉토리 식별자)</span>
+            </label>
+            <input
+              type="text"
+              value={form.english_code}
+              onChange={e => set('english_code', e.target.value)}
+              placeholder="예: Mokdong_POLY"
               className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#2D6A4F]"
             />
           </div>
