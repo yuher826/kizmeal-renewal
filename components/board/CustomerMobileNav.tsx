@@ -31,6 +31,9 @@ export default function CustomerMobileNav() {
   // 라우트 변경 시 드로어 닫기
   useEffect(() => { setOpen(false) }, [pathname])
 
+  // 문의 상세 페이지에서는 하단 탭바 숨김 (자체 입력창과 충돌)
+  const isInquiryDetail = pathname.startsWith('/board/inquiries/') && !pathname.endsWith('/new')
+
   // 드로어 열릴 때 body 스크롤 잠금
   useEffect(() => {
     document.body.style.overflow = open ? 'hidden' : ''
@@ -157,6 +160,28 @@ export default function CustomerMobileNav() {
           </button>
         </div>
       </div>
+
+      {/* ── 하단 탭바 (모바일 전용) ──────────────────────────────── */}
+      {!isInquiryDetail && (
+        <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-30 bg-white border-t border-gray-100 flex">
+          {NAV.map(item => {
+            const isItemActive = pathname === item.href ||
+              (item.href !== '/board/dashboard' && pathname.startsWith(item.href))
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`flex-1 flex flex-col items-center py-2 text-[10px] gap-0.5 transition-colors ${
+                  isItemActive ? 'text-[#2D6A4F] font-bold' : 'text-gray-400'
+                }`}
+              >
+                <span className="text-lg leading-none">{item.icon}</span>
+                <span>{item.label}</span>
+              </Link>
+            )
+          })}
+        </nav>
+      )}
     </>
   )
 }

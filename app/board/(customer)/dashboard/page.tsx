@@ -12,6 +12,7 @@ export default function CustomerDashboardPage() {
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [slaRules, setSlaRules] = useState<Record<string, SlaRule>>({})
   const [loading, setLoading] = useState(true)
+  const [hasDietThisMonth, setHasDietThisMonth] = useState<boolean | null>(null)
 
   useEffect(() => {
     const supabase = createClient()
@@ -73,6 +74,19 @@ export default function CustomerDashboardPage() {
         .limit(10)
 
       if (notifs) setNotifications(notifs as Notification[])
+
+      // 이번달 식단표 확인
+      const nowYear  = new Date().getFullYear()
+      const nowMonth = new Date().getMonth() + 1
+      const { data: dietCheck } = await supabase
+        .from('weekly_menus')
+        .select('id')
+        .eq('branch_id', branchId)
+        .in('status', ['generated', 'review_requested', 'approved', 'deployed'])
+        .eq('year', nowYear)
+        .eq('month', nowMonth)
+        .limit(1)
+      setHasDietThisMonth((dietCheck?.length ?? 0) > 0)
 
       setLoading(false)
     }
@@ -201,31 +215,33 @@ export default function CustomerDashboardPage() {
             )}
           </div>
         </div>
+        {/* 이번달 식단표 */}
+        <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+            <h2 className="font-bold text-[#1C2B1E]">이번달 식단표</h2>
+            <Link href="/board/customer/diet" className="text-xs text-[#2D6A4F] font-medium hover:underline">
+              전체 보기
+            </Link>
+          </div>
+          <div className="p-4">
+            {hasDietThisMonth === null ? (
+              <div className="h-10 bg-gray-50 rounded-xl animate-pulse" />
+            ) : hasDietThisMonth ? (
+              <Link
+                href="/board/customer/diet"
+                className="flex items-center justify-center gap-2 w-full bg-[#2D6A4F] hover:bg-[#1B4332] text-white font-semibold py-3 rounded-xl transition-colors text-sm"
+              >
+                <span>📄</span>
+                <span>이번달 식단표 확인</span>
+              </Link>
+            ) : (
+              <p className="text-gray-400 text-sm text-center py-2">이번달 식단표 준비 중입니다</p>
+            )}
+          </div>
+        </div>
       </div>
 
-      {/* 모바일 하단 네비게이션 */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 flex sm:hidden z-20">
-        {[
-          { href: '/board/dashboard', label: '홈', icon: '🏠' },
-          { href: '/board/inquiries', label: '문의', icon: '💬' },
-          { href: '/board/inquiries/new', label: '새 문의', icon: '✏️', highlight: true },
-          { href: '/board/settings', label: '설정', icon: '⚙️' },
-        ].map(item => (
-          <Link
-            key={item.href}
-            href={item.href}
-            className={`flex-1 flex flex-col items-center py-3 text-xs gap-1 ${
-              item.highlight
-                ? 'text-[#F97316] font-bold'
-                : 'text-gray-500 hover:text-[#2D6A4F]'
-            } transition-colors`}
-          >
-            <span>{item.icon}</span>
-            <span>{item.label}</span>
-          </Link>
-        ))}
-      </nav>
-      <div className="h-16 sm:hidden" />
+      <div className="h-14 sm:hidden" />
     </div>
   )
 }

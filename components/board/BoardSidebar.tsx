@@ -10,10 +10,10 @@ type MenuItem = { icon: string; label: string; href: string }
 
 const CUSTOMER_MENU: MenuItem[] = [
   { icon: '🏠', label: '홈', href: '/board/dashboard' },
-  { icon: '💬', label: '1:1 문의', href: '/board/customer/inquiries' },
+  { icon: '💬', label: '1:1 문의', href: '/board/inquiries' },
   { icon: '📋', label: '식단표', href: '/board/customer/diet' },
   { icon: '📢', label: '공지사항', href: '/board/customer/notices' },
-  { icon: '👤', label: '마이페이지', href: '/board/customer/profile' },
+  { icon: '👤', label: '마이페이지', href: '/board/settings' },
 ]
 
 type Role = 'admin' | 'branch' | null
