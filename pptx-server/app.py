@@ -93,25 +93,28 @@ def generate():
 
         menu_data, branches, date_map = load_excel(excel_path)
 
+        _BATCH = 5
         raw_results = []
-        for cfg in branches:
-            branch_full_name = cfg['name']
-            out_pptx = os.path.join(output_dir, f'{branch_full_name}_{year}{month:02d}.pptx')
-            try:
-                gen_pptx(cfg, menu_data, TEMPLATE_PATH, out_pptx, date_map=date_map)
-                raw_results.append({
-                    'branch_full_name': branch_full_name,
-                    'pptx_path':   out_pptx,
-                    'status':      'success',
-                    'error_msg':   '',
-                })
-            except Exception as exc:
-                raw_results.append({
-                    'branch_full_name': branch_full_name,
-                    'pptx_path':   None,
-                    'status':      'error',
-                    'error_msg':   str(exc),
-                })
+        for batch_start in range(0, len(branches), _BATCH):
+            for cfg in branches[batch_start:batch_start + _BATCH]:
+                branch_full_name = cfg['name']
+                out_pptx = os.path.join(output_dir, f'{branch_full_name}_{year}{month:02d}.pptx')
+                try:
+                    gen_pptx(cfg, menu_data, TEMPLATE_PATH, out_pptx, date_map=date_map)
+                    raw_results.append({
+                        'branch_full_name': branch_full_name,
+                        'pptx_path':   out_pptx,
+                        'status':      'success',
+                        'error_msg':   '',
+                    })
+                except Exception as exc:
+                    raw_results.append({
+                        'branch_full_name': branch_full_name,
+                        'pptx_path':   None,
+                        'status':      'error',
+                        'error_msg':   str(exc),
+                    })
+            gc.collect()
 
         # Supabase Storage 업로드
         import supabase_uploader
