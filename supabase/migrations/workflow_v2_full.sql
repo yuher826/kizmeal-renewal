@@ -59,15 +59,15 @@ WHERE diet_type = 'ck' OR diet_type IS NULL;
 
 -- ⑥ [중요] 기존 review_request → generation_complete 변환 (Migration 안전)
 UPDATE diet_review_items
-SET status = 'generation_complete'
-WHERE status = 'review_request';
+SET review_status = 'generation_complete'
+WHERE review_status = 'review_request';
 
 -- diet_review_items status constraint 재정의
 ALTER TABLE diet_review_items
   DROP CONSTRAINT IF EXISTS diet_review_items_status_check;
 ALTER TABLE diet_review_items
   ADD CONSTRAINT diet_review_items_status_check
-  CHECK (status IN (
+  CHECK (review_status IN (
     'generation_complete',
     'correction_request',
     'resubmitted',
