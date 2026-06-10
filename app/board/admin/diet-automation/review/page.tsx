@@ -21,7 +21,7 @@ type ReviewItem = {
   branch_name:     string
   pptx_url:        string | null
   jpg_url:         string | null
-  status:          'generation_complete' | 'correction_request' | 'resubmitted' | 'approved' | 'deployed'
+  review_status:   'generation_complete' | 'correction_request' | 'resubmitted' | 'approved' | 'deployed'
   memo:            string | null
   memo_category:   string | null
   correction_count: number
@@ -245,13 +245,13 @@ function ManagerView({
   }
 
   const filtered = items.filter(it => {
-    if (tab !== 'all' && it.status !== tab) return false
+    if (tab !== 'all' && it.review_status !== tab) return false
     if (search && !it.branch_name.includes(search)) return false
     return true
   })
 
   const selectableIds = filtered
-    .filter(it => ['generation_complete', 'resubmitted'].includes(it.status))
+    .filter(it => ['generation_complete', 'resubmitted'].includes(it.review_status))
     .map(it => it.id)
   const allSelected  = selectableIds.length > 0 && selectableIds.every(id => selectedIds.has(id))
   const someSelected = selectedIds.size > 0
@@ -394,18 +394,18 @@ function ManagerView({
               {filtered.map((item, idx) => (
                 <>
                   <tr key={item.id}
-                    className={`border-b border-gray-50 hover:bg-green-50/20 transition-colors ${idx % 2 === 1 ? 'bg-gray-50/40' : ''} ${item.status === 'resubmitted' ? 'bg-blue-50/20' : ''}`}>
+                    className={`border-b border-gray-50 hover:bg-green-50/20 transition-colors ${idx % 2 === 1 ? 'bg-gray-50/40' : ''} ${item.review_status === 'resubmitted' ? 'bg-blue-50/20' : ''}`}>
                     <td className="px-3 py-3 text-center">
                       <input type="checkbox"
                         checked={selectedIds.has(item.id)}
                         onChange={() => toggleSelect(item.id)}
-                        disabled={!['generation_complete', 'resubmitted'].includes(item.status)}
+                        disabled={!['generation_complete', 'resubmitted'].includes(item.review_status)}
                         className="rounded disabled:opacity-30" />
                     </td>
                     <td className="text-center px-3 py-3 text-gray-400 text-xs">{idx + 1}</td>
                     <td className="px-3 py-3 font-medium text-[#1C2B1E]">
                       {item.branch_name}
-                      {item.status === 'resubmitted' && (
+                      {item.review_status === 'resubmitted' && (
                         <span className="ml-2 text-xs text-blue-600 font-semibold">재검토 필요</span>
                       )}
                     </td>
@@ -418,7 +418,7 @@ function ManagerView({
                       ) : <span className="text-gray-300 text-xs">-</span>}
                     </td>
                     <td className="text-center px-3 py-3">
-                      <StatusBadge status={item.status} />
+                      <StatusBadge status={item.review_status} />
                     </td>
                     <td className="text-center px-3 py-3">
                       {item.correction_count === 0 ? (
@@ -432,7 +432,7 @@ function ManagerView({
                       )}
                     </td>
                     <td className="text-center px-3 py-3">
-                      {['generation_complete', 'resubmitted'].includes(item.status) && (
+                      {['generation_complete', 'resubmitted'].includes(item.review_status) && (
                         <div className="flex gap-1.5 justify-center flex-wrap">
                           <button type="button" onClick={() => handleApprove([item.id])} disabled={submitting}
                             className="px-3 py-1.5 rounded-lg bg-[#2E7D32] text-white text-xs font-semibold hover:bg-[#1B5E20] disabled:opacity-40">
@@ -445,13 +445,13 @@ function ManagerView({
                           </button>
                         </div>
                       )}
-                      {item.status === 'correction_request' && (
+                      {item.review_status === 'correction_request' && (
                         <span className="text-orange-600 text-xs font-medium">수정요청됨</span>
                       )}
-                      {item.status === 'approved' && (
+                      {item.review_status === 'approved' && (
                         <span className="text-green-700 text-xs font-medium">배포대기중</span>
                       )}
-                      {item.status === 'deployed' && (
+                      {item.review_status === 'deployed' && (
                         <div className="text-xs text-teal-700 font-medium">
                           배포완료
                           {item.deployed_at && <div className="text-gray-400 text-[10px]">{formatKST(item.deployed_at)}</div>}
@@ -519,20 +519,20 @@ function ManagerView({
       {filtered.length > 0 && (
         <div className="sm:hidden space-y-3">
           {filtered.map(item => (
-            <div key={item.id} className={`bg-white rounded-2xl border p-4 ${item.status === 'resubmitted' ? 'border-blue-200 bg-blue-50/10' : 'border-gray-100'}`}>
+            <div key={item.id} className={`bg-white rounded-2xl border p-4 ${item.review_status === 'resubmitted' ? 'border-blue-200 bg-blue-50/10' : 'border-gray-100'}`}>
               <div className="flex items-center gap-2 mb-3">
                 <input type="checkbox" checked={selectedIds.has(item.id)} onChange={() => toggleSelect(item.id)}
-                  disabled={!['generation_complete', 'resubmitted'].includes(item.status)}
+                  disabled={!['generation_complete', 'resubmitted'].includes(item.review_status)}
                   className="rounded disabled:opacity-30 flex-shrink-0" />
                 <span className="font-bold text-[#1C2B1E] flex-1 min-w-0 truncate">{item.branch_name}</span>
-                <StatusBadge status={item.status} />
+                <StatusBadge status={item.review_status} />
               </div>
               <div className="flex gap-2 flex-wrap">
                 {item.pptx_url && (
                   <a href={item.pptx_url} target="_blank" rel="noopener noreferrer"
                     className="px-3 py-1.5 rounded-xl bg-[#E3F2FD] text-[#1565C0] text-xs font-bold">PPTX</a>
                 )}
-                {['generation_complete', 'resubmitted'].includes(item.status) && (
+                {['generation_complete', 'resubmitted'].includes(item.review_status) && (
                   <>
                     <button type="button" onClick={() => handleApprove([item.id])} disabled={submitting}
                       className="px-3 py-1.5 rounded-xl bg-[#2E7D32] text-white text-xs font-semibold disabled:opacity-40">✅ 승인</button>
@@ -589,9 +589,9 @@ function NutritionistView({
   const [fileMap,       setFileMap]       = useState<Record<string, File>>({})
   const fileRefs = useRef<Record<string, HTMLInputElement | null>>({})
 
-  const correctionItems = items.filter(i => i.status === 'correction_request')
-  const approvedItems   = items.filter(i => i.status === 'approved')
-  const historyItems    = items.filter(i => i.status === 'deployed')
+  const correctionItems = items.filter(i => i.review_status === 'correction_request')
+  const approvedItems   = items.filter(i => i.review_status === 'approved')
+  const historyItems    = items.filter(i => i.review_status === 'deployed')
 
   const approvedSelectableIds = approvedItems.map(i => i.id)
   const allSelected = approvedSelectableIds.length > 0 && approvedSelectableIds.every(id => selectedIds.has(id))
@@ -691,7 +691,7 @@ function NutritionistView({
               <div key={item.id} className="bg-white rounded-2xl border border-orange-200 p-4 space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="font-bold text-[#1C2B1E]">{item.branch_name}</span>
-                  <StatusBadge status={item.status} />
+                  <StatusBadge status={item.review_status} />
                 </div>
                 {latestCorrection && (
                   <div className="bg-orange-50 rounded-xl p-3 space-y-1">
@@ -778,7 +778,7 @@ function NutritionistView({
                   <div key={item.id} className="bg-white rounded-2xl border border-green-100 p-4 flex items-center gap-3">
                     <input type="checkbox" checked={selectedIds.has(item.id)} onChange={() => toggleSelect(item.id)} className="rounded flex-shrink-0" />
                     <span className="font-medium text-[#1C2B1E] flex-1">{item.branch_name}</span>
-                    <StatusBadge status={item.status} />
+                    <StatusBadge status={item.review_status} />
                     {item.reviewed_at && <span className="text-xs text-gray-400 hidden sm:block">{formatKST(item.reviewed_at)}</span>}
                     <button type="button"
                       onClick={() => openConfirm([item.id])}
@@ -872,7 +872,7 @@ function DirectorView({
     const priority: Record<string, number> = {
       generation_complete: 0, correction_request: 1, resubmitted: 2, approved: 3, deployed: 4,
     }
-    return (priority[a.status] ?? 5) - (priority[b.status] ?? 5)
+    return (priority[a.review_status] ?? 5) - (priority[b.review_status] ?? 5)
   })
 
   const STAT_CARDS = [
@@ -928,7 +928,7 @@ function DirectorView({
                 return (
                   <tr key={item.id} className={`border-b border-gray-50 ${idx % 2 === 1 ? 'bg-gray-50/40' : ''}`}>
                     <td className="px-4 py-3 font-medium text-[#1C2B1E]">{item.branch_name}</td>
-                    <td className="text-center px-3 py-3"><StatusBadge status={item.status} /></td>
+                    <td className="text-center px-3 py-3"><StatusBadge status={item.review_status} /></td>
                     <td className="text-center px-3 py-3 text-xs text-gray-400">
                       {lastUpdate ? formatKST(lastUpdate) : '-'}
                     </td>

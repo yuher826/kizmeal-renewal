@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
   // 기존 diet_review_item 조회 (파일명 및 현재 상태 확인)
   const { data: reviewItem } = await db
     .from('diet_review_items')
-    .select('id, status, pptx_url, memo_history, weekly_menu_id')
+    .select('id, review_status, pptx_url, memo_history, weekly_menu_id')
     .eq('weekly_menu_id', weeklyMenuId)
     .eq('branch_id', branchId)
     .maybeSingle()
@@ -108,7 +108,7 @@ export async function POST(req: NextRequest) {
   const { data: updatedItem, error: updateError } = await db
     .from('diet_review_items')
     .update({
-      status:         'resubmitted',
+      review_status:  'resubmitted',
       pptx_url:       newPptxUrl,
       resubmitted_at: now,
       memo_history:   history,

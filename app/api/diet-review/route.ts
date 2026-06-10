@@ -20,7 +20,7 @@ type ReviewItemRow = {
   branch_name:     string
   pptx_url:        string | null
   jpg_url:         string | null
-  status:          string
+  review_status:   string
   memo:            string | null
   memo_category:   string | null
   correction_count: number
@@ -163,7 +163,7 @@ export async function GET(req: NextRequest) {
         branch_name:    nameMap.get(r.branch_id) ?? r.branch_id,
         pptx_url:       r.pptx_url ?? null,
         jpg_url:        r.jpg_url  ?? null,
-        status:         'generation_complete',
+        review_status:  'generation_complete',
       }))
       await db.from('diet_review_items').insert(toInsert)
     }
@@ -189,11 +189,11 @@ export async function GET(req: NextRequest) {
   // 4. 통계
   const stats = {
     total:               allItems.length,
-    generation_complete: allItems.filter(i => i.status === 'generation_complete').length,
-    correction_request:  allItems.filter(i => i.status === 'correction_request').length,
-    resubmitted:         allItems.filter(i => i.status === 'resubmitted').length,
-    approved:            allItems.filter(i => i.status === 'approved').length,
-    deployed:            allItems.filter(i => i.status === 'deployed').length,
+    generation_complete: allItems.filter(i => i.review_status === 'generation_complete').length,
+    correction_request:  allItems.filter(i => i.review_status === 'correction_request').length,
+    resubmitted:         allItems.filter(i => i.review_status === 'resubmitted').length,
+    approved:            allItems.filter(i => i.review_status === 'approved').length,
+    deployed:            allItems.filter(i => i.review_status === 'deployed').length,
   }
 
   return NextResponse.json({
@@ -256,12 +256,12 @@ export async function POST(req: NextRequest) {
 
     const { data: currentItems } = await db
       .from('diet_review_items')
-      .select('id, status, correction_count, memo_history')
+      .select('id, review_status, correction_count, memo_history')
       .in('id', targetIds)
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const eligibleItems = ((currentItems ?? []) as any[]).filter((i) =>
-      ['generation_complete', 'resubmitted'].includes(i.status)
+      ['generation_complete', 'resubmitted'].includes(i.review_status)
     )
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const skippedIds = targetIds.filter(id => !eligibleItems.find((i: any) => i.id === id))
@@ -276,7 +276,7 @@ export async function POST(req: NextRequest) {
       const { data: u } = await db
         .from('diet_review_items')
         .update({
-          status:          'correction_request',
+          review_status:   'correction_request',
           memo:            memo,
           memo_category:   memo_category ?? null,
           correction_count: (item.correction_count ?? 0) + 1,
@@ -315,12 +315,12 @@ export async function POST(req: NextRequest) {
 
     const { data: currentItems } = await db
       .from('diet_review_items')
-      .select('id, status, memo_history, weekly_menu_id')
+      .select('id, review_status, memo_history, weekly_menu_id')
       .in('id', targetIds)
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const eligibleItems = ((currentItems ?? []) as any[]).filter((i) =>
-      ['generation_complete', 'resubmitted'].includes(i.status)
+      ['generation_complete', 'resubmitted'].includes(i.review_status)
     )
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const skippedIds = targetIds.filter(id => !eligibleItems.find((i: any) => i.id === id))
@@ -333,9 +333,9 @@ export async function POST(req: NextRequest) {
       const { data: u } = await db
         .from('diet_review_items')
         .update({
-          status:      'approved',
-          memo_history: history,
-          reviewed_by: adminRow.id,
+          review_status: 'approved',
+          memo_history:  history,
+          reviewed_by:   adminRow.id,
           reviewed_at: now,
           updated_at:  now,
         })
@@ -367,7 +367,7 @@ export async function POST(req: NextRequest) {
 
     const { data: current } = await db
       .from('diet_review_items')
-      .select('id, status, memo_history')
+      .select('id, review_status, memo_history')
       .eq('id', item_id)
       .maybeSingle() as { data: ReviewItemRow | null }
 
@@ -379,7 +379,7 @@ export async function POST(req: NextRequest) {
     const { data: updated } = await db
       .from('diet_review_items')
       .update({
-        status:         'resubmitted',
+        review_status:  'resubmitted',
         resubmitted_at: now,
         memo_history:   history,
         updated_at:     now,
@@ -410,7 +410,7 @@ export async function POST(req: NextRequest) {
 
     const { data: currentItems } = await db
       .from('diet_review_items')
-      .select('id, status, branch_id, branch_name, memo_history')
+      .select('id, review_status, branch_id, branch_name, memo_history')
       .in('id', targetIds)
 
     const now = new Date().toISOString()
@@ -418,13 +418,13 @@ export async function POST(req: NextRequest) {
     const skipped: string[] = []
 
     for (const item of (currentItems ?? []) as ReviewItemRow[]) {
-      if (item.status === 'deployed') {
+      if (item.review_status === 'deployed') {
         skipped.push(item.branch_name)
         continue
       }
       // CK: approved 상태만 처리
       // (위탁+review_required=false 케이스는 deploy route에서 처리)
-      if (item.status !== 'approved') {
+      if (item.review_status !== 'approved') {
         skipped.push(item.branch_name)
         continue
       }
@@ -433,10 +433,10 @@ export async function POST(req: NextRequest) {
       const { error } = await db
         .from('diet_review_items')
         .update({
-          status:      'deployed',
-          deployed_by: adminRow.id,
-          deployed_at: now,
-          memo_history: history,
+          review_status: 'deployed',
+          deployed_by:   adminRow.id,
+          deployed_at:   now,
+          memo_history:  history,
           updated_at:  now,
         })
         .eq('id', item.id)

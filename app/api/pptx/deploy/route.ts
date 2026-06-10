@@ -21,10 +21,10 @@ type ReviewItemRow = {
   id:           string
   branch_id:    string | null
   branch_name:  string
-  pptx_url:     string | null
-  jpg_url:      string | null
-  status:       string
-  memo_history: unknown[]
+  pptx_url:      string | null
+  jpg_url:       string | null
+  review_status: string
+  memo_history:  unknown[]
 }
 
 function buildDietEmailHtml(
@@ -104,7 +104,7 @@ export async function POST(req: NextRequest) {
   // diet_review_items 조회
   let itemsQuery = db
     .from('diet_review_items')
-    .select('id, branch_id, branch_name, pptx_url, jpg_url, status, memo_history')
+    .select('id, branch_id, branch_name, pptx_url, jpg_url, review_status, memo_history')
     .eq('weekly_menu_id', menuRow.id)
 
   if (branch_ids && branch_ids.length > 0) {
@@ -144,7 +144,7 @@ export async function POST(req: NextRequest) {
       const reviewRequired      = profile?.review_required ?? false
       const canDeployWithoutApproval = !isCk && !reviewRequired
 
-      if (!canDeployWithoutApproval && item.status !== 'approved') {
+      if (!canDeployWithoutApproval && item.review_status !== 'approved') {
         failed.push(item.branch_name)
         return
       }
@@ -188,11 +188,11 @@ export async function POST(req: NextRequest) {
         ]
 
         await db.from('diet_review_items').update({
-          status:      'deployed',
-          deployed_by: adminRow!.id,
-          deployed_at: now,
-          memo_history: history,
-          updated_at:  now,
+          review_status: 'deployed',
+          deployed_by:   adminRow!.id,
+          deployed_at:   now,
+          memo_history:  history,
+          updated_at:    now,
         }).eq('id', item.id)
 
         success.push(item.branch_name)
