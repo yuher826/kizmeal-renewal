@@ -110,7 +110,8 @@ class SupabaseREST:
 
     def upload_file(self, bucket, path, data, mime):
         """Storage 파일 업로드 (upsert)"""
-        url = f'{self._url}/storage/v1/object/{bucket}/{urllib.parse.quote(path, safe="/")}'
+        encoded_path = '/'.join(urllib.parse.quote(seg, safe='') for seg in path.split('/'))
+        url = f'{self._url}/storage/v1/object/{bucket}/{encoded_path}'
         req = urllib.request.Request(url, data=data, headers={
             **self._auth_headers(),
             'Content-Type': mime,
@@ -124,7 +125,8 @@ class SupabaseREST:
             raise RuntimeError(f'Storage upload HTTP {exc.code}: {detail}') from exc
 
     def get_public_url(self, bucket, path):
-        return f'{self._url}/storage/v1/object/public/{bucket}/{urllib.parse.quote(path, safe="/")}'
+        encoded_path = '/'.join(urllib.parse.quote(seg, safe='') for seg in path.split('/'))
+        return f'{self._url}/storage/v1/object/public/{bucket}/{encoded_path}'
 
 
 # ════════════════════════════════════════════════════════════════════
