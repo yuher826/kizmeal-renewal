@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
@@ -90,6 +90,14 @@ type GenerationResults = {
   results:      GenResult[]
 }
 
+type ActionsProgress = {
+  total:       number
+  generated:   number
+  error:       number
+  generating:  number
+  is_complete: boolean
+}
+
 function formatGeneratedAt(iso: string) {
   try {
     const d = new Date(iso)
@@ -120,6 +128,9 @@ export default function DietAutomationPage() {
   const [genStatus,  setGenStatus]  = useState<PptxGenStatus>('idle')
   const [genError,   setGenError]   = useState<string | null>(null)
   const [genResults, setGenResults] = useState<GenerationResults | null>(null)
+
+  const [actionsProgress, setActionsProgress] = useState<ActionsProgress | null>(null)
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const [downloadingZip, setDownloadingZip] = useState(false)
   const [deploying,      setDeploying]      = useState(false)
@@ -169,44 +180,70 @@ export default function DietAutomationPage() {
 
   useEffect(() => { fetchMenuRow() }, [fetchMenuRow])
 
-  // ── PPTX 생성 ─────────────────────────────────────────────────
+  // ── PPTX 생성 (GitHub Actions 트리거) ────────────────────────
   async function handleGenerate() {
-    setGenStatus('waking')
+    setGenStatus('generating')
     setGenError(null)
-
-    // 70초 후 '생성 중' 상태로 전환 (서버 wake-up 완료 예상)
-    const wakeTimer = setTimeout(() => setGenStatus('generating'), 70_000)
+    setActionsProgress(null)
 
     try {
-      const res = await fetch('/api/pptx/generate', {
+      const res = await fetch('/api/pptx/trigger', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({
-          weekly_menu_id: menuRowId,
-        }),
+        body:    JSON.stringify({ year: pptxYear, month: pptxMonth }),
       })
-      clearTimeout(wakeTimer)
       const data = await res.json()
       if (!res.ok) {
-        setGenError(data.error || '생성 오류가 발생했습니다.')
+        setGenError(data.error || 'GitHub Actions 트리거 오류')
         setGenStatus('error')
-      } else {
-        setGenResults({
-          generated_at: new Date().toISOString(),
-          succeeded:    data.succeeded,
-          failed:       data.failed,
-          results:      data.results ?? [],
-        })
-        setGenStatus('done')
-        showToast(`${data.succeeded}개원 생성 완료! ✅`)
-        await fetchMenuRow()
       }
+      // 성공 시 폴링은 아래 useEffect가 genStatus='generating' 감지해서 자동 시작
     } catch (err) {
-      clearTimeout(wakeTimer)
       setGenError(String(err))
       setGenStatus('error')
     }
   }
+
+  // ── Actions 진행 폴링 (genStatus='generating' 동안 3초마다) ──
+  useEffect(() => {
+    if (genStatus !== 'generating') {
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current)
+        pollingRef.current = null
+      }
+      return
+    }
+
+    const poll = async () => {
+      try {
+        const res = await fetch(
+          `/api/pptx/actions-status?year=${pptxYear}&month=${pptxMonth}`,
+        )
+        if (!res.ok) return
+        const data: ActionsProgress = await res.json()
+        setActionsProgress(data)
+        if (data.is_complete) {
+          setGenStatus('done')
+          await fetchMenuRow()
+          showToast(
+            `생성 완료! ${data.generated}개 성공${data.error > 0 ? `, ${data.error}개 실패` : ''} ✅`,
+          )
+        }
+      } catch {
+        // 폴링 오류는 무시하고 계속
+      }
+    }
+
+    poll()
+    pollingRef.current = setInterval(poll, 3000)
+
+    return () => {
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current)
+        pollingRef.current = null
+      }
+    }
+  }, [genStatus, pptxYear, pptxMonth, fetchMenuRow, showToast])
 
   // ── 재시도 ────────────────────────────────────────────────────
   async function handleRetry(_branchId: string | null, branchName: string) {
@@ -349,7 +386,8 @@ export default function DietAutomationPage() {
 
   const isGenerating = genStatus === 'waking' || genStatus === 'generating'
   const canActivateBottom =
-    ['generated','review_requested','approved','deployed'].includes(menuStatus ?? '') && !!genResults
+    ['generated','review_requested','approved','deployed'].includes(menuStatus ?? '') &&
+    (!!genResults || !!actionsProgress?.is_complete)
 
   return (
     <main className="min-h-screen bg-[#F6FAF6] px-4 sm:px-6 py-6 sm:py-8">
@@ -586,32 +624,71 @@ export default function DietAutomationPage() {
                 <div className="bg-orange-50 rounded-2xl border border-orange-200 p-4 flex items-center gap-3">
                   <span className="text-xl animate-spin inline-block">🟠</span>
                   <div>
-                    <p className="text-sm font-bold text-orange-700">Render 서버 준비 중...</p>
-                    <p className="text-xs text-orange-600 mt-0.5">최대 60초 소요됩니다</p>
+                    <p className="text-sm font-bold text-orange-700">GitHub Actions 실행 준비 중...</p>
+                    <p className="text-xs text-orange-600 mt-0.5">잠시 후 자동으로 진행됩니다</p>
                   </div>
                 </div>
               )}
 
               {genStatus === 'generating' && (
-                <div className="bg-blue-50 rounded-2xl border border-blue-200 p-4 flex items-center gap-3">
-                  <span className="text-xl animate-spin inline-block">🔵</span>
-                  <div>
-                    <p className="text-sm font-bold text-blue-700">49개원 PPTX 생성 중...</p>
-                    <p className="text-xs text-blue-600 mt-0.5">5~10분 소요됩니다. 페이지를 닫지 마세요.</p>
+                <div className="bg-blue-50 rounded-2xl border border-blue-200 p-4">
+                  <div className="flex items-center gap-3 mb-3">
+                    <span className="text-xl animate-spin inline-block">🔵</span>
+                    <div>
+                      <p className="text-sm font-bold text-blue-700">
+                        GitHub Actions PPTX 생성 중
+                        {actionsProgress
+                          ? ` — ${actionsProgress.generated + actionsProgress.error} / ${actionsProgress.total}`
+                          : '...'}
+                      </p>
+                      <p className="text-xs text-blue-600 mt-0.5">
+                        5~10분 소요됩니다. 페이지를 새로고침해도 현황이 복원됩니다.
+                      </p>
+                    </div>
                   </div>
+                  {actionsProgress && (
+                    <div>
+                      <div className="flex justify-between text-[11px] text-blue-600 mb-1">
+                        <span>진행: {actionsProgress.generated}개 완료{actionsProgress.error > 0 ? `, ${actionsProgress.error}개 실패` : ''}</span>
+                        <span>{actionsProgress.total}개 전체</span>
+                      </div>
+                      <div className="h-2 bg-blue-100 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-blue-500 rounded-full transition-all duration-500"
+                          style={{ width: `${Math.round(((actionsProgress.generated + actionsProgress.error) / actionsProgress.total) * 100)}%` }}
+                        />
+                      </div>
+                      {actionsProgress.error > 0 && (
+                        <p className="text-[11px] text-red-500 mt-1">{actionsProgress.error}개 원 오류</p>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 
-              {genStatus === 'done' && genResults && (
+              {genStatus === 'done' && (
                 <div className="bg-green-50 rounded-2xl border border-green-200 p-4 flex items-center gap-3">
                   <span className="text-xl">🟢</span>
                   <div>
-                    <p className="text-sm font-bold text-green-700">
-                      완료! 성공 {genResults.succeeded}개 / 실패 {genResults.failed}개
-                    </p>
-                    <p className="text-xs text-green-600 mt-0.5">
-                      {formatGeneratedAt(genResults.generated_at)} 생성
-                    </p>
+                    {genResults ? (
+                      <>
+                        <p className="text-sm font-bold text-green-700">
+                          완료! 성공 {genResults.succeeded}개 / 실패 {genResults.failed}개
+                        </p>
+                        <p className="text-xs text-green-600 mt-0.5">
+                          {formatGeneratedAt(genResults.generated_at)} 생성
+                        </p>
+                      </>
+                    ) : actionsProgress ? (
+                      <>
+                        <p className="text-sm font-bold text-green-700">
+                          {actionsProgress.generated}개 완료!{actionsProgress.error > 0 ? ` (${actionsProgress.error}개 오류)` : ''}
+                        </p>
+                        <p className="text-xs text-green-600 mt-0.5">GitHub Actions 생성 완료</p>
+                      </>
+                    ) : (
+                      <p className="text-sm font-bold text-green-700">생성 완료</p>
+                    )}
                   </div>
                 </div>
               )}
