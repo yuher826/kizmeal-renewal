@@ -93,12 +93,16 @@ def generate():
 
         menu_data, branches, date_map = load_excel(excel_path)
 
+        branch_id_map  = _get_branch_id_map()
+        uuid8_to_short = {v[:8]: k for k, v in branch_id_map.items()}
+
         _BATCH = 5
         raw_results = []
         for batch_start in range(0, len(branches), _BATCH):
             for cfg in branches[batch_start:batch_start + _BATCH]:
                 branch_full_name = cfg['name']
-                out_pptx = os.path.join(output_dir, f'{branch_full_name}_{year}{month:02d}.pptx')
+                branch_uuid8 = (branch_id_map.get(branch_full_name) or '')[:8] or branch_full_name
+                out_pptx = os.path.join(output_dir, f'{branch_uuid8}_{year}{month:02d}.pptx')
                 try:
                     gen_pptx(cfg, menu_data, TEMPLATE_PATH, out_pptx, date_map=date_map)
                     raw_results.append({
@@ -118,10 +122,10 @@ def generate():
 
         # Supabase Storage 업로드
         import supabase_uploader
-        upload_map = supabase_uploader.upload_all(output_dir, year, month, week_num)
+        upload_map_raw = supabase_uploader.upload_all(output_dir, year, month, week_num)
+        upload_map     = {uuid8_to_short.get(k, k): v for k, v in upload_map_raw.items()}
 
         # DB 업데이트
-        branch_id_map = _get_branch_id_map()
         _update_db(upload_map, branch_id_map, year, month, week_num)
 
         # 응답 조합
@@ -407,7 +411,7 @@ def _get_branch_cfgs_from_db():
         client = get_supabase_client()
         profiles = client.select(
             'branch_profiles',
-            'short_code,display_name,distribution_email,distribution_emails,'
+            'id,short_code,display_name,distribution_email,distribution_emails,'
             'slide_count,snack_morning,snack_afternoon,snack_childcare,'
             'needs_english,has_yonder,has_dessert_fruit,file_format,'
             'snack_label,morning_snack_fixed,morning_snack_fixed_menu',
@@ -458,6 +462,7 @@ def _get_branch_cfgs_from_db():
             'file_fmt':     (p.get('file_format') or 'PDF').upper(),
             'use_pm_as_am': (not p.get('snack_morning') and bool(p.get('snack_afternoon'))),
             'fixed_am':     fixed_am,
+            'branch_uuid':  p.get('id', ''),
         })
 
     return cfgs
@@ -519,6 +524,8 @@ def generate_from_json():
         if not branch_cfgs:
             return jsonify({'error': 'branch_profiles에서 활성 원 설정을 불러오지 못했습니다.'}), 500
 
+        uuid8_to_short = {cfg['branch_uuid'][:8]: cfg['name'] for cfg in branch_cfgs}
+
         from pptx_generator import generate as gen_pptx
 
         _BATCH = 5
@@ -526,7 +533,8 @@ def generate_from_json():
         for batch_start in range(0, len(branch_cfgs), _BATCH):
             for cfg in branch_cfgs[batch_start:batch_start + _BATCH]:
                 branch_full_name = cfg['name']
-                out_pptx = os.path.join(output_dir, f'{branch_full_name}_{year}{month:02d}.pptx')
+                branch_uuid8 = cfg['branch_uuid'][:8]
+                out_pptx = os.path.join(output_dir, f'{branch_uuid8}_{year}{month:02d}.pptx')
                 try:
                     gen_pptx(cfg, adapted_menu, TEMPLATE_PATH, out_pptx, date_map=date_map)
                     raw_results.append({
@@ -546,7 +554,8 @@ def generate_from_json():
 
         # Supabase Storage 업로드
         import supabase_uploader
-        upload_map = supabase_uploader.upload_all(output_dir, year, month, week_num)
+        upload_map_raw = supabase_uploader.upload_all(output_dir, year, month, week_num)
+        upload_map     = {uuid8_to_short.get(k, k): v for k, v in upload_map_raw.items()}
 
         # DB 업데이트
         branch_id_map = _get_branch_id_map()
