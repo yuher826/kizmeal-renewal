@@ -393,6 +393,18 @@ function DietAutomationContent() {
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n))
   }
 
+  async function handleResetDemo() {
+    if (!confirm('테스트 데이터를 초기화하시겠습니까?\n(이번 달 생성된 식단표 데이터가 삭제됩니다)')) return
+    const res = await fetch('/api/pptx/reset-demo', { method: 'POST' })
+    const data = await res.json()
+    if (data.success) {
+      setToast('🔧 초기화 완료. 페이지를 새로고침합니다.')
+      setTimeout(() => window.location.reload(), 1500)
+    } else {
+      setToast('초기화 실패: ' + (data.error || '알 수 없는 오류'))
+    }
+  }
+
   // ── 결과 행 헬퍼 ──────────────────────────────────────────────────
   function getFileBadge(branchName: string) {
     if (MANUAL_PROCESS_CODES.has(branchName)) return { label: '수동처리', color: '#E65100', bg: '#FFF3E0' }
@@ -803,6 +815,14 @@ function DietAutomationContent() {
                       {actionsProgress.error > 0 && (
                         <p className="text-[11px] text-red-500 mt-1">{actionsProgress.error}개 원 오류</p>
                       )}
+                      <a
+                        href="https://github.com/yuher826/kizmeal-renewal/actions"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-blue-500 hover:underline mt-2 inline-block"
+                      >
+                        🔗 GitHub Actions에서 실행 중
+                      </a>
                     </div>
                   )}
                 </div>
@@ -863,17 +883,27 @@ function DietAutomationContent() {
                   </button>
                 </div>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
+                  <table className="w-full text-sm" style={{ tableLayout: 'fixed' }}>
+                    <colgroup>
+                      <col style={{ width: 40 }} />
+                      <col style={{ width: 160 }} />
+                      <col style={{ width: 80 }} />
+                      <col style={{ width: 90 }} />
+                      <col style={{ width: 70 }} />
+                      <col style={{ width: 170 }} />
+                      <col style={{ width: 130 }} />
+                      <col style={{ width: 80 }} />
+                    </colgroup>
                     <thead>
                       <tr className="bg-gray-50 border-b border-gray-100">
-                        <th className="text-center px-3 py-3 font-semibold text-gray-400 w-8">#</th>
-                        <th className="text-left   px-3 py-3 font-semibold text-gray-400">원명</th>
-                        <th className="text-center px-3 py-3 font-semibold text-gray-400">구분</th>
-                        <th className="text-center px-3 py-3 font-semibold text-gray-400">파일형식</th>
-                        <th className="text-center px-3 py-3 font-semibold text-gray-400">상태</th>
-                        <th className="text-left   px-3 py-3 font-semibold text-gray-400">배포이메일</th>
-                        <th className="text-center px-3 py-3 font-semibold text-gray-400">다운로드</th>
-                        <th className="text-center px-3 py-3 font-semibold text-gray-400">개별메일</th>
+                        <th className="text-center px-3 py-3 font-semibold text-gray-400 text-xs">#</th>
+                        <th className="text-left   px-3 py-3 font-semibold text-gray-400 text-xs">원명</th>
+                        <th className="text-center px-3 py-3 font-semibold text-gray-400 text-xs">구분</th>
+                        <th className="text-center px-3 py-3 font-semibold text-gray-400 text-xs">파일형식</th>
+                        <th className="text-center px-3 py-3 font-semibold text-gray-400 text-xs">상태</th>
+                        <th className="text-left   px-3 py-3 font-semibold text-gray-400 text-xs">배포이메일</th>
+                        <th className="text-center px-3 py-3 font-semibold text-gray-400 text-xs">다운로드</th>
+                        <th className="text-center px-3 py-3 font-semibold text-gray-400 text-xs">개별메일</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -891,20 +921,34 @@ function DietAutomationContent() {
                         return (
                           <tr
                             key={`${row.branchName}-${idx}`}
-                            className={`border-b border-gray-50 transition-colors hover:bg-[#E8F5E9] ${
+                            className={`border-b border-gray-50 transition-colors hover:bg-[#DCF0E8] ${
                               isError ? 'bg-[#FEF2F2]'
                               : isProc ? 'bg-[#EFF6FF]'
-                              : idx % 2 === 0 ? 'bg-white' : 'bg-[#F8FBF9]'
+                              : idx % 2 === 0 ? 'bg-white' : 'bg-[#F0F7F4]'
                             }`}
                           >
                             {/* 번호 */}
-                            <td className="text-center px-3 py-3 text-gray-400">{idx + 1}</td>
+                            <td className="text-center px-3 py-[14px] text-xs text-gray-400">{idx + 1}</td>
 
-                            {/* 원명 */}
-                            <td className="px-3 py-3 font-medium text-[#1C2B1E] whitespace-nowrap">{row.branchName}</td>
+                            {/* 원명 + 부가정보 */}
+                            <td className="px-3 py-[14px]">
+                              <p className="text-[15px] font-medium text-[#1C2B1E] truncate">{row.branchName}</p>
+                              {row.deployEmail ? (
+                                <p className="text-xs text-gray-400 truncate mt-0.5">{row.deployEmail}</p>
+                              ) : row.branchId ? (
+                                <Link
+                                  href={`/board/admin/diet/branch-profile/${row.branchId}`}
+                                  className="text-xs text-red-400 hover:underline mt-0.5 inline-block"
+                                >
+                                  이메일 미설정 →
+                                </Link>
+                              ) : (
+                                <p className="text-xs text-red-400 mt-0.5">이메일 미설정</p>
+                              )}
+                            </td>
 
                             {/* 구분 */}
-                            <td className="text-center px-3 py-3">
+                            <td className="text-center px-3 py-[14px]">
                               <span
                                 className="inline-block rounded-full px-2 py-0.5 text-xs font-medium"
                                 style={isSep
@@ -916,7 +960,7 @@ function DietAutomationContent() {
                             </td>
 
                             {/* 파일형식 */}
-                            <td className="text-center px-3 py-3">
+                            <td className="text-center px-3 py-[14px]">
                               <span
                                 className="inline-block rounded-full px-2 py-0.5 text-xs font-medium"
                                 style={{ color: badge.color, background: badge.bg }}
@@ -926,13 +970,13 @@ function DietAutomationContent() {
                             </td>
 
                             {/* 상태 */}
-                            <td className="text-center px-3 py-3">
+                            <td className="text-center px-3 py-[14px]">
                               {isSuccess ? (
-                                <span className="text-green-600 font-medium">✅ 성공</span>
+                                <span className="text-green-600 font-medium text-xs">✅ 성공</span>
                               ) : isError ? (
-                                <span className="text-red-600 cursor-help" title={row.errorMsg}>❌ 실패</span>
+                                <span className="text-red-600 text-xs cursor-help" title={row.errorMsg}>❌ 실패</span>
                               ) : (
-                                <span className="inline-flex items-center gap-1 text-blue-600">
+                                <span className="inline-flex items-center gap-1 text-blue-600 text-xs">
                                   <span className="w-3 h-3 border border-blue-400 border-t-transparent rounded-full animate-spin" />
                                   생성중
                                 </span>
@@ -940,23 +984,24 @@ function DietAutomationContent() {
                             </td>
 
                             {/* 배포이메일 */}
-                            <td className="px-3 py-3">
+                            <td className="px-3 py-[14px]">
                               {row.deployEmail ? (
-                                <span className="text-xs text-gray-500 truncate max-w-[120px] block">
-                                  {row.deployEmail}
-                                </span>
-                              ) : (
-                                <span
-                                  className="inline-flex items-center gap-1 text-xs text-red-500 cursor-help"
+                                <span className="text-xs text-gray-500 truncate block">{row.deployEmail}</span>
+                              ) : row.branchId ? (
+                                <Link
+                                  href={`/board/admin/diet/branch-profile/${row.branchId}`}
+                                  className="inline-flex items-center gap-1 text-xs text-red-500 hover:underline"
                                   title="원 프로파일에서 이메일을 설정해주세요"
                                 >
                                   ⚠ 미설정
-                                </span>
+                                </Link>
+                              ) : (
+                                <span className="text-xs text-red-400">⚠ 미설정</span>
                               )}
                             </td>
 
                             {/* 다운로드 */}
-                            <td className="text-center px-3 py-3">
+                            <td className="text-center px-3 py-[14px]">
                               {isManual ? (
                                 <span className="text-gray-300">—</span>
                               ) : (
@@ -972,9 +1017,7 @@ function DietAutomationContent() {
                                       PPTX
                                     </a>
                                   ) : (
-                                    <span className="px-2 py-1 rounded text-[10px] font-medium text-gray-300 bg-gray-50 cursor-not-allowed">
-                                      PPTX
-                                    </span>
+                                    <span className="px-2 py-1 rounded text-[10px] font-medium text-gray-300 bg-gray-50 cursor-not-allowed">PPTX</span>
                                   )}
                                   {row.pdfUrl ? (
                                     <a
@@ -987,16 +1030,14 @@ function DietAutomationContent() {
                                       PDF
                                     </a>
                                   ) : (
-                                    <span className="px-2 py-1 rounded text-[10px] font-medium text-gray-300 bg-gray-50 cursor-not-allowed">
-                                      PDF
-                                    </span>
+                                    <span className="px-2 py-1 rounded text-[10px] font-medium text-gray-300 bg-gray-50 cursor-not-allowed">PDF</span>
                                   )}
                                 </div>
                               )}
                             </td>
 
                             {/* 개별메일 */}
-                            <td className="text-center px-3 py-3">
+                            <td className="text-center px-3 py-[14px]">
                               {isManual ? (
                                 <span className="text-gray-300">—</span>
                               ) : canSendMail ? (
@@ -1219,6 +1260,17 @@ function DietAutomationContent() {
           )}
         </div>
       )}
+
+      {/* ── 테스트 초기화 ────────────────────────────────────────────── */}
+      <div className="flex justify-center pb-6">
+        <button
+          type="button"
+          onClick={handleResetDemo}
+          className="text-xs text-gray-300 hover:text-gray-400 transition-colors"
+        >
+          🔧 테스트 초기화
+        </button>
+      </div>
 
       {/* ── 토스트 ───────────────────────────────────────────────────── */}
       {toast && (

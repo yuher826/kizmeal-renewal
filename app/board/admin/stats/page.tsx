@@ -109,7 +109,7 @@ export default function AdminStatsPage() {
         </div>
       </header>
 
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+      <div className="px-4 sm:px-6 py-6 space-y-6">
         {/* KPI */}
         <div className="grid grid-cols-3 gap-4">
           {[

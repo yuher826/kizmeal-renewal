@@ -104,7 +104,13 @@ export default function DietUploadPage() {
       const res = await fetch('/api/diet-automation/upload', { method: 'POST', body: formData })
       const data: UploadResult = await res.json()
       setResult(data)
-      if (data.success) setExistingData(true)
+      if (data.success) {
+        setExistingData(true)
+        setToast('✅ 업로드 완료! 잠시 후 허브로 이동합니다...')
+        setTimeout(() => {
+          router.push(`/board/admin/diet-automation?year=${data.year}&month=${data.month}`)
+        }, 3000)
+      }
     } catch (err) {
       const error = err as { message?: string }
       showToast(`업로드 오류: ${error?.message || '알 수 없는 오류'}`)

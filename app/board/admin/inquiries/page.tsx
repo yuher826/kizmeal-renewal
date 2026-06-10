@@ -249,7 +249,7 @@ export default function AdminInquiriesPage() {
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-5">
+      <div className="px-4 sm:px-6 py-6 space-y-5">
 
         {/* 통계 카드 — 고객사 탭에서만 */}
         {tab === 'branch' && (

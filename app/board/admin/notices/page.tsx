@@ -50,7 +50,7 @@ export default function AdminNoticesPage() {
         </button>
       </header>
 
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 space-y-4">
+      <div className="px-4 sm:px-6 py-6 space-y-4">
         {/* 탭 */}
         <div className="flex gap-1 bg-white border border-gray-100 rounded-2xl p-1 w-fit">
           <Link

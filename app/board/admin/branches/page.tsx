@@ -438,7 +438,7 @@ export default function AdminBranchesPage() {
 
       {/* 탭 */}
       <div className="bg-white border-b border-gray-100 px-4 sm:px-6">
-        <div className="flex gap-1 max-w-7xl mx-auto">
+        <div className="flex gap-1">
           {([['branches', '지점'], ['brands', '브랜드'], ['admins', '관리자계정']] as const).map(([t, label]) => (
             currentAdmin?.role === 'super' || t !== 'admins' ? (
               <button
@@ -457,7 +457,7 @@ export default function AdminBranchesPage() {
         </div>
       </div>
 
-      <div className={`max-w-7xl mx-auto px-4 sm:px-6 py-6 ${selectedBranch ? 'pr-0 sm:pr-6' : ''}`}>
+      <div className={`px-4 sm:px-6 py-6 ${selectedBranch ? 'pr-0 sm:pr-6' : ''}`}>
         {/* ── 지점 탭 ───────────────────────────────────────── */}
         {activeTab === 'branches' && (
           <div className="flex gap-4">
