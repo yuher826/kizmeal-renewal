@@ -14,6 +14,7 @@
 ⚠️ 일본어 금지.
 """
 
+import gc
 import os
 import shutil
 import threading
@@ -517,25 +518,28 @@ def generate_from_json():
 
         from pptx_generator import generate as gen_pptx
 
+        _BATCH = 5
         raw_results = []
-        for cfg in branch_cfgs:
-            branch_full_name = cfg['name']
-            out_pptx = os.path.join(output_dir, f'{branch_full_name}_{year}{month:02d}.pptx')
-            try:
-                gen_pptx(cfg, adapted_menu, TEMPLATE_PATH, out_pptx, date_map=date_map)
-                raw_results.append({
-                    'branch_full_name': branch_full_name,
-                    'pptx_path':   out_pptx,
-                    'status':      'success',
-                    'error_msg':   '',
-                })
-            except Exception as exc:
-                raw_results.append({
-                    'branch_full_name': branch_full_name,
-                    'pptx_path':   None,
-                    'status':      'error',
-                    'error_msg':   str(exc),
-                })
+        for batch_start in range(0, len(branch_cfgs), _BATCH):
+            for cfg in branch_cfgs[batch_start:batch_start + _BATCH]:
+                branch_full_name = cfg['name']
+                out_pptx = os.path.join(output_dir, f'{branch_full_name}_{year}{month:02d}.pptx')
+                try:
+                    gen_pptx(cfg, adapted_menu, TEMPLATE_PATH, out_pptx, date_map=date_map)
+                    raw_results.append({
+                        'branch_full_name': branch_full_name,
+                        'pptx_path':   out_pptx,
+                        'status':      'success',
+                        'error_msg':   '',
+                    })
+                except Exception as exc:
+                    raw_results.append({
+                        'branch_full_name': branch_full_name,
+                        'pptx_path':   None,
+                        'status':      'error',
+                        'error_msg':   str(exc),
+                    })
+            gc.collect()
 
         # Supabase Storage 업로드
         import supabase_uploader
