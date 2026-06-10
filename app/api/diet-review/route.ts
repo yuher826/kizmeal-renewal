@@ -120,24 +120,30 @@ export async function GET(req: NextRequest) {
 
   const db = getDb(supabase)
 
-  // 1. 글로벌 weekly_menu 조회 (diet_type 대소문자 무관하게 branch_id=null 기준으로만 조회)
-  const { data: menuRow } = await db
-    .from('weekly_menus')
-    .select('id, status, year, month')
-    .eq('year', year).eq('month', month).is('branch_id', null)
-    .maybeSingle()
-
   const emptyStats = {
     total: 0, generation_complete: 0, correction_request: 0,
     resubmitted: 0, approved: 0, deployed: 0,
   }
 
-  if (!menuRow) {
+  // 1단계: 해당 년월의 weekly_menu id 목록 조회 (제한 없이 전체)
+  const { data: menuIdRows } = await db
+    .from('weekly_menus')
+    .select('id, status, year, month, branch_id')
+    .eq('year', year)
+    .eq('month', month)
+
+  const ids = (menuIdRows ?? []).map((m: { id: string }) => m.id)
+
+  if (ids.length === 0) {
     return NextResponse.json({
       menuRow: null, items: [], stats: emptyStats,
       currentAdmin: { id: adminRow.id, name: adminRow.name, role: adminRow.role, diet_scope: adminRow.diet_scope },
     })
   }
+
+  // 글로벌 메뉴(branch_id=null) 우선, 없으면 첫 번째를 menuRow로 사용
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const menuRow = (menuIdRows ?? []).find((m: any) => m.branch_id === null) ?? (menuIdRows ?? [])[0]
 
   // 2. diet_review_items 존재 확인 후 없으면 자동 생성
   const { data: existingItems } = await db
@@ -169,12 +175,11 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // 3. items 조회 — weekly_menus JOIN으로 year/month 기준 필터 (영양사: 접근 가능 브랜치만)
+  // 2단계: diet_review_items 조회 — weekly_menu_id IN (ids) (영양사: 접근 가능 브랜치만)
   let itemsQuery = db
     .from('diet_review_items')
-    .select('*, weekly_menus!inner(id)')
-    .eq('weekly_menus.year', year)
-    .eq('weekly_menus.month', month)
+    .select('*')
+    .in('weekly_menu_id', ids)
     .order('branch_name')
 
   if (adminRow.role === 'nutritionist') {
@@ -184,9 +189,8 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  const { data: rawItems } = await itemsQuery
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const allItems: ReviewItemRow[] = ((rawItems ?? []) as any[]).map(({ weekly_menus: _wm, ...rest }) => rest as ReviewItemRow)
+  const { data: items } = await itemsQuery
+  const allItems = (items ?? []) as ReviewItemRow[]
 
   // 4. 통계
   const stats = {
