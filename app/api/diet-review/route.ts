@@ -120,11 +120,11 @@ export async function GET(req: NextRequest) {
 
   const db = getDb(supabase)
 
-  // 1. 글로벌 weekly_menu 조회
+  // 1. 글로벌 weekly_menu 조회 (diet_type 대소문자 무관하게 branch_id=null 기준으로만 조회)
   const { data: menuRow } = await db
     .from('weekly_menus')
     .select('id, status, year, month')
-    .eq('year', year).eq('month', month).eq('diet_type', 'CK').is('branch_id', null)
+    .eq('year', year).eq('month', month).is('branch_id', null)
     .maybeSingle()
 
   const emptyStats = {
@@ -169,11 +169,12 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // 3. items 조회 (영양사: 접근 가능 브랜치만)
+  // 3. items 조회 — weekly_menus JOIN으로 year/month 기준 필터 (영양사: 접근 가능 브랜치만)
   let itemsQuery = db
     .from('diet_review_items')
-    .select('*')
-    .eq('weekly_menu_id', menuRow.id)
+    .select('*, weekly_menus!inner(id)')
+    .eq('weekly_menus.year', year)
+    .eq('weekly_menus.month', month)
     .order('branch_name')
 
   if (adminRow.role === 'nutritionist') {
@@ -183,8 +184,9 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  const { data: items } = await itemsQuery
-  const allItems = (items ?? []) as ReviewItemRow[]
+  const { data: rawItems } = await itemsQuery
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const allItems: ReviewItemRow[] = ((rawItems ?? []) as any[]).map(({ weekly_menus: _wm, ...rest }) => rest as ReviewItemRow)
 
   // 4. 통계
   const stats = {

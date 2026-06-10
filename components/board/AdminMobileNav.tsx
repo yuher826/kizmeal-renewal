@@ -57,8 +57,7 @@ export default function AdminMobileNav() {
       const type = new URLSearchParams(query).get('type')
       return pathname === path && searchParams.get('type') === type
     }
-    if (path === '/board/admin') return pathname === path
-    return pathname === path || pathname.startsWith(path + '/')
+    return pathname === path
   }
 
   const selectedTab = ADMIN_TABS.find(t => t.key === drawerTab) || ADMIN_TABS[1]
