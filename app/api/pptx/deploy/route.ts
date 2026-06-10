@@ -7,27 +7,31 @@ export const maxDuration = 60
 
 const FROM = 'onboarding@resend.dev'
 
-type GenResult = {
-  branch_id?:  string | null
-  branch_name: string
-  pdf_url:     string
-  pptx_url:    string
-  status:      string
-}
-
 type BranchProfile = {
+  id:                  string
   short_code:          string
   display_name:        string | null
   distribution_email:  string | null
   distribution_emails: string[] | null
+  diet_type:           string | null
+  review_required:     boolean | null
+}
+
+type ReviewItemRow = {
+  id:           string
+  branch_id:    string | null
+  branch_name:  string
+  pptx_url:     string | null
+  jpg_url:      string | null
+  status:       string
+  memo_history: unknown[]
 }
 
 function buildDietEmailHtml(
   branchName: string,
   year:       number,
   month:      number,
-  pdfUrl:     string,
-  pptxUrl?:   string,
+  pptxUrl:    string,
 ): string {
   return `
 <div style="font-family:'Apple SD Gothic Neo',Malgun Gothic,sans-serif;max-width:520px;margin:0 auto;background:#F6FAF6;padding:24px 16px;">
@@ -43,19 +47,11 @@ function buildDietEmailHtml(
       ${year}년 ${month}월 식단표를 아래 버튼에서 다운로드해 주세요.
     </p>
     <a
-      href="${pdfUrl}"
-      style="display:inline-block;background:#2D6A4F;color:white;text-decoration:none;font-size:15px;font-weight:bold;padding:14px 40px;border-radius:14px;margin-bottom:12px;"
-    >
-      📄 식단표 PDF 다운로드
-    </a>
-    ${pptxUrl ? `
-    <br>
-    <a
       href="${pptxUrl}"
-      style="display:inline-block;background:#E3F2FD;color:#1565C0;text-decoration:none;font-size:14px;font-weight:bold;padding:12px 32px;border-radius:12px;margin-top:8px;"
+      style="display:inline-block;background:#1565C0;color:white;text-decoration:none;font-size:15px;font-weight:bold;padding:14px 40px;border-radius:14px;margin-bottom:12px;"
     >
-      📊 PPTX 파일 다운로드
-    </a>` : ''}
+      📊 식단표 PPTX 다운로드
+    </a>
     <p style="color:#9CA3AF;font-size:12px;margin:24px 0 0;line-height:1.6;">
       파일은 Supabase Storage에 안전하게 보관됩니다.<br>
       문의사항은 키즈밀 관리팀으로 연락해주세요.
@@ -71,9 +67,12 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { data: adminRow } = await supabase
-    .from('admins').select('id, role').eq('auth_id', user.id).maybeSingle()
+    .from('admins')
+    .select('id, name, role')
+    .eq('auth_id', user.id)
+    .maybeSingle()
 
-  if (!['super_admin', 'manager'].includes(adminRow?.role ?? '')) {
+  if (!['nutritionist', 'super_admin'].includes(adminRow?.role ?? '')) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
@@ -87,14 +86,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'year, month 필드가 필요합니다.' }, { status: 400 })
   }
 
-  const serviceKey   = process.env.SUPABASE_SERVICE_ROLE_KEY
-  const supabaseUrl  = process.env.NEXT_PUBLIC_SUPABASE_URL!
-  const dbClient     = serviceKey ? createAdminClient(supabaseUrl, serviceKey) : supabase
+  const serviceKey  = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+  const db = serviceKey ? createAdminClient(supabaseUrl, serviceKey) : supabase
 
-  // weekly_menus 조회
-  const { data: menuRow } = await dbClient
+  // 글로벌 weekly_menu 조회
+  const { data: menuRow } = await db
     .from('weekly_menus')
-    .select('id, status, generation_results')
+    .select('id, status')
     .eq('year', year).eq('month', month).eq('diet_type', 'CK').is('branch_id', null)
     .maybeSingle()
 
@@ -102,60 +101,59 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: '식단 데이터를 찾을 수 없습니다.' }, { status: 404 })
   }
 
-  const allowedStatuses = ['generated', 'review_requested', 'approved']
-  if (!allowedStatuses.includes(menuRow.status)) {
-    return NextResponse.json(
-      { error: `배포 불가 상태입니다. (현재: ${menuRow.status})` },
-      { status: 400 },
-    )
-  }
-
-  const genResults = menuRow.generation_results as { results?: GenResult[] } | null
-  let successResults = (genResults?.results ?? []).filter(r => r.status === 'success' && r.pdf_url)
-
-  // diet_review_items 조회: branch_ids 필터링 및 배포 후 memo_history 업데이트에 활용
-  type ReviewItemRow = { id: string; branch_id: string | null; branch_name: string; memo_history: unknown[] }
-  const { data: reviewItemsData } = await dbClient
+  // diet_review_items 조회
+  let itemsQuery = db
     .from('diet_review_items')
-    .select('id, branch_id, branch_name, memo_history')
+    .select('id, branch_id, branch_name, pptx_url, jpg_url, status, memo_history')
     .eq('weekly_menu_id', menuRow.id)
-  const reviewItemsByName = new Map<string, ReviewItemRow>(
-    (reviewItemsData ?? []).map((item: ReviewItemRow) => [item.branch_name, item]),
-  )
 
-  // branch_ids 지정 시 해당 원만 부분 배포
   if (branch_ids && branch_ids.length > 0) {
-    const allowedNames = new Set(
-      (reviewItemsData ?? [])
-        .filter((item: ReviewItemRow) => item.branch_id && branch_ids.includes(item.branch_id))
-        .map((item: ReviewItemRow) => item.branch_name),
-    )
-    successResults = successResults.filter(r => allowedNames.has(r.branch_name))
+    itemsQuery = itemsQuery.in('branch_id', branch_ids)
   }
 
-  if (!successResults.length) {
-    return NextResponse.json({ error: 'PDF URL이 있는 성공 결과가 없습니다.' }, { status: 400 })
+  const { data: reviewItems } = await itemsQuery
+  const allItems = (reviewItems ?? []) as ReviewItemRow[]
+
+  if (!allItems.length) {
+    return NextResponse.json({ error: '배포할 항목이 없습니다.' }, { status: 400 })
   }
 
-  // branch_profiles 일괄 조회
-  const { data: profiles } = await dbClient
+  // branch_profiles 조회 (diet_type, review_required 포함)
+  const branchIds = allItems.map(i => i.branch_id).filter(Boolean) as string[]
+  const { data: profiles } = await db
     .from('branch_profiles')
-    .select('short_code, display_name, distribution_email, distribution_emails')
-    .eq('contract_status', 'active')
+    .select('id, short_code, display_name, distribution_email, distribution_emails, diet_type, review_required')
+    .in('id', branchIds)
 
   const profileMap = new Map<string, BranchProfile>(
-    (profiles ?? []).map((p: BranchProfile) => [p.short_code, p]),
+    (profiles ?? []).map((p: BranchProfile) => [p.id, p])
   )
 
   const resend = new Resend(process.env.RESEND_API_KEY)
+  const now    = new Date().toISOString()
 
-  type SendResult = { branch_name: string; emails: string[]; success: boolean; error?: string }
-  const sendResults: SendResult[] = []
-  const deployedBranchIds: string[] = []
+  const success: string[] = []
+  const failed:  string[] = []
 
   await Promise.all(
-    successResults.map(async result => {
-      const profile = profileMap.get(result.branch_name)
+    allItems.map(async item => {
+      const profile = item.branch_id ? profileMap.get(item.branch_id) : undefined
+
+      // 배포 가능 조건 체크
+      const isCk                = profile?.diet_type === 'ck' || profile?.diet_type == null
+      const reviewRequired      = profile?.review_required ?? false
+      const canDeployWithoutApproval = !isCk && !reviewRequired
+
+      if (!canDeployWithoutApproval && item.status !== 'approved') {
+        failed.push(item.branch_name)
+        return
+      }
+
+      if (!item.pptx_url) {
+        failed.push(item.branch_name)
+        return
+      }
+
       const emails: string[] = []
       if (profile?.distribution_email)      emails.push(profile.distribution_email)
       if (profile?.distribution_emails?.length) {
@@ -165,70 +163,67 @@ export async function POST(req: NextRequest) {
       }
 
       if (!emails.length) {
-        sendResults.push({ branch_name: result.branch_name, emails: [], success: false, error: '배포 이메일 미등록' })
+        failed.push(item.branch_name)
         return
       }
 
-      const displayName = profile?.display_name || result.branch_name
+      const displayName = profile?.display_name || item.branch_name
 
       try {
         await resend.emails.send({
           from:    FROM,
           to:      emails,
           subject: `[키즈밀] ${year}년 ${month}월 식단표가 도착했습니다 🥗`,
-          html:    buildDietEmailHtml(displayName, year, month, result.pdf_url, result.pptx_url),
+          html:    buildDietEmailHtml(displayName, year, month, item.pptx_url),
         })
-        sendResults.push({ branch_name: result.branch_name, emails, success: true })
-        const ri = reviewItemsByName.get(result.branch_name)
-        if (ri) {
-          const hist = [
-            ...(Array.isArray(ri.memo_history) ? ri.memo_history : []),
-            { status: 'deployed', at: new Date().toISOString() },
-          ]
-          await dbClient.from('diet_review_items')
-            .update({ memo_history: hist, updated_at: new Date().toISOString() })
-            .eq('id', ri.id)
-          if (ri.branch_id) deployedBranchIds.push(ri.branch_id)
-        }
-      } catch (err) {
-        sendResults.push({ branch_name: result.branch_name, emails, success: false, error: String(err) })
+
+        const history = [
+          ...(Array.isArray(item.memo_history) ? item.memo_history : []),
+          {
+            by:     adminRow!.name ?? adminRow!.id,
+            role:   adminRow!.role,
+            action: 'deployed',
+            at:     now,
+          },
+        ]
+
+        await db.from('diet_review_items').update({
+          status:      'deployed',
+          deployed_by: adminRow!.id,
+          deployed_at: now,
+          memo_history: history,
+          updated_at:  now,
+        }).eq('id', item.id)
+
+        success.push(item.branch_name)
+      } catch {
+        failed.push(item.branch_name)
       }
     }),
   )
 
-  const sent   = sendResults.filter(r => r.success).length
-  const failed = sendResults.filter(r => !r.success).length
-
-  // 전체 배포일 때만 status → 'deployed'
+  // 전체 배포 시 weekly_menus.status → 'deployed'
   if (!branch_ids || branch_ids.length === 0) {
-    await dbClient.from('weekly_menus').update({
+    await db.from('weekly_menus').update({
       status:      'deployed',
-      deployed_at: new Date().toISOString(),
+      deployed_at: now,
       deployed_by: adminRow!.id,
     }).eq('id', menuRow.id)
   }
 
   // 배포 완료 알림
-  await dbClient.from('diet_notifications').insert({
-    type:           'deploy_complete',
-    title:          `${year}년 ${month}월 식단표 배포 완료`,
-    message:        `${sent}개원 이메일 발송 완료${failed > 0 ? ` (실패 ${failed}개)` : ''}`,
-    recipient_role: 'super_admin',
-    weekly_menu_id: menuRow.id,
-    year,
-    month,
-  })
+  if (success.length > 0) {
+    const branchList = success.slice(0, 3).join(', ') + (success.length > 3 ? ` 외 ${success.length - 3}개원` : '')
+    await db.from('diet_notifications').insert({
+      type:           'deployed_complete',
+      title:          `${year}년 ${month}월 식단표 배포 완료`,
+      message:        `${branchList} 배포가 완료되었습니다. (총 ${success.length}개원)`,
+      recipient_role: 'manager',
+      weekly_menu_id: menuRow.id,
+      year,
+      month,
+    })
+  }
 
-  // diet-review 워크플로우 배포 알림
-  await dbClient.from('diet_notifications').insert({
-    type:           'deployed',
-    title:          `${year}년 ${month}월 식단표 배포 완료`,
-    message:        '이메일 배포가 완료되었습니다.',
-    recipient_role: 'super_admin',
-    weekly_menu_id: menuRow.id,
-    year,
-    month,
-  })
-
-  return NextResponse.json({ success: failed === 0, sent, failed, results: sendResults, deployed_branch_ids: deployedBranchIds })
+  return NextResponse.json({ success: failed.length === 0, sent: success.length, failed: failed.length, results: { success, failed } })
 }

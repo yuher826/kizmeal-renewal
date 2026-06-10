@@ -2,15 +2,97 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase-server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 
-type GenResult = {
-  branch_id:   string | null
-  branch_name: string
-  pptx_url:    string
-  jpg_url?:    string
-  status:      string
+// ── 타입 ──────────────────────────────────────────────────────────
+type AdminRow = {
+  id:                  string
+  name:                string
+  role:                string
+  diet_scope:          string | null
+  ck_location_id:      string | null
+  assigned_branch_ids: string[]
+  is_active:           boolean
 }
 
-// ── GET /api/diet-review?year=&month= ────────────────────────────
+type ReviewItemRow = {
+  id:              string
+  weekly_menu_id:  string
+  branch_id:       string | null
+  branch_name:     string
+  pptx_url:        string | null
+  jpg_url:         string | null
+  status:          string
+  memo:            string | null
+  memo_category:   string | null
+  correction_count: number
+  memo_history:    unknown[]
+  reviewed_by:     string | null
+  reviewed_at:     string | null
+  approved_by:     string | null
+  approved_at:     string | null
+  deployed_by:     string | null
+  deployed_at:     string | null
+  resubmitted_at:  string | null
+}
+
+type HistoryEntry = {
+  round?:    number
+  by:        string
+  role:      string
+  action:    string
+  memo?:     string
+  category?: string
+  at:        string
+}
+
+// ── 유틸 ──────────────────────────────────────────────────────────
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyDb = ReturnType<typeof createAdminClient> | any
+
+function getDb(supabase: ReturnType<typeof createClient>): AnyDb {
+  const serviceKey  = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+  return serviceKey ? createAdminClient(supabaseUrl, serviceKey) : supabase
+}
+
+function appendHistory(
+  existing: unknown[],
+  admin:    AdminRow,
+  action:   string,
+  extras:   { memo?: string; category?: string } = {},
+): HistoryEntry[] {
+  const history: HistoryEntry[] = Array.isArray(existing) ? [...existing as HistoryEntry[]] : []
+  const correctionRound = history.filter(h => h.action === 'correction_request').length
+  const entry: HistoryEntry = {
+    by:     admin.name ?? admin.id,
+    role:   admin.role,
+    action,
+    at:     new Date().toISOString(),
+  }
+  if (action === 'correction_request') entry.round = correctionRound + 1
+  if (extras.memo)     entry.memo     = extras.memo
+  if (extras.category) entry.category = extras.category
+  history.push(entry)
+  return history
+}
+
+// 영양사 접근 가능 branch_id 목록 반환
+async function getNutritionistBranchIds(
+  db:    ReturnType<typeof createAdminClient>,
+  admin: AdminRow,
+): Promise<string[] | null> {
+  if (admin.diet_scope === 'consignment') {
+    return (admin.assigned_branch_ids ?? []) as string[]
+  }
+  // diet_scope='ck'
+  let query = db.from('branch_profiles').select('id').eq('diet_type', 'ck')
+  if (admin.ck_location_id) {
+    query = query.eq('ck_location_id', admin.ck_location_id)
+  }
+  const { data } = await query
+  return (data ?? []).map((r: { id: string }) => r.id)
+}
+
+// ── GET /api/diet-review?year=&month= ─────────────────────────────
 export async function GET(req: NextRequest) {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -18,53 +100,51 @@ export async function GET(req: NextRequest) {
 
   const { data: adminRow } = await supabase
     .from('admins')
-    .select('id, name, role')
+    .select('id, name, role, diet_scope, ck_location_id, assigned_branch_ids, is_active')
     .eq('auth_id', user.id)
-    .maybeSingle()
+    .maybeSingle() as { data: AdminRow | null }
 
   if (!adminRow) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-  const ALLOWED = ['super_admin', 'manager', 'director']
+  const ALLOWED = ['super_admin', 'manager', 'director', 'nutritionist']
   if (!ALLOWED.includes(adminRow.role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const url    = new URL(req.url)
-  const year   = Number(url.searchParams.get('year'))
-  const month  = Number(url.searchParams.get('month'))
+  const url   = new URL(req.url)
+  const year  = Number(url.searchParams.get('year'))
+  const month = Number(url.searchParams.get('month'))
   if (!year || !month) {
     return NextResponse.json({ error: 'year, month 필요' }, { status: 400 })
   }
 
-  const serviceKey  = process.env.SUPABASE_SERVICE_ROLE_KEY
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-  const db = serviceKey ? createAdminClient(supabaseUrl, serviceKey) : supabase
+  const db = getDb(supabase)
 
-  // ── 1. 글로벌 weekly_menu 조회 ─────────────────────────────────
+  // 1. 글로벌 weekly_menu 조회
   const { data: menuRow } = await db
     .from('weekly_menus')
-    .select('id, status, year, month, generation_results')
+    .select('id, status, year, month')
     .eq('year', year).eq('month', month).eq('diet_type', 'CK').is('branch_id', null)
     .maybeSingle()
 
+  const emptyStats = {
+    total: 0, generation_complete: 0, correction_request: 0,
+    resubmitted: 0, approved: 0, deployed: 0,
+  }
+
   if (!menuRow) {
     return NextResponse.json({
-      menuRow: null,
-      items:   [],
-      stats:   { total: 0, pending: 0, approved: 0, correction_requested: 0, final_approved: 0 },
-      currentAdmin: { id: adminRow.id, name: adminRow.name, role: adminRow.role },
+      menuRow: null, items: [], stats: emptyStats,
+      currentAdmin: { id: adminRow.id, name: adminRow.name, role: adminRow.role, diet_scope: adminRow.diet_scope },
     })
   }
 
-  // ── 2. diet_review_items 존재 확인 후 없으면 자동 생성 ────────
+  // 2. diet_review_items 존재 확인 후 없으면 자동 생성
   const { data: existingItems } = await db
     .from('diet_review_items')
-    .select('id')
-    .eq('weekly_menu_id', menuRow.id)
-    .limit(1)
+    .select('id').eq('weekly_menu_id', menuRow.id).limit(1)
 
   if (!existingItems || existingItems.length === 0) {
-    // 브랜치별 weekly_menus 우선
     const { data: branchMenus } = await db
       .from('weekly_menus')
       .select('id, branch_id, pptx_url, jpg_url')
@@ -73,103 +153,59 @@ export async function GET(req: NextRequest) {
 
     if (branchMenus && branchMenus.length > 0) {
       const branchIds = branchMenus.map((r: { branch_id: string }) => r.branch_id).filter(Boolean)
-      const { data: branches } = await db
-        .from('branches')
-        .select('id, name')
-        .in('id', branchIds)
+      const { data: branches } = await db.from('branches').select('id, name').in('id', branchIds)
       const nameMap = new Map<string, string>(
         (branches ?? []).map((b: { id: string; name: string }) => [b.id, b.name])
       )
-      const toInsert = branchMenus.map((r: {
-        branch_id: string
-        pptx_url: string | null
-        jpg_url:  string | null
-      }) => ({
+      const toInsert = branchMenus.map((r: { branch_id: string; pptx_url: string | null; jpg_url: string | null }) => ({
         weekly_menu_id: menuRow.id,
         branch_id:      r.branch_id,
         branch_name:    nameMap.get(r.branch_id) ?? r.branch_id,
         pptx_url:       r.pptx_url ?? null,
         jpg_url:        r.jpg_url  ?? null,
-        review_status:  'pending',
+        status:         'generation_complete',
       }))
       await db.from('diet_review_items').insert(toInsert)
-    } else {
-      // fallback: generation_results JSONB
-      const gen = menuRow.generation_results as { results?: GenResult[] } | null
-      const successes = (gen?.results ?? []).filter(r => r.status === 'success')
-      if (successes.length > 0) {
-        const toInsert = successes.map(r => ({
-          weekly_menu_id: menuRow.id,
-          branch_id:      r.branch_id ?? null,
-          branch_name:    r.branch_name,
-          pptx_url:       r.pptx_url ?? null,
-          jpg_url:        r.jpg_url  ?? null,
-          review_status:  'pending',
-        }))
-        await db.from('diet_review_items').insert(toInsert)
-      }
     }
   }
 
-  // ── 3. 최신 items 조회 ─────────────────────────────────────────
-  const { data: items } = await db
+  // 3. items 조회 (영양사: 접근 가능 브랜치만)
+  let itemsQuery = db
     .from('diet_review_items')
     .select('*')
     .eq('weekly_menu_id', menuRow.id)
     .order('branch_name')
 
-  const allItems = (items ?? []) as Array<{
-    id: string
-    branch_id: string | null
-    branch_name: string
-    pptx_url: string | null
-    jpg_url: string | null
-    review_status: string
-    memo: string | null
-    memo_category: string | null
-    correction_count: number
-    memo_history: unknown[]
-    reviewed_by: string | null
-    reviewed_at: string | null
-    approved_by: string | null
-    approved_at: string | null
-  }>
-
-  // ── 4. 관리자 이름 조회 ────────────────────────────────────────
-  const adminIds = new Set<string>()
-  for (const item of allItems) {
-    if (item.reviewed_by) adminIds.add(item.reviewed_by)
-    if (item.approved_by) adminIds.add(item.approved_by)
-  }
-  const adminNameMap = new Map<string, string>()
-  if (adminIds.size > 0) {
-    const { data: admins } = await db
-      .from('admins')
-      .select('id, name')
-      .in('id', Array.from(adminIds))
-    for (const a of admins ?? []) {
-      adminNameMap.set(a.id, a.name)
+  if (adminRow.role === 'nutritionist') {
+    const branchIds = await getNutritionistBranchIds(db, adminRow)
+    if (branchIds !== null && branchIds.length > 0) {
+      itemsQuery = itemsQuery.in('branch_id', branchIds)
     }
   }
 
-  // ── 5. 통계 ────────────────────────────────────────────────────
+  const { data: items } = await itemsQuery
+  const allItems = (items ?? []) as ReviewItemRow[]
+
+  // 4. 통계
   const stats = {
-    total:                allItems.length,
-    pending:              allItems.filter(i => i.review_status === 'pending').length,
-    approved:             allItems.filter(i => i.review_status === 'approved' && !i.approved_by).length,
-    correction_requested: allItems.filter(i => i.review_status === 'correction_requested').length,
-    final_approved:       allItems.filter(i => i.review_status === 'approved' && !!i.approved_by).length,
+    total:               allItems.length,
+    generation_complete: allItems.filter(i => i.status === 'generation_complete').length,
+    correction_request:  allItems.filter(i => i.status === 'correction_request').length,
+    resubmitted:         allItems.filter(i => i.status === 'resubmitted').length,
+    approved:            allItems.filter(i => i.status === 'approved').length,
+    deployed:            allItems.filter(i => i.status === 'deployed').length,
   }
 
   return NextResponse.json({
     menuRow,
-    items: allItems.map(item => ({
-      ...item,
-      reviewed_by_name: item.reviewed_by ? (adminNameMap.get(item.reviewed_by) ?? null) : null,
-      approved_by_name: item.approved_by ? (adminNameMap.get(item.approved_by) ?? null) : null,
-    })),
+    items: allItems,
     stats,
-    currentAdmin: { id: adminRow.id, name: adminRow.name, role: adminRow.role },
+    currentAdmin: {
+      id:         adminRow.id,
+      name:       adminRow.name,
+      role:       adminRow.role,
+      diet_scope: adminRow.diet_scope,
+    },
   })
 }
 
@@ -181,20 +217,21 @@ export async function POST(req: NextRequest) {
 
   const { data: adminRow } = await supabase
     .from('admins')
-    .select('id, name, role')
+    .select('id, name, role, diet_scope, ck_location_id, assigned_branch_ids, is_active')
     .eq('auth_id', user.id)
-    .maybeSingle()
+    .maybeSingle() as { data: AdminRow | null }
 
   if (!adminRow) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-  const ALLOWED = ['super_admin', 'manager', 'director']
-  if (!ALLOWED.includes(adminRow.role)) {
+  // director는 POST 전체 차단
+  if (adminRow.role === 'director') {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
   let body: {
-    item_id:        string
-    review_status:  'approved' | 'correction_requested'
+    action:         'correction_request' | 'approved' | 'resubmit' | 'deployed'
+    item_id?:       string
+    ids?:           string[]
     memo?:          string
     memo_category?: string
   }
@@ -202,190 +239,223 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: '요청 형식 오류' }, { status: 400 })
   }
 
-  const { item_id, review_status, memo, memo_category } = body
+  const { action, item_id, ids, memo, memo_category } = body
+  const db = getDb(supabase)
 
-  const serviceKey  = process.env.SUPABASE_SERVICE_ROLE_KEY
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-  const db = serviceKey ? createAdminClient(supabaseUrl, serviceKey) : supabase
-
-  const { data: current } = await db
-    .from('diet_review_items')
-    .select('weekly_menu_id, correction_count, memo_history, reviewed_by, approved_by')
-    .eq('id', item_id)
-    .maybeSingle()
-
-  if (!current) return NextResponse.json({ error: 'Item not found' }, { status: 404 })
-
-  if (adminRow.role === 'director' && review_status !== 'approved') {
-    return NextResponse.json({ error: '승인된 항목만 최종승인 가능' }, { status: 400 })
-  }
-
-  const now     = new Date().toISOString()
-  const history = Array.isArray(current.memo_history) ? [...current.memo_history] : []
-
-  const updates: Record<string, unknown> = {
-    review_status,
-    updated_at: now,
-  }
-
-  if (review_status === 'approved') {
-    if (adminRow.role === 'director') {
-      updates.approved_by  = adminRow.id
-      updates.approved_at  = now
-      updates.reviewed_by  = current.reviewed_by ?? adminRow.id
-      updates.reviewed_at  = current.reviewed_by ? undefined : now
-      history.push({ status: 'final_approved', at: now, by: adminRow.name ?? adminRow.id })
-    } else {
-      updates.reviewed_by = adminRow.id
-      updates.reviewed_at = now
-      history.push({ status: 'approved', at: now, by: adminRow.name ?? adminRow.id })
+  // ── correction_request ──────────────────────────────────────────
+  if (action === 'correction_request') {
+    if (!['manager', 'super_admin'].includes(adminRow.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
-  } else {
-    updates.memo          = memo ?? null
-    updates.memo_category = memo_category ?? null
-    updates.reviewed_by   = adminRow.id
-    updates.reviewed_at   = now
-    updates.correction_count = ((current.correction_count as number) ?? 0) + 1
-    history.push({
-      status:        'correction_requested',
-      memo:          memo ?? undefined,
-      memo_category: memo_category ?? undefined,
-      at:            now,
-      by:            adminRow.name ?? adminRow.id,
-    })
-  }
+    if (!memo || memo.trim() === '') {
+      return NextResponse.json({ error: '수정요청 메모는 필수입니다.' }, { status: 400 })
+    }
 
-  updates.memo_history = history
+    const targetIds = ids?.length ? ids : item_id ? [item_id] : []
+    if (!targetIds.length) return NextResponse.json({ error: 'item_id 또는 ids 필요' }, { status: 400 })
 
-  // director가 이미 reviewed_at을 undefined로 설정하면 undefined key 제거
-  for (const k of Object.keys(updates)) {
-    if (updates[k] === undefined) delete updates[k]
-  }
+    const { data: currentItems } = await db
+      .from('diet_review_items')
+      .select('id, status, correction_count, memo_history')
+      .in('id', targetIds)
 
-  const { data: updated, error } = await db
-    .from('diet_review_items')
-    .update(updates)
-    .eq('id', item_id)
-    .select()
-    .single()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const eligibleItems = ((currentItems ?? []) as any[]).filter((i) =>
+      ['generation_complete', 'resubmitted'].includes(i.status)
+    )
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const skippedIds = targetIds.filter(id => !eligibleItems.find((i: any) => i.id === id))
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    const now = new Date().toISOString()
+    const updated: ReviewItemRow[] = []
 
-  // 모든 items가 final_approved면 weekly_menus.status → 'approved'
-  const { data: allMenuItems } = await db
-    .from('diet_review_items')
-    .select('approved_by')
-    .eq('weekly_menu_id', current.weekly_menu_id)
-  if (allMenuItems?.length && allMenuItems.every(i => i.approved_by !== null)) {
-    await db.from('weekly_menus').update({ status: 'approved' }).eq('id', current.weekly_menu_id)
-  }
-
-  return NextResponse.json({
-    success: true,
-    item: {
-      ...updated,
-      reviewed_by_name: adminRow.role !== 'director' ? adminRow.name : (current.reviewed_by ? null : adminRow.name),
-      approved_by_name: adminRow.role === 'director'  ? adminRow.name : null,
-    },
-  })
-}
-
-// ── PATCH /api/diet-review ───────────────────────────────────────
-export async function PATCH(req: NextRequest) {
-  const supabase = createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-  const { data: adminRow } = await supabase
-    .from('admins')
-    .select('id, name, role')
-    .eq('auth_id', user.id)
-    .maybeSingle()
-
-  if (!adminRow) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-
-  const ALLOWED = ['super_admin', 'manager', 'director']
-  if (!ALLOWED.includes(adminRow.role)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-  }
-
-  let body: {
-    item_ids:       string[]
-    review_status:  'approved' | 'correction_requested'
-    memo?:          string
-    memo_category?: string
-  }
-  try { body = await req.json() } catch {
-    return NextResponse.json({ error: '요청 형식 오류' }, { status: 400 })
-  }
-
-  const { item_ids, review_status, memo, memo_category } = body
-  if (!item_ids?.length || !review_status) {
-    return NextResponse.json({ error: 'item_ids, review_status가 필요합니다' }, { status: 400 })
-  }
-
-  if (adminRow.role === 'director' && review_status !== 'approved') {
-    return NextResponse.json({ error: '승인된 항목만 최종승인 가능' }, { status: 400 })
-  }
-
-  const serviceKey  = process.env.SUPABASE_SERVICE_ROLE_KEY
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-  const db = serviceKey ? createAdminClient(supabaseUrl, serviceKey) : supabase
-
-  const { data: items } = await db
-    .from('diet_review_items')
-    .select('id, weekly_menu_id, correction_count, memo_history')
-    .in('id', item_ids)
-
-  if (!items?.length) return NextResponse.json({ error: '항목을 찾을 수 없습니다' }, { status: 404 })
-
-  const now = new Date().toISOString()
-
-  await Promise.all(
-    items.map(async (item: {
-      id: string
-      weekly_menu_id: string
-      correction_count: number
-      memo_history: unknown[]
-    }) => {
-      const history: unknown[] = Array.isArray(item.memo_history) ? [...item.memo_history] : []
-      const updates: Record<string, unknown> = { review_status, updated_at: now }
-
-      if (adminRow.role === 'director') {
-        updates.approved_by = adminRow.id
-        updates.approved_at = now
-        history.push({ status: 'approved', at: now, by: adminRow.name })
-      } else {
-        updates.reviewed_by = adminRow.id
-        updates.reviewed_at = now
-        if (review_status === 'correction_requested') {
-          updates.correction_count  = (item.correction_count ?? 0) + 1
-          updates.memo              = memo ?? null
-          updates.memo_category     = memo_category ?? null
-          history.push({ status: 'correction_requested', memo, memo_category, at: now, by: adminRow.name })
-        } else if (review_status === 'approved') {
-          history.push({ status: 'approved', at: now, by: adminRow.name })
-        }
-      }
-      updates.memo_history = history
-
-      await db.from('diet_review_items').update(updates).eq('id', item.id)
-    }),
-  )
-
-  // 영향받은 weekly_menus별 status 체크
-  const menuIds = Array.from(new Set(items.map((i: { weekly_menu_id: string }) => i.weekly_menu_id)))
-  await Promise.all(
-    menuIds.map(async menuId => {
-      const { data: all } = await db
+    for (const item of eligibleItems as ReviewItemRow[]) {
+      const history = appendHistory(item.memo_history, adminRow, 'correction_request', {
+        memo, category: memo_category,
+      })
+      const { data: u } = await db
         .from('diet_review_items')
-        .select('approved_by')
-        .eq('weekly_menu_id', menuId)
-      if (all?.length && all.every(i => i.approved_by !== null)) {
-        await db.from('weekly_menus').update({ status: 'approved' }).eq('id', menuId)
-      }
-    }),
-  )
+        .update({
+          status:          'correction_request',
+          memo:            memo,
+          memo_category:   memo_category ?? null,
+          correction_count: (item.correction_count ?? 0) + 1,
+          memo_history:    history,
+          reviewed_by:     adminRow.id,
+          reviewed_at:     now,
+          updated_at:      now,
+        })
+        .eq('id', item.id)
+        .select()
+        .single()
+      if (u) updated.push(u as ReviewItemRow)
+    }
 
-  return NextResponse.json({ success: true, updated_count: items.length })
+    // 영양사에게 알림
+    if (updated.length > 0) {
+      await db.from('diet_notifications').insert({
+        type:           'correction_to_nutritionist',
+        title:          '수정 요청이 도착했습니다',
+        message:        `${adminRow.name}이(가) ${updated.length}개 원 식단표 수정을 요청했습니다.`,
+        recipient_role: 'nutritionist',
+      })
+    }
+
+    return NextResponse.json({ success: true, updated, skipped: skippedIds })
+  }
+
+  // ── approved ────────────────────────────────────────────────────
+  if (action === 'approved') {
+    if (!['manager', 'super_admin'].includes(adminRow.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    const targetIds = ids?.length ? ids : item_id ? [item_id] : []
+    if (!targetIds.length) return NextResponse.json({ error: 'item_id 또는 ids 필요' }, { status: 400 })
+
+    const { data: currentItems } = await db
+      .from('diet_review_items')
+      .select('id, status, memo_history, weekly_menu_id')
+      .in('id', targetIds)
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const eligibleItems = ((currentItems ?? []) as any[]).filter((i) =>
+      ['generation_complete', 'resubmitted'].includes(i.status)
+    )
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const skippedIds = targetIds.filter(id => !eligibleItems.find((i: any) => i.id === id))
+
+    const now = new Date().toISOString()
+    const updated: ReviewItemRow[] = []
+
+    for (const item of eligibleItems as ReviewItemRow[]) {
+      const history = appendHistory(item.memo_history, adminRow, 'approved')
+      const { data: u } = await db
+        .from('diet_review_items')
+        .update({
+          status:      'approved',
+          memo_history: history,
+          reviewed_by: adminRow.id,
+          reviewed_at: now,
+          updated_at:  now,
+        })
+        .eq('id', item.id)
+        .select()
+        .single()
+      if (u) updated.push(u as ReviewItemRow)
+    }
+
+    // 영양사에게 승인 알림
+    if (updated.length > 0) {
+      await db.from('diet_notifications').insert({
+        type:           'approved_to_nutritionist',
+        title:          '식단표가 승인되었습니다',
+        message:        `${adminRow.name}이(가) ${updated.length}개 원 식단표를 승인했습니다.`,
+        recipient_role: 'nutritionist',
+      })
+    }
+
+    return NextResponse.json({ success: true, updated, skipped: skippedIds })
+  }
+
+  // ── resubmit ────────────────────────────────────────────────────
+  if (action === 'resubmit') {
+    if (!['nutritionist', 'super_admin'].includes(adminRow.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+    if (!item_id) return NextResponse.json({ error: 'item_id 필요' }, { status: 400 })
+
+    const { data: current } = await db
+      .from('diet_review_items')
+      .select('id, status, memo_history')
+      .eq('id', item_id)
+      .maybeSingle() as { data: ReviewItemRow | null }
+
+    if (!current) return NextResponse.json({ error: '항목 없음' }, { status: 404 })
+
+    const now = new Date().toISOString()
+    const history = appendHistory(current.memo_history, adminRow, 'resubmit', { memo })
+
+    const { data: updated } = await db
+      .from('diet_review_items')
+      .update({
+        status:         'resubmitted',
+        resubmitted_at: now,
+        memo_history:   history,
+        updated_at:     now,
+      })
+      .eq('id', item_id)
+      .select()
+      .single()
+
+    // 매니저에게 재제출 알림
+    await db.from('diet_notifications').insert({
+      type:           'resubmitted_to_manager',
+      title:          '식단표 재제출 알림',
+      message:        `${adminRow.name}이(가) 수정 후 재제출했습니다. 재검토를 진행해주세요.`,
+      recipient_role: 'manager',
+    })
+
+    return NextResponse.json({ success: true, item: updated })
+  }
+
+  // ── deployed (단건) ─────────────────────────────────────────────
+  if (action === 'deployed') {
+    if (!['nutritionist', 'super_admin'].includes(adminRow.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    const targetIds = ids?.length ? ids : item_id ? [item_id] : []
+    if (!targetIds.length) return NextResponse.json({ error: 'item_id 또는 ids 필요' }, { status: 400 })
+
+    const { data: currentItems } = await db
+      .from('diet_review_items')
+      .select('id, status, branch_id, branch_name, memo_history')
+      .in('id', targetIds)
+
+    const now = new Date().toISOString()
+    const success: string[] = []
+    const skipped: string[] = []
+
+    for (const item of (currentItems ?? []) as ReviewItemRow[]) {
+      if (item.status === 'deployed') {
+        skipped.push(item.branch_name)
+        continue
+      }
+      // CK: approved 상태만 처리
+      // (위탁+review_required=false 케이스는 deploy route에서 처리)
+      if (item.status !== 'approved') {
+        skipped.push(item.branch_name)
+        continue
+      }
+
+      const history = appendHistory(item.memo_history, adminRow, 'deployed')
+      const { error } = await db
+        .from('diet_review_items')
+        .update({
+          status:      'deployed',
+          deployed_by: adminRow.id,
+          deployed_at: now,
+          memo_history: history,
+          updated_at:  now,
+        })
+        .eq('id', item.id)
+
+      if (error) skipped.push(item.branch_name)
+      else       success.push(item.branch_name)
+    }
+
+    if (success.length > 0) {
+      await db.from('diet_notifications').insert({
+        type:           'deployed_complete',
+        title:          '식단표 배포 완료',
+        message:        `${success.join(', ')} 외 총 ${success.length}개원 배포가 완료되었습니다.`,
+        recipient_role: 'manager',
+      })
+    }
+
+    return NextResponse.json({ success: true, deployed: success, skipped })
+  }
+
+  return NextResponse.json({ error: '알 수 없는 action' }, { status: 400 })
 }

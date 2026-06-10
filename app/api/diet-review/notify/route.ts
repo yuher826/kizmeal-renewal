@@ -16,10 +16,12 @@ export async function POST(req: NextRequest) {
   if (!adminRow) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   let body: {
-    type:            'review_complete' | 'final_approved' | 'deployed'
-    year:            number
-    month:           number
+    type:            string
+    year?:           number
+    month?:          number
     weekly_menu_id?: string
+    branch_names?:   string[]
+    count?:          number
   }
   try { body = await req.json() } catch {
     return NextResponse.json({ error: '요청 형식 오류' }, { status: 400 })
@@ -29,36 +31,99 @@ export async function POST(req: NextRequest) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
   const db = serviceKey ? createAdminClient(supabaseUrl, serviceKey) : supabase
 
-  if (body.type === 'review_complete') {
-    await db.from('diet_notifications').insert({
-      type:           'review_complete',
-      title:          `${body.year}년 ${body.month}월 식단표 검토 완료`,
-      message:        `${adminRow.name}이(가) 검토를 완료했습니다. 최종 승인을 진행해주세요.`,
-      recipient_role: 'director',
-      weekly_menu_id: body.weekly_menu_id ?? null,
-      year:           body.year,
-      month:          body.month,
-    })
-  } else if (body.type === 'final_approved') {
-    await db.from('diet_notifications').insert({
-      type:           'final_approved',
-      title:          `${body.year}년 ${body.month}월 식단표 최종 승인`,
-      message:        `${adminRow.name}이(가) 최종 승인했습니다. 배포를 진행해주세요.`,
-      recipient_role: 'manager',
-      weekly_menu_id: body.weekly_menu_id ?? null,
-      year:           body.year,
-      month:          body.month,
-    })
-  } else if (body.type === 'deployed') {
-    await db.from('diet_notifications').insert({
-      type:           'deployed',
-      title:          `${body.year}년 ${body.month}월 식단표 배포 완료`,
-      message:        '이메일 배포가 완료되었습니다.',
-      recipient_role: 'super_admin',
-      weekly_menu_id: body.weekly_menu_id ?? null,
-      year:           body.year,
-      month:          body.month,
-    })
+  const { type, year, month, weekly_menu_id, branch_names, count } = body
+  const period = (year && month) ? `${year}년 ${month}월 ` : ''
+
+  switch (type) {
+    case 'correction_to_nutritionist':
+      await db.from('diet_notifications').insert({
+        type,
+        title:          `${period}식단표 수정 요청`,
+        message:        `${adminRow.name}이(가) 수정을 요청했습니다. 확인 후 수정 파일을 재제출해주세요.`,
+        recipient_role: 'nutritionist',
+        weekly_menu_id: weekly_menu_id ?? null,
+        year:           year ?? null,
+        month:          month ?? null,
+      })
+      break
+
+    case 'approved_to_nutritionist':
+      await db.from('diet_notifications').insert({
+        type,
+        title:          `${period}식단표 승인 완료`,
+        message:        `${adminRow.name}이(가) 식단표를 승인했습니다. 배포를 진행해주세요.`,
+        recipient_role: 'nutritionist',
+        weekly_menu_id: weekly_menu_id ?? null,
+        year:           year ?? null,
+        month:          month ?? null,
+      })
+      break
+
+    case 'resubmitted_to_manager': {
+      // role IN ('manager','super_admin') 전원
+      const { data: managers } = await db
+        .from('admins')
+        .select('id')
+        .in('role', ['manager', 'super_admin'])
+        .eq('is_active', true)
+
+      const notifications = (managers ?? []).map((m: { id: string }) => ({
+        type,
+        title:          `${period}식단표 재제출 알림`,
+        message:        `${adminRow.name}이(가) 수정 후 재제출했습니다. 재검토를 진행해주세요.`,
+        recipient_role: 'manager',
+        recipient_id:   m.id,
+        weekly_menu_id: weekly_menu_id ?? null,
+        year:           year ?? null,
+        month:          month ?? null,
+      }))
+      if (notifications.length > 0) {
+        await db.from('diet_notifications').insert(notifications)
+      }
+      break
+    }
+
+    case 'deployed_complete': {
+      const deployedCount = count ?? branch_names?.length ?? 0
+      const branchList    = branch_names?.length ? branch_names.slice(0, 3).join(', ') + (branch_names.length > 3 ? ` 외 ${branch_names.length - 3}개원` : '') : `${deployedCount}개원`
+
+      const { data: managers } = await db
+        .from('admins')
+        .select('id')
+        .in('role', ['manager', 'super_admin'])
+        .eq('is_active', true)
+
+      const notifications = (managers ?? []).map((m: { id: string }) => ({
+        type,
+        title:          `${period}식단표 배포 완료`,
+        message:        `${branchList} 배포가 완료되었습니다. (총 ${deployedCount}개원)`,
+        recipient_role: 'manager',
+        recipient_id:   m.id,
+        weekly_menu_id: weekly_menu_id ?? null,
+        year:           year ?? null,
+        month:          month ?? null,
+      }))
+      if (notifications.length > 0) {
+        await db.from('diet_notifications').insert(notifications)
+      }
+      break
+    }
+
+    // 하위호환 타입
+    case 'generation_complete':
+      await db.from('diet_notifications').insert({
+        type,
+        title:          `${period}식단표 생성 완료`,
+        message:        '식단표 생성이 완료되었습니다. 검토를 진행해주세요.',
+        recipient_role: 'manager',
+        weekly_menu_id: weekly_menu_id ?? null,
+        year:           year ?? null,
+        month:          month ?? null,
+      })
+      break
+
+    default:
+      return NextResponse.json({ error: `알 수 없는 type: ${type}` }, { status: 400 })
   }
 
   return NextResponse.json({ success: true })
