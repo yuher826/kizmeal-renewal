@@ -8,6 +8,7 @@ export const maxDuration = 60
 const FROM = 'onboarding@resend.dev'
 
 type GenResult = {
+  branch_id?:  string | null
   branch_name: string
   pdf_url:     string
   pptx_url:    string
@@ -76,12 +77,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  let body: { year?: number; month?: number }
+  let body: { year?: number; month?: number; branch_ids?: string[] }
   try { body = await req.json() } catch {
     return NextResponse.json({ error: '요청 형식 오류' }, { status: 400 })
   }
 
-  const { year, month } = body
+  const { year, month, branch_ids } = body
   if (!year || !month) {
     return NextResponse.json({ error: 'year, month 필드가 필요합니다.' }, { status: 400 })
   }
@@ -110,7 +111,12 @@ export async function POST(req: NextRequest) {
   }
 
   const genResults = menuRow.generation_results as { results?: GenResult[] } | null
-  const successResults = (genResults?.results ?? []).filter(r => r.status === 'success' && r.pdf_url)
+  let successResults = (genResults?.results ?? []).filter(r => r.status === 'success' && r.pdf_url)
+
+  // branch_ids 지정 시 해당 원만 부분 배포
+  if (branch_ids && branch_ids.length > 0) {
+    successResults = successResults.filter(r => r.branch_id && branch_ids.includes(r.branch_id))
+  }
 
   if (!successResults.length) {
     return NextResponse.json({ error: 'PDF URL이 있는 성공 결과가 없습니다.' }, { status: 400 })
@@ -166,12 +172,14 @@ export async function POST(req: NextRequest) {
   const sent   = sendResults.filter(r => r.success).length
   const failed = sendResults.filter(r => !r.success).length
 
-  // weekly_menus status → 'deployed'
-  await dbClient.from('weekly_menus').update({
-    status:      'deployed',
-    deployed_at: new Date().toISOString(),
-    deployed_by: adminRow!.id,
-  }).eq('id', menuRow.id)
+  // 전체 배포일 때만 status → 'deployed'
+  if (!branch_ids || branch_ids.length === 0) {
+    await dbClient.from('weekly_menus').update({
+      status:      'deployed',
+      deployed_at: new Date().toISOString(),
+      deployed_by: adminRow!.id,
+    }).eq('id', menuRow.id)
+  }
 
   // 배포 완료 알림
   await dbClient.from('diet_notifications').insert({
