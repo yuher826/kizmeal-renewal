@@ -119,21 +119,66 @@ function historyIcon(action: string) {
 }
 
 // ── 워크플로우 스텝 ───────────────────────────────────────────────
-function WorkflowSteps({ stats }: { stats: Stats }) {
-  const steps = [
-    { label: '생성완료', count: stats.generation_complete, color: 'text-gray-600' },
+function WorkflowSteps({
+  stats, activeTab, onTabChange,
+}: {
+  stats:        Stats
+  activeTab?:   ManagerTab
+  onTabChange?: (tab: ManagerTab) => void
+}) {
+  // 클릭 가능 모드 (manager/super_admin)
+  if (onTabChange) {
+    const steps: { label: string; count: number; tab: ManagerTab; activeCls: string; idleCls: string }[] = [
+      { label: '검토대기', count: stats.generation_complete,  tab: 'generation_complete', activeCls: 'bg-gray-700 text-white',    idleCls: 'text-gray-600 hover:bg-gray-100' },
+      { label: '수정요청', count: stats.correction_request,   tab: 'correction_request',  activeCls: 'bg-orange-500 text-white',  idleCls: 'text-orange-500 hover:bg-orange-50' },
+      { label: '재제출됨', count: stats.resubmitted,          tab: 'resubmitted',         activeCls: 'bg-blue-500 text-white',    idleCls: 'text-blue-500 hover:bg-blue-50' },
+      { label: '승인완료', count: stats.approved,             tab: 'approved',            activeCls: 'bg-green-600 text-white',   idleCls: 'text-green-600 hover:bg-green-50' },
+      { label: '배포완료', count: stats.deployed,             tab: 'deployed',            activeCls: 'bg-teal-600 text-white',    idleCls: 'text-teal-600 hover:bg-teal-50' },
+    ]
+    return (
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <button
+          type="button"
+          onClick={() => onTabChange('all')}
+          className={`text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-colors ${
+            !activeTab || activeTab === 'all'
+              ? 'bg-[#2D6A4F] text-white'
+              : 'text-gray-500 bg-gray-100 hover:bg-gray-200'
+          }`}
+        >
+          전체 {stats.total}
+        </button>
+        {steps.map(s => (
+          <button
+            key={s.tab}
+            type="button"
+            onClick={() => onTabChange(s.tab)}
+            className={`text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-colors ${
+              activeTab === s.tab ? s.activeCls : s.idleCls
+            }`}
+          >
+            {s.label} {s.count}
+          </button>
+        ))}
+      </div>
+    )
+  }
+
+  // 읽기 전용 모드 (director, nutritionist)
+  const readSteps = [
+    { label: '생성완료', count: stats.generation_complete,                    color: 'text-gray-600' },
     { label: '검토중',   count: stats.correction_request + stats.resubmitted, color: 'text-orange-600' },
-    { label: '승인완료', count: stats.approved, color: 'text-green-600' },
-    { label: '배포완료', count: stats.deployed, color: 'text-teal-600' },
+    { label: '승인완료', count: stats.approved,                                color: 'text-green-600' },
+    { label: '배포완료', count: stats.deployed,                                color: 'text-teal-600' },
   ]
   return (
     <div className="flex items-center gap-1 flex-wrap">
-      {steps.map((s, i) => (
+      {readSteps.map((s, i) => (
         <div key={s.label} className="flex items-center gap-1">
           <span className={`text-xs font-semibold ${s.color}`}>
             [{s.label} {s.count}]
           </span>
-          {i < steps.length - 1 && <span className="text-gray-300 text-xs">→</span>}
+          {i < readSteps.length - 1 && <span className="text-gray-300 text-xs">→</span>}
         </div>
       ))}
     </div>
@@ -144,10 +189,13 @@ function WorkflowSteps({ stats }: { stats: Stats }) {
 function CommonHeader({
   year, month, stats, search,
   onYearMonth, onSearch,
+  activeTab, onTabChange,
 }: {
   year: number; month: number; stats: Stats; search: string
-  onYearMonth: (y: number, m: number) => void
-  onSearch:    (v: string) => void
+  onYearMonth:  (y: number, m: number) => void
+  onSearch:     (v: string) => void
+  activeTab?:   ManagerTab
+  onTabChange?: (tab: ManagerTab) => void
 }) {
   const monthOptions = getMonthOptions()
   const total     = stats.total
@@ -176,7 +224,7 @@ function CommonHeader({
       </div>
 
       {/* 워크플로우 스텝 */}
-      {total > 0 && <WorkflowSteps stats={stats} />}
+      {total > 0 && <WorkflowSteps stats={stats} activeTab={activeTab} onTabChange={onTabChange} />}
 
       {/* 진행률 바 */}
       {total > 0 && (
@@ -205,21 +253,23 @@ function CommonHeader({
 
 // ── Manager/SuperAdmin 화면 ────────────────────────────────────────
 function ManagerView({
-  items, stats, showToast, onRefresh,
+  items, stats, showToast, onRefresh, tab, onTabChange,
 }: {
-  items:     ReviewItem[]
-  stats:     Stats
-  year:      number
-  month:     number
-  menuRow:   MenuRow | null
-  adminId:   string
-  adminName: string
-  showToast: (msg: string) => void
-  onRefresh: () => void
+  items:       ReviewItem[]
+  stats:       Stats
+  year:        number
+  month:       number
+  menuRow:     MenuRow | null
+  adminId:     string
+  adminName:   string
+  showToast:   (msg: string) => void
+  onRefresh:   () => void
+  tab:         ManagerTab
+  onTabChange: (t: ManagerTab) => void
 }) {
-  const [tab,            setTab]            = useState<ManagerTab>('all')
   const [search]                             = useState('')
   const [selectedIds,    setSelectedIds]    = useState<Set<string>>(new Set())
+  useEffect(() => { setSelectedIds(new Set()) }, [tab])
   const [activeInlineId, setActiveInlineId] = useState<string | null>(null)
   const [inlineMemo,     setInlineMemo]     = useState('')
   const [inlineCategory, setInlineCategory] = useState('')
@@ -307,7 +357,7 @@ function ManagerView({
       <div className="flex gap-1 overflow-x-auto pb-1">
         {TAB_KEYS.map(t => (
           <button key={t.key} type="button"
-            onClick={() => { setTab(t.key); setSelectedIds(new Set()) }}
+            onClick={() => onTabChange(t.key)}
             className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${
               tab === t.key ? 'bg-[#2D6A4F] text-white' : 'bg-white text-gray-600 border border-gray-200 hover:border-[#2D6A4F]'
             }`}>
@@ -962,6 +1012,7 @@ function DietReviewPageInner() {
   })
   const [currentAdmin, setCurrentAdmin] = useState<CurrentAdmin | null>(null)
   const [search,       setSearch]       = useState('')
+  const [managerTab,   setManagerTab]   = useState<ManagerTab>('all')
   const [loading,      setLoading]      = useState(true)
   const [toast,        setToast]        = useState<string | null>(null)
 
@@ -992,7 +1043,7 @@ function DietReviewPageInner() {
   useEffect(() => { fetchData() }, [fetchData])
 
   function handleYearMonth(y: number, m: number) {
-    setYear(y); setMonth(m); setSearch('')
+    setYear(y); setMonth(m); setSearch(''); setManagerTab('all')
   }
 
   const filteredItems = search
@@ -1027,6 +1078,8 @@ function DietReviewPageInner() {
         <CommonHeader
           year={year} month={month} stats={stats} search={search}
           onYearMonth={handleYearMonth} onSearch={setSearch}
+          activeTab={isManager ? managerTab : undefined}
+          onTabChange={isManager ? setManagerTab : undefined}
         />
 
         {/* 로딩 */}
@@ -1049,6 +1102,7 @@ function DietReviewPageInner() {
             year={year} month={month} menuRow={menuRow}
             adminId={currentAdmin!.id} adminName={currentAdmin!.name}
             showToast={showToast} onRefresh={fetchData}
+            tab={managerTab} onTabChange={setManagerTab}
           />
         )}
 
