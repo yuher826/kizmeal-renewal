@@ -180,9 +180,10 @@ export async function POST(req: NextRequest) {
         const history = [
           ...(Array.isArray(item.memo_history) ? item.memo_history : []),
           {
-            by:     adminRow!.name ?? adminRow!.id,
+            by:     user.email ?? adminRow!.name ?? adminRow!.id,
             role:   adminRow!.role,
             action: 'deployed',
+            memo:   '이메일 배포 완료',
             at:     now,
           },
         ]

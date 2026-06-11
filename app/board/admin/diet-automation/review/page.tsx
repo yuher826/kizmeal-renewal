@@ -898,6 +898,29 @@ function ManagerView({
                   </div>
                 </div>
               )}
+              {item.correction_count > 0 && (
+                <div className="mt-3">
+                  <button type="button"
+                    onClick={() => setExpandedHistory(prev => { const n = new Set(prev); if (n.has(item.id)) n.delete(item.id); else n.add(item.id); return n })}
+                    className="text-orange-600 text-xs font-medium hover:underline">
+                    수정이력 {item.correction_count}회 {expandedHistory.has(item.id) ? '▲' : '▼'}
+                  </button>
+                  {expandedHistory.has(item.id) && (
+                    <div className="mt-2 space-y-1.5 bg-gray-50/60 rounded-xl p-2">
+                      {(item.memo_history ?? []).map((h, i) => (
+                        <div key={i} className="flex flex-wrap gap-2 items-start text-xs text-gray-600">
+                          <span>{historyIcon(h.action)}</span>
+                          <span className="text-gray-400">{formatKST(h.at)}</span>
+                          <span className="font-medium">{h.by}</span>
+                          {h.round && <span className="text-orange-600 font-semibold">수정 {h.round}회차</span>}
+                          {h.category && <span className="bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded">{h.category}</span>}
+                          {h.memo && <span className="text-gray-500">{h.memo}</span>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           ))}
         </div>
