@@ -251,7 +251,7 @@ function CommonHeader({
 
 // ── Manager/SuperAdmin 화면 ────────────────────────────────────────
 function ManagerView({
-  items, stats, showToast, onRefresh, tab, onTabChange, patchItem, year, month,
+  items, stats, showToast, tab, onTabChange, patchItem, year, month,
 }: {
   items:       ReviewItem[]
   stats:       Stats
@@ -411,23 +411,39 @@ function ManagerView({
     }
   }
 
-  // 일괄 수정요청
-  async function handleBatchCorrectionSubmit(ids: string[]) {
+  // 일괄 수정요청 (모달 확인 후 실행)
+  async function handleBatchCorrectionSubmit() {
     if (!inlineMemo.trim()) { showToast('메모를 입력해주세요.', 'error'); return }
     if (!inlineCategory)    { showToast('카테고리를 선택해주세요.', 'error'); return }
+    const ids = Array.from(selectedIds)
+    const savedMemo = inlineMemo, savedCat = inlineCategory
+    setActiveInlineId(null); setInlineMemo(''); setInlineCategory('')
     setSubmitting(true)
+    const prevMap = new Map(ids.map(id => [id, items.find(i => i.id === id)?.review_status]))
+    ids.forEach(id => patchItem(id, { review_status: 'correction_request', memo: savedMemo, memo_category: savedCat }))
+    setSelectedIds(new Set())
     try {
       const res  = await fetch('/api/diet-review', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'correction_request', ids, memo: inlineMemo, memo_category: inlineCategory || undefined }),
+        body: JSON.stringify({ action: 'correction_request', ids, memo: savedMemo, memo_category: savedCat || undefined }),
       })
       const data = await res.json()
       if (data.success) {
-        showToast(`${data.updated?.length ?? 0}개 수정요청 완료`, 'success')
-        setActiveInlineId(null); setInlineMemo(''); setInlineCategory(''); setSelectedIds(new Set())
-        onRefresh()
-      } else { showToast(`오류: ${data.error}`, 'error') }
-    } catch { showToast('네트워크 오류', 'error') }
+        fetch('/api/diet-review/notify', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'correction_to_nutritionist' }),
+        }).catch(() => {})
+        showToast(`${data.updated?.length ?? ids.length}개 원 수정요청 전송됨`, 'success')
+      } else {
+        ids.forEach(id => { const p = prevMap.get(id); if (p) patchItem(id, { review_status: p as ReviewItem['review_status'], memo: null, memo_category: null }) })
+        setSelectedIds(new Set(ids))
+        showToast(`오류: ${data.error}`, 'error')
+      }
+    } catch {
+      ids.forEach(id => { const p = prevMap.get(id); if (p) patchItem(id, { review_status: p as ReviewItem['review_status'], memo: null, memo_category: null }) })
+      setSelectedIds(new Set(ids))
+      showToast('네트워크 오류', 'error')
+    }
     finally { setSubmitting(false) }
   }
 
@@ -457,20 +473,23 @@ function ManagerView({
         ))}
       </div>
 
-      {/* 일괄 액션 */}
+      {/* 선택 항목 액션 바 */}
       {selectedIds.size > 0 && (
-        <div className="flex gap-2 flex-wrap items-center">
-          <button type="button" onClick={() => setShowBatchConfirm(true)} disabled={submitting}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#2E7D32] text-white text-sm font-semibold hover:bg-[#1B5E20] disabled:opacity-40 transition-colors">
-            {submitting
-              ? <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin inline-block" /><span>처리중...</span></>
-              : `✅ 선택 ${selectedIds.size}개 일괄승인`}
-          </button>
-          <button type="button"
-            onClick={() => { setActiveInlineId('__batch__'); setInlineMemo(''); setInlineCategory('') }}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-orange-50 text-orange-700 text-sm font-semibold hover:bg-orange-100 transition-colors border border-orange-200">
-            ✏️ 선택항목 수정요청 ({selectedIds.size}개)
-          </button>
+        <div className="bg-[#E8F5E9] border border-[#2D6A4F]/20 rounded-2xl px-4 py-3 flex flex-wrap items-center gap-3">
+          <span className="text-sm font-bold text-[#2D6A4F]">{selectedIds.size}개 선택됨</span>
+          <div className="flex gap-2 flex-wrap">
+            <button type="button" onClick={() => setShowBatchConfirm(true)} disabled={submitting}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#2E7D32] text-white text-sm font-semibold hover:bg-[#1B5E20] disabled:opacity-40 transition-colors">
+              {submitting
+                ? <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin inline-block" /><span>처리중...</span></>
+                : `✅ 선택 ${selectedIds.size}개 일괄승인`}
+            </button>
+            <button type="button"
+              onClick={() => { setActiveInlineId('__batch__'); setInlineMemo(''); setInlineCategory('') }}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-orange-50 text-orange-700 text-sm font-semibold hover:bg-orange-100 transition-colors border border-orange-200">
+              ✏️ 선택 {selectedIds.size}개 수정요청
+            </button>
+          </div>
         </div>
       )}
 
@@ -495,26 +514,33 @@ function ManagerView({
         </div>
       )}
 
-      {/* 일괄 수정요청 인라인 */}
+      {/* 일괄 수정요청 모달 */}
       {activeInlineId === '__batch__' && (
-        <div className="rounded-2xl border border-orange-200 bg-orange-50/40 p-4 space-y-3">
-          <p className="text-sm font-semibold text-orange-700">수정 요청 내용 (선택된 {selectedIds.size}개 항목)</p>
-          <select value={inlineCategory} onChange={e => setInlineCategory(e.target.value)}
-            className="w-full sm:w-56 text-sm border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none focus:border-orange-400">
-            <option value="">카테고리 선택 (필수)</option>
-            {CORRECTION_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-          </select>
-          <textarea value={inlineMemo} onChange={e => setInlineMemo(e.target.value)}
-            placeholder="예) 3주차 목요일 메뉴 오타 수정 바랍니다" rows={2}
-            className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2 resize-none focus:outline-none focus:border-orange-400" />
-          <div className="flex gap-2">
-            <button type="button" onClick={() => handleBatchCorrectionSubmit(Array.from(selectedIds))}
-              disabled={submitting || !inlineMemo.trim() || !inlineCategory}
-              className="px-4 py-2 rounded-xl bg-orange-600 text-white text-sm font-semibold hover:bg-orange-700 disabled:opacity-40">
-              수정요청 제출
-            </button>
-            <button type="button" onClick={() => { setActiveInlineId(null); setInlineMemo(''); setInlineCategory('') }}
-              className="px-4 py-2 rounded-xl bg-gray-100 text-gray-600 text-sm font-semibold hover:bg-gray-200">취소</button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full space-y-4">
+            <p className="text-base font-bold text-[#1C2B1E]">선택한 {selectedIds.size}개 원에 수정요청</p>
+            <select value={inlineCategory} onChange={e => setInlineCategory(e.target.value)}
+              className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none focus:border-orange-400">
+              <option value="">카테고리 선택 (필수)</option>
+              {CORRECTION_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+            <div>
+              <p className="text-xs font-semibold text-gray-500 mb-1">수정 내용 (필수)</p>
+              <textarea value={inlineMemo} onChange={e => setInlineMemo(e.target.value)}
+                placeholder="예) 3주차 목요일 메뉴 오타 수정 바랍니다" rows={3}
+                className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2 resize-none focus:outline-none focus:border-orange-400" />
+            </div>
+            <div className="flex gap-3">
+              <button type="button" onClick={() => { setActiveInlineId(null); setInlineMemo(''); setInlineCategory('') }}
+                className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold text-gray-600 hover:bg-gray-50 transition-colors">
+                취소
+              </button>
+              <button type="button" onClick={() => handleBatchCorrectionSubmit()}
+                disabled={submitting || !inlineMemo.trim() || !inlineCategory}
+                className="flex-1 py-2.5 rounded-xl bg-orange-600 text-white text-sm font-semibold hover:bg-orange-700 disabled:opacity-40 transition-colors">
+                수정요청 전송
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -533,7 +559,13 @@ function ManagerView({
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100 text-xs">
                 <th className="px-3 py-3 w-10">
-                  <input ref={selectAllRef} type="checkbox" onChange={toggleSelectAll} className="rounded cursor-pointer" />
+                  <input
+                    ref={selectAllRef}
+                    type="checkbox"
+                    onClick={e => { e.stopPropagation(); e.preventDefault(); toggleSelectAll() }}
+                    onChange={() => {}}
+                    className="rounded cursor-pointer"
+                  />
                 </th>
                 <th className="text-center px-3 py-3 font-semibold text-gray-500 w-8">#</th>
                 <th className="text-left   px-3 py-3 font-semibold text-gray-500">원명</th>
