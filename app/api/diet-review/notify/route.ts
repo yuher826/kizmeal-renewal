@@ -109,6 +109,29 @@ export async function POST(req: NextRequest) {
       break
     }
 
+    case 'emergency_deploy': {
+      const branchList = branch_names?.length ? branch_names.join(', ') : '(원 미확인)'
+      const { data: managers } = await db
+        .from('admins')
+        .select('id')
+        .in('role', ['manager', 'super_admin'])
+        .eq('is_active', true)
+
+      const notifications = (managers ?? []).map((m: { id: string }) => ({
+        type,
+        title:          `${period}비상 배포 실행`,
+        message:        `${adminRow.name}(super_admin)이(가) 비상 배포를 실행했습니다. 대상: ${branchList}`,
+        recipient_role: 'manager',
+        recipient_id:   m.id,
+        year:           year ?? null,
+        month:          month ?? null,
+      }))
+      if (notifications.length > 0) {
+        await db.from('diet_notifications').insert(notifications)
+      }
+      break
+    }
+
     // 하위호환 타입
     case 'generation_complete':
       await db.from('diet_notifications').insert({

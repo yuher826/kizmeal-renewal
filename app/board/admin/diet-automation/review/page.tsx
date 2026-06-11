@@ -251,12 +251,13 @@ function CommonHeader({
 
 // ── Manager/SuperAdmin 화면 ────────────────────────────────────────
 function ManagerView({
-  items, stats, showToast, tab, onTabChange, patchItem, year, month,
+  items, stats, showToast, tab, onTabChange, patchItem, year, month, role,
 }: {
   items:       ReviewItem[]
   stats:       Stats
   year:        number
   month:       number
+  role:        string
   adminId:     string
   adminName:   string
   showToast:   (msg: string, type?: 'success' | 'error') => void
@@ -276,7 +277,10 @@ function ManagerView({
   const [inlineCategory,  setInlineCategory] = useState('')
   const [expandedHistory, setExpandedHistory] = useState<Set<string>>(new Set())
   const [submitting,      setSubmitting]     = useState(false)
-  const [showBatchConfirm, setShowBatchConfirm] = useState(false)
+  const [showBatchConfirm,  setShowBatchConfirm]  = useState(false)
+  const [emergencyItem,     setEmergencyItem]     = useState<ReviewItem | null>(null)
+  const [emergencyInput,    setEmergencyInput]    = useState('')
+  const [emergencyLoading,  setEmergencyLoading]  = useState(false)
 
   const TAB_KEYS: { key: ManagerTab; label: string; icon: string }[] = [
     { key: 'all',                 label: '전체',    icon: '📋' },
@@ -454,6 +458,35 @@ function ManagerView({
     finally { setSubmitting(false) }
   }
 
+  async function handleEmergencyDeploy() {
+    if (!emergencyItem) return
+    setEmergencyLoading(true)
+    const item = emergencyItem
+    try {
+      const res  = await fetch('/api/pptx/deploy', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ year, month, branch_ids: [item.branch_id] }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        patchItem(item.id, { review_status: 'deployed' })
+        setEmergencyItem(null)
+        setEmergencyInput('')
+        fetch('/api/diet-review/notify', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'emergency_deploy', year, month, branch_names: [item.branch_name] }),
+        }).catch(() => {})
+        showToast('비상 배포 완료 — 기록이 저장됐습니다', 'success')
+      } else {
+        showToast(`비상 배포 실패 — ${data.error ?? '다시 시도해주세요'}`, 'error')
+      }
+    } catch {
+      showToast('비상 배포 실패 — 다시 시도해주세요', 'error')
+    } finally {
+      setEmergencyLoading(false)
+    }
+  }
+
   function rowBg(status: string) {
     if (status === 'correction_request') return 'bg-orange-50'
     if (status === 'resubmitted')        return 'bg-blue-50/30'
@@ -546,6 +579,44 @@ function ManagerView({
                 disabled={submitting || !inlineMemo.trim() || !inlineCategory}
                 className="flex-1 py-2.5 rounded-xl bg-orange-600 text-white text-sm font-semibold hover:bg-orange-700 disabled:opacity-40 transition-colors">
                 수정요청 전송
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 비상 배포 모달 */}
+      {emergencyItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full space-y-4">
+            <p className="text-base font-bold text-red-600 text-center">⚠️ 비상 배포 확인</p>
+            <p className="text-sm text-gray-600 text-center leading-relaxed">
+              이 기능은 비상시에만 사용하세요.<br />정상 배포는 영양사가 진행합니다.
+            </p>
+            <p className="text-sm font-semibold text-[#1C2B1E] text-center">{emergencyItem.branch_name}</p>
+            <div>
+              <p className="text-xs text-gray-500 mb-1">확인을 위해 <strong>비상배포</strong>를 입력하세요</p>
+              <input
+                type="text"
+                value={emergencyInput}
+                onChange={e => setEmergencyInput(e.target.value)}
+                placeholder="비상배포"
+                className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:border-red-400"
+              />
+            </div>
+            <div className="flex gap-3">
+              <button type="button"
+                onClick={() => { setEmergencyItem(null); setEmergencyInput('') }}
+                className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold text-gray-600 hover:bg-gray-50 transition-colors">
+                취소
+              </button>
+              <button type="button"
+                onClick={handleEmergencyDeploy}
+                disabled={emergencyInput !== '비상배포' || emergencyLoading}
+                className="flex-1 py-2.5 rounded-xl bg-red-600 text-white text-sm font-semibold disabled:opacity-40 flex items-center justify-center gap-1 transition-colors hover:bg-red-700">
+                {emergencyLoading
+                  ? <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /><span>배포중...</span></>
+                  : '🚨 비상 배포'}
               </button>
             </div>
           </div>
@@ -654,7 +725,16 @@ function ManagerView({
                         </div>
                       )}
                       {item.review_status === 'approved' && (
-                        <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-bold">✅ 승인완료</span>
+                        <div className="flex flex-col items-center gap-1">
+                          <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-bold">✅ 승인완료</span>
+                          {role === 'super_admin' && (
+                            <button type="button"
+                              onClick={() => { setEmergencyItem(item); setEmergencyInput('') }}
+                              className="px-2 py-1 rounded-lg border border-red-500 text-red-500 text-xs hover:bg-red-50 transition-colors">
+                              🚨 비상배포
+                            </button>
+                          )}
+                        </div>
                       )}
                       {item.review_status === 'deployed' && (
                         <div className="space-y-0.5">
@@ -786,6 +866,13 @@ function ManagerView({
                   <button type="button"
                     onClick={() => { setActiveInlineId(activeInlineId === item.id ? null : item.id); setInlineMemo(''); setInlineCategory('') }}
                     className="px-3 py-1.5 rounded-xl bg-orange-50 text-orange-700 text-xs font-semibold border border-orange-200">✏️ 재요청</button>
+                )}
+                {item.review_status === 'approved' && role === 'super_admin' && (
+                  <button type="button"
+                    onClick={() => { setEmergencyItem(item); setEmergencyInput('') }}
+                    className="px-3 py-1.5 rounded-xl border border-red-500 text-red-500 text-xs font-semibold hover:bg-red-50">
+                    🚨 비상배포
+                  </button>
                 )}
               </div>
               {activeInlineId === item.id && (
@@ -1312,7 +1399,7 @@ function DietReviewPageInner() {
         {!loading && items.length > 0 && isManager && (
           <ManagerView
             items={filteredItems} stats={localStats}
-            year={year} month={month}
+            year={year} month={month} role={role}
             adminId={currentAdmin!.id} adminName={currentAdmin!.name}
             showToast={showToast} onRefresh={fetchData}
             tab={managerTab} onTabChange={setManagerTab}
