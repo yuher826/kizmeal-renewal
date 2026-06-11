@@ -44,8 +44,6 @@ type Stats = {
   deployed:            number
 }
 
-type MenuRow = { id: string; status: string; year: number; month: number }
-
 type CurrentAdmin = {
   id:         string
   name:       string
@@ -259,7 +257,6 @@ function ManagerView({
   stats:       Stats
   year:        number
   month:       number
-  menuRow:     MenuRow | null
   adminId:     string
   adminName:   string
   showToast:   (msg: string) => void
@@ -1005,7 +1002,6 @@ function DietReviewPageInner() {
   const [year,  setYear]  = useState(() => Number(searchParams.get('year'))  || now.getFullYear())
   const [month, setMonth] = useState(() => Number(searchParams.get('month')) || now.getMonth() + 1)
 
-  const [menuRow,      setMenuRow]      = useState<MenuRow | null>(null)
   const [items,        setItems]        = useState<ReviewItem[]>([])
   const [stats,        setStats]        = useState<Stats>({
     total: 0, generation_complete: 0, correction_request: 0, resubmitted: 0, approved: 0, deployed: 0,
@@ -1031,7 +1027,6 @@ function DietReviewPageInner() {
         showToast(`오류: ${data.error}`)
         return
       }
-      setMenuRow(data.menuRow)
       setItems(data.items ?? [])
       setStats(data.stats ?? { total: 0, generation_complete: 0, correction_request: 0, resubmitted: 0, approved: 0, deployed: 0 })
       setCurrentAdmin(data.currentAdmin)
@@ -1086,7 +1081,7 @@ function DietReviewPageInner() {
         {loading && <Skeleton />}
 
         {/* 데이터 없음 */}
-        {!loading && !menuRow && (
+        {!loading && currentAdmin && items.length === 0 && (
           <div className="bg-white rounded-2xl border border-gray-100 p-10 text-center">
             <p className="text-gray-400 text-sm">{year}년 {month}월 식단 데이터가 없습니다.</p>
             <Link href="/board/admin/diet-automation/upload" className="mt-4 inline-block text-[#2D6A4F] text-sm underline">
@@ -1096,24 +1091,24 @@ function DietReviewPageInner() {
         )}
 
         {/* 역할별 뷰 */}
-        {!loading && menuRow && isManager && (
+        {!loading && items.length > 0 && isManager && (
           <ManagerView
             items={filteredItems} stats={stats}
-            year={year} month={month} menuRow={menuRow}
+            year={year} month={month}
             adminId={currentAdmin!.id} adminName={currentAdmin!.name}
             showToast={showToast} onRefresh={fetchData}
             tab={managerTab} onTabChange={setManagerTab}
           />
         )}
 
-        {!loading && menuRow && isNutri && (
+        {!loading && items.length > 0 && isNutri && (
           <NutritionistView
             items={filteredItems} year={year} month={month}
             showToast={showToast} onRefresh={fetchData}
           />
         )}
 
-        {!loading && menuRow && isDirector && (
+        {!loading && items.length > 0 && isDirector && (
           <DirectorView
             items={filteredItems} stats={stats} year={year} month={month}
           />
