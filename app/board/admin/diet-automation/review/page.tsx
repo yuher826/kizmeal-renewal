@@ -251,7 +251,7 @@ function CommonHeader({
 
 // ── Manager/SuperAdmin 화면 ────────────────────────────────────────
 function ManagerView({
-  items, stats, showToast, onRefresh, tab, onTabChange,
+  items, showToast, onRefresh, tab, onTabChange,
 }: {
   items:       ReviewItem[]
   stats:       Stats
@@ -259,49 +259,62 @@ function ManagerView({
   month:       number
   adminId:     string
   adminName:   string
-  showToast:   (msg: string) => void
+  showToast:   (msg: string, type?: 'success' | 'error') => void
   onRefresh:   () => void
   tab:         ManagerTab
   onTabChange: (t: ManagerTab) => void
 }) {
-  const [search]                             = useState('')
+  // 낙관적 업데이트용 로컬 아이템
+  const [localItems, setLocalItems] = useState<ReviewItem[]>(items)
+  useEffect(() => { setLocalItems(items) }, [items])
+
+  const [search]             = useState('')
   const [selectedIds,    setSelectedIds]    = useState<Set<string>>(new Set())
   useEffect(() => { setSelectedIds(new Set()) }, [tab])
+  const [loadingItemIds, setLoadingItemIds] = useState<Set<string>>(new Set())
   const [activeInlineId, setActiveInlineId] = useState<string | null>(null)
   const [inlineMemo,     setInlineMemo]     = useState('')
   const [inlineCategory, setInlineCategory] = useState('')
   const [expandedHistory, setExpandedHistory] = useState<Set<string>>(new Set())
   const [submitting,     setSubmitting]     = useState(false)
 
-  const TAB_KEYS: { key: ManagerTab; label: string }[] = [
-    { key: 'all',                label: '전체' },
-    { key: 'generation_complete', label: '검토대기' },
-    { key: 'correction_request',  label: '수정요청' },
-    { key: 'resubmitted',         label: '재제출됨' },
-    { key: 'approved',            label: '승인완료' },
-    { key: 'deployed',            label: '배포완료' },
-  ]
-
-  const tabCount: Record<ManagerTab, number> = {
-    all:                 stats.total,
-    generation_complete: stats.generation_complete,
-    correction_request:  stats.correction_request,
-    resubmitted:         stats.resubmitted,
-    approved:            stats.approved,
-    deployed:            stats.deployed,
+  function patchItem(id: string, patch: Partial<ReviewItem>) {
+    setLocalItems(prev => prev.map(it => it.id === id ? { ...it, ...patch } : it))
   }
 
-  const filtered = items.filter(it => {
+  const localStats: Stats = {
+    total:               localItems.length,
+    generation_complete: localItems.filter(i => i.review_status === 'generation_complete').length,
+    correction_request:  localItems.filter(i => i.review_status === 'correction_request').length,
+    resubmitted:         localItems.filter(i => i.review_status === 'resubmitted').length,
+    approved:            localItems.filter(i => i.review_status === 'approved').length,
+    deployed:            localItems.filter(i => i.review_status === 'deployed').length,
+  }
+
+  const TAB_KEYS: { key: ManagerTab; label: string; icon: string }[] = [
+    { key: 'all',                 label: '전체',    icon: '📋' },
+    { key: 'generation_complete', label: '검토대기', icon: '⏳' },
+    { key: 'correction_request',  label: '수정요청', icon: '🔴' },
+    { key: 'resubmitted',         label: '재제출됨', icon: '🔵' },
+    { key: 'approved',            label: '승인완료', icon: '✅' },
+    { key: 'deployed',            label: '배포완료', icon: '📤' },
+  ]
+  const tabCount: Record<ManagerTab, number> = {
+    all: localStats.total, generation_complete: localStats.generation_complete,
+    correction_request: localStats.correction_request, resubmitted: localStats.resubmitted,
+    approved: localStats.approved, deployed: localStats.deployed,
+  }
+
+  const filtered = localItems.filter(it => {
     if (tab !== 'all' && it.review_status !== tab) return false
     if (search && !it.branch_name.includes(search)) return false
     return true
   })
 
-  const selectableIds = filtered
-    .filter(it => ['generation_complete', 'resubmitted'].includes(it.review_status))
-    .map(it => it.id)
-  const allSelected  = selectableIds.length > 0 && selectableIds.every(id => selectedIds.has(id))
-  const someSelected = selectedIds.size > 0
+  // generation_complete만 체크 가능
+  const selectableIds = filtered.filter(it => it.review_status === 'generation_complete').map(it => it.id)
+  const allSelected   = selectableIds.length > 0 && selectableIds.every(id => selectedIds.has(id))
+  const someSelected  = selectedIds.size > 0
 
   function toggleSelect(id: string) {
     setSelectedIds(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n })
@@ -310,57 +323,130 @@ function ManagerView({
     setSelectedIds(allSelected ? new Set() : new Set(selectableIds))
   }
 
-  async function callPost(payload: object) {
-    const res  = await fetch('/api/diet-review', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    })
-    return res.json()
+  // 단건 승인 (낙관적 업데이트)
+  async function handleApprove(item: ReviewItem) {
+    const prev = item.review_status
+    setLoadingItemIds(s => { const n = new Set(s); n.add(item.id); return n })
+    patchItem(item.id, { review_status: 'approved' })
+    try {
+      const res  = await fetch('/api/diet-review', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'approved', ids: [item.id] }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        fetch('/api/diet-review/notify', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'approved_to_nutritionist', branchName: item.branch_name }),
+        }).catch(() => {})
+        showToast(`${item.branch_name} 승인 완료 — 영양사에게 알림 전송됨`, 'success')
+      } else {
+        patchItem(item.id, { review_status: prev }); showToast(`오류: ${data.error}`, 'error')
+      }
+    } catch {
+      patchItem(item.id, { review_status: prev }); showToast('네트워크 오류', 'error')
+    } finally {
+      setLoadingItemIds(s => { const n = new Set(s); n.delete(item.id); return n })
+    }
   }
 
-  async function handleApprove(ids: string[]) {
+  // 일괄 승인
+  async function handleBatchApprove(ids: string[]) {
     setSubmitting(true)
-    const data = await callPost({ action: 'approved', ids })
-    if (data.success) {
-      showToast(`${data.updated?.length ?? 0}개 승인완료`)
-      onRefresh()
-    } else {
-      showToast(`오류: ${data.error}`)
-    }
-    setSelectedIds(new Set())
-    setSubmitting(false)
+    const prevMap = new Map(ids.map(id => [id, localItems.find(i => i.id === id)?.review_status]))
+    ids.forEach(id => patchItem(id, { review_status: 'approved' }))
+    try {
+      const res  = await fetch('/api/diet-review', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'approved', ids }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        showToast(`${data.updated?.length ?? 0}개 승인 완료`, 'success'); setSelectedIds(new Set())
+      } else {
+        ids.forEach(id => { const p = prevMap.get(id); if (p) patchItem(id, { review_status: p as ReviewItem['review_status'] }) })
+        showToast(`오류: ${data.error}`, 'error')
+      }
+    } catch { onRefresh(); showToast('네트워크 오류', 'error') }
+    finally { setSubmitting(false) }
   }
 
-  async function handleCorrectionSubmit(ids: string[]) {
-    if (!inlineMemo.trim()) { showToast('메모를 입력해주세요.'); return }
-    setSubmitting(true)
-    const data = await callPost({
-      action: 'correction_request', ids,
-      memo: inlineMemo, memo_category: inlineCategory || undefined,
-    })
-    if (data.success) {
-      showToast(`${data.updated?.length ?? 0}개 수정요청 완료`)
-      setActiveInlineId(null); setInlineMemo(''); setInlineCategory('')
-      onRefresh()
-    } else {
-      showToast(`오류: ${data.error}`)
+  // 단건 수정요청 (낙관적 업데이트)
+  async function handleCorrectionSubmit(item: ReviewItem) {
+    if (!inlineMemo.trim())  { showToast('메모를 입력해주세요.', 'error'); return }
+    if (!inlineCategory)     { showToast('카테고리를 선택해주세요.', 'error'); return }
+    const prev = item.review_status
+    const savedMemo = inlineMemo, savedCat = inlineCategory
+    setLoadingItemIds(s => { const n = new Set(s); n.add(item.id); return n })
+    patchItem(item.id, { review_status: 'correction_request', memo: savedMemo, memo_category: savedCat })
+    setActiveInlineId(null); setInlineMemo(''); setInlineCategory('')
+    try {
+      const res  = await fetch('/api/diet-review', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'correction_request', ids: [item.id], memo: savedMemo, memo_category: savedCat || undefined }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        fetch('/api/diet-review/notify', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'correction_to_nutritionist', branchName: item.branch_name, memo: savedMemo, category: savedCat }),
+        }).catch(() => {})
+        showToast(`${item.branch_name} 수정요청 전송 — 영양사 알림 발송됨`, 'success')
+      } else {
+        patchItem(item.id, { review_status: prev, memo: null, memo_category: null })
+        setActiveInlineId(item.id); setInlineMemo(savedMemo); setInlineCategory(savedCat)
+        showToast(`오류: ${data.error}`, 'error')
+      }
+    } catch {
+      patchItem(item.id, { review_status: prev, memo: null, memo_category: null })
+      setActiveInlineId(item.id); setInlineMemo(savedMemo); setInlineCategory(savedCat)
+      showToast('네트워크 오류', 'error')
+    } finally {
+      setLoadingItemIds(s => { const n = new Set(s); n.delete(item.id); return n })
     }
-    setSubmitting(false)
+  }
+
+  // 일괄 수정요청
+  async function handleBatchCorrectionSubmit(ids: string[]) {
+    if (!inlineMemo.trim()) { showToast('메모를 입력해주세요.', 'error'); return }
+    if (!inlineCategory)    { showToast('카테고리를 선택해주세요.', 'error'); return }
+    setSubmitting(true)
+    try {
+      const res  = await fetch('/api/diet-review', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'correction_request', ids, memo: inlineMemo, memo_category: inlineCategory || undefined }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        showToast(`${data.updated?.length ?? 0}개 수정요청 완료`, 'success')
+        setActiveInlineId(null); setInlineMemo(''); setInlineCategory(''); setSelectedIds(new Set())
+        onRefresh()
+      } else { showToast(`오류: ${data.error}`, 'error') }
+    } catch { showToast('네트워크 오류', 'error') }
+    finally { setSubmitting(false) }
+  }
+
+  function rowBg(status: string) {
+    if (status === 'correction_request') return 'bg-orange-50'
+    if (status === 'resubmitted')        return 'bg-blue-50/30'
+    if (status === 'approved')           return 'bg-green-50'
+    if (status === 'deployed')           return 'bg-teal-50'
+    return ''
   }
 
   return (
     <div className="space-y-4">
       {/* 탭 */}
-      <div className="flex gap-1 overflow-x-auto pb-1">
+      <div className="flex gap-1.5 overflow-x-auto pb-1">
         {TAB_KEYS.map(t => (
-          <button key={t.key} type="button"
-            onClick={() => onTabChange(t.key)}
-            className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${
-              tab === t.key ? 'bg-[#2D6A4F] text-white' : 'bg-white text-gray-600 border border-gray-200 hover:border-[#2D6A4F]'
+          <button key={t.key} type="button" onClick={() => onTabChange(t.key)}
+            className={`flex-shrink-0 flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-colors ${
+              tab === t.key ? 'bg-[#2D6A4F] text-white shadow-sm' : 'bg-white text-gray-600 border border-gray-200 hover:border-[#2D6A4F] hover:text-[#2D6A4F]'
             }`}>
-            {t.label}
-            <span className={`w-5 h-5 rounded-full text-[10px] flex items-center justify-center font-bold ${
-              tab === t.key ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'
+            <span>{t.icon}</span>
+            <span>{t.label}</span>
+            <span className={`min-w-[20px] h-5 px-1 rounded-full text-[10px] flex items-center justify-center font-bold ${
+              tab === t.key ? 'bg-white/25 text-white' : 'bg-gray-100 text-gray-500'
             }`}>{tabCount[t.key]}</span>
           </button>
         ))}
@@ -369,14 +455,13 @@ function ManagerView({
       {/* 일괄 액션 */}
       {someSelected && (
         <div className="flex gap-2 flex-wrap">
-          <button type="button" onClick={() => handleApprove(Array.from(selectedIds))}
-            disabled={submitting}
+          <button type="button" onClick={() => handleBatchApprove(Array.from(selectedIds))} disabled={submitting}
             className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#2E7D32] text-white text-sm font-semibold hover:bg-[#1B5E20] disabled:opacity-40 transition-colors">
-            ☑️ 선택항목 승인 ({selectedIds.size}개)
+            ✅ 선택항목 승인 ({selectedIds.size}개)
           </button>
           <button type="button"
             onClick={() => { setActiveInlineId('__batch__'); setInlineMemo(''); setInlineCategory('') }}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-orange-50 text-orange-700 text-sm font-semibold hover:bg-orange-100 disabled:opacity-40 transition-colors border border-orange-200">
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-orange-50 text-orange-700 text-sm font-semibold hover:bg-orange-100 transition-colors border border-orange-200">
             ✏️ 선택항목 수정요청 ({selectedIds.size}개)
           </button>
         </div>
@@ -384,29 +469,24 @@ function ManagerView({
 
       {/* 일괄 수정요청 인라인 */}
       {activeInlineId === '__batch__' && (
-        <div className="rounded-2xl border border-orange-200 bg-orange-50/40 p-4 space-y-2">
+        <div className="rounded-2xl border border-orange-200 bg-orange-50/40 p-4 space-y-3">
           <p className="text-sm font-semibold text-orange-700">수정 요청 내용 (선택된 {selectedIds.size}개 항목)</p>
-          <div className="flex flex-wrap gap-1.5">
-            {CORRECTION_CATEGORIES.map(cat => (
-              <button key={cat} type="button" onClick={() => setInlineCategory(cat)}
-                className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${
-                  inlineCategory === cat ? 'bg-orange-600 text-white border-orange-600' : 'bg-white text-gray-600 border-gray-200 hover:border-orange-300'
-                }`}>{cat}</button>
-            ))}
-          </div>
+          <select value={inlineCategory} onChange={e => setInlineCategory(e.target.value)}
+            className="w-full sm:w-56 text-sm border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none focus:border-orange-400">
+            <option value="">카테고리 선택 (필수)</option>
+            {CORRECTION_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
           <textarea value={inlineMemo} onChange={e => setInlineMemo(e.target.value)}
-            placeholder="수정 요청 내용을 입력해주세요... (필수)" rows={2}
+            placeholder="예) 3주차 목요일 메뉴 오타 수정 바랍니다" rows={2}
             className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2 resize-none focus:outline-none focus:border-orange-400" />
           <div className="flex gap-2">
-            <button type="button" onClick={() => handleCorrectionSubmit(Array.from(selectedIds))}
-              disabled={submitting}
+            <button type="button" onClick={() => handleBatchCorrectionSubmit(Array.from(selectedIds))}
+              disabled={submitting || !inlineMemo.trim() || !inlineCategory}
               className="px-4 py-2 rounded-xl bg-orange-600 text-white text-sm font-semibold hover:bg-orange-700 disabled:opacity-40">
-              제출
+              수정요청 제출
             </button>
             <button type="button" onClick={() => { setActiveInlineId(null); setInlineMemo(''); setInlineCategory('') }}
-              className="px-4 py-2 rounded-xl bg-gray-100 text-gray-600 text-sm font-semibold hover:bg-gray-200">
-              취소
-            </button>
+              className="px-4 py-2 rounded-xl bg-gray-100 text-gray-600 text-sm font-semibold hover:bg-gray-200">취소</button>
           </div>
         </div>
       )}
@@ -414,7 +494,7 @@ function ManagerView({
       {/* 빈 상태 */}
       {filtered.length === 0 && (
         <div className="bg-white rounded-2xl border border-gray-100 p-10 text-center">
-          <p className="text-gray-400 text-sm">이번 달 검토할 식단표가 없습니다.</p>
+          <p className="text-gray-400 text-sm">해당 탭에 식단표가 없습니다.</p>
         </div>
       )}
 
@@ -438,67 +518,75 @@ function ManagerView({
             <tbody>
               {filtered.map((item, idx) => (
                 <>
-                  <tr key={item.id}
-                    className={`border-b border-gray-50 hover:bg-green-50/20 transition-colors ${idx % 2 === 1 ? 'bg-gray-50/40' : ''} ${item.review_status === 'resubmitted' ? 'bg-blue-50/20' : ''}`}>
+                  <tr key={item.id} className={`border-b border-gray-50 transition-colors ${rowBg(item.review_status) || (idx % 2 === 1 ? 'bg-gray-50/40' : '')}`}>
                     <td className="px-3 py-3 text-center">
-                      <input type="checkbox"
-                        checked={selectedIds.has(item.id)}
-                        onChange={() => toggleSelect(item.id)}
-                        disabled={!['generation_complete', 'resubmitted'].includes(item.review_status)}
+                      <input type="checkbox" checked={selectedIds.has(item.id)} onChange={() => toggleSelect(item.id)}
+                        disabled={item.review_status !== 'generation_complete'}
                         className="rounded disabled:opacity-30" />
                     </td>
                     <td className="text-center px-3 py-3 text-gray-400 text-xs">{idx + 1}</td>
                     <td className="px-3 py-3 font-medium text-[#1C2B1E]">
-                      {item.branch_name}
-                      {item.review_status === 'resubmitted' && (
-                        <span className="ml-2 text-xs text-blue-600 font-semibold">재검토 필요</span>
+                      <div>
+                        {item.branch_name}
+                        {item.review_status === 'resubmitted' && (
+                          <span className="ml-2 text-xs text-blue-600 font-semibold">재검토 필요</span>
+                        )}
+                      </div>
+                      {item.review_status === 'correction_request' && item.memo && (
+                        <div className="mt-0.5 flex items-start gap-1 text-xs text-orange-700">
+                          <span>🔴</span>
+                          {item.memo_category && <span className="font-semibold">[{item.memo_category}]</span>}
+                          <span className="text-gray-500 line-clamp-1">{item.memo}</span>
+                        </div>
                       )}
                     </td>
                     <td className="text-center px-3 py-3">
-                      {item.pptx_url ? (
-                        <a href={item.pptx_url} target="_blank" rel="noopener noreferrer"
-                          className="px-2.5 py-1.5 rounded-lg bg-[#E3F2FD] text-[#1565C0] text-xs font-bold hover:bg-[#BBDEFB]">
-                          PPTX
-                        </a>
-                      ) : <span className="text-gray-300 text-xs">-</span>}
+                      {item.pptx_url
+                        ? <a href={item.pptx_url} target="_blank" rel="noopener noreferrer" className="px-2.5 py-1.5 rounded-lg bg-[#E3F2FD] text-[#1565C0] text-xs font-bold hover:bg-[#BBDEFB]">PPTX</a>
+                        : <span className="text-gray-300 text-xs">-</span>}
                     </td>
+                    <td className="text-center px-3 py-3"><StatusBadge status={item.review_status} /></td>
                     <td className="text-center px-3 py-3">
-                      <StatusBadge status={item.review_status} />
-                    </td>
-                    <td className="text-center px-3 py-3">
-                      {item.correction_count === 0 ? (
-                        <span className="text-gray-300 text-xs">-</span>
-                      ) : (
-                        <button type="button"
-                          onClick={() => setExpandedHistory(prev => { const n = new Set(prev); if (n.has(item.id)) n.delete(item.id); else n.add(item.id); return n })}
-                          className="text-orange-600 text-xs font-medium hover:underline">
-                          {item.correction_count}회 {expandedHistory.has(item.id) ? '▲' : '▼'}
-                        </button>
-                      )}
+                      {item.correction_count === 0
+                        ? <span className="text-gray-300 text-xs">-</span>
+                        : <button type="button"
+                            onClick={() => setExpandedHistory(prev => { const n = new Set(prev); if (n.has(item.id)) n.delete(item.id); else n.add(item.id); return n })}
+                            className="text-orange-600 text-xs font-medium hover:underline">
+                            {item.correction_count}회 {expandedHistory.has(item.id) ? '▲' : '▼'}
+                          </button>}
                     </td>
                     <td className="text-center px-3 py-3">
                       {['generation_complete', 'resubmitted'].includes(item.review_status) && (
                         <div className="flex gap-1.5 justify-center flex-wrap">
-                          <button type="button" onClick={() => handleApprove([item.id])} disabled={submitting}
-                            className="px-3 py-1.5 rounded-lg bg-[#2E7D32] text-white text-xs font-semibold hover:bg-[#1B5E20] disabled:opacity-40">
-                            ✅ 승인
+                          <button type="button" onClick={() => handleApprove(item)} disabled={loadingItemIds.has(item.id)}
+                            className="px-3 py-1.5 rounded-lg bg-[#2E7D32] text-white text-xs font-semibold hover:bg-[#1B5E20] disabled:opacity-50 flex items-center gap-1">
+                            {loadingItemIds.has(item.id)
+                              ? <><span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" /><span>처리중</span></>
+                              : '✅ 승인'}
                           </button>
                           <button type="button"
-                            onClick={() => { setActiveInlineId(item.id); setInlineMemo(''); setInlineCategory('') }}
+                            onClick={() => { setActiveInlineId(activeInlineId === item.id ? null : item.id); setInlineMemo(''); setInlineCategory('') }}
                             className="px-3 py-1.5 rounded-lg bg-orange-50 text-orange-700 text-xs font-semibold hover:bg-orange-100 border border-orange-200">
                             ✏️ 수정요청
                           </button>
                         </div>
                       )}
                       {item.review_status === 'correction_request' && (
-                        <span className="text-orange-600 text-xs font-medium">수정요청됨</span>
+                        <div className="flex gap-1.5 justify-center flex-wrap">
+                          <span className="text-orange-600 text-xs font-medium">수정요청됨</span>
+                          <button type="button"
+                            onClick={() => { setActiveInlineId(activeInlineId === item.id ? null : item.id); setInlineMemo(''); setInlineCategory('') }}
+                            className="px-2 py-1 rounded-lg bg-orange-50 text-orange-700 text-xs font-semibold border border-orange-200 hover:bg-orange-100">
+                            재요청
+                          </button>
+                        </div>
                       )}
                       {item.review_status === 'approved' && (
-                        <span className="text-green-700 text-xs font-medium">배포대기중</span>
+                        <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-bold">✅ 승인완료</span>
                       )}
                       {item.review_status === 'deployed' && (
-                        <div className="text-xs text-teal-700 font-medium">
-                          배포완료
+                        <div className="space-y-0.5">
+                          <span className="inline-flex items-center gap-1 px-2 py-1 bg-teal-100 text-teal-700 rounded-full text-xs font-bold">📤 배포완료</span>
                           {item.deployed_at && <div className="text-gray-400 text-[10px]">{formatKST(item.deployed_at)}</div>}
                         </div>
                       )}
@@ -510,23 +598,24 @@ function ManagerView({
                     <tr key={`${item.id}-inline`}>
                       <td colSpan={7} className="px-4 pb-3 bg-orange-50/30">
                         <div className="rounded-xl border border-orange-200 bg-white p-3 space-y-2">
-                          <p className="text-xs font-semibold text-orange-700">수정 요청 내용</p>
-                          <div className="flex flex-wrap gap-1.5">
-                            {CORRECTION_CATEGORIES.map(cat => (
-                              <button key={cat} type="button" onClick={() => setInlineCategory(cat)}
-                                className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${
-                                  inlineCategory === cat ? 'bg-orange-600 text-white border-orange-600' : 'bg-white text-gray-600 border-gray-200 hover:border-orange-300'
-                                }`}>{cat}</button>
-                            ))}
-                          </div>
+                          <p className="text-xs font-semibold text-orange-700">수정 요청 — {item.branch_name}</p>
+                          <select value={inlineCategory} onChange={e => setInlineCategory(e.target.value)}
+                            className="w-full sm:w-48 text-xs border border-gray-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:border-orange-400">
+                            <option value="">카테고리 선택 (필수)</option>
+                            {CORRECTION_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                          </select>
                           <textarea value={inlineMemo} onChange={e => setInlineMemo(e.target.value)}
-                            placeholder="수정 요청 내용을 입력해주세요... (필수)" rows={2}
+                            placeholder="예) 3주차 목요일 메뉴 오타 수정 바랍니다" rows={2}
                             className="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 resize-none focus:outline-none focus:border-orange-400" />
                           <div className="flex gap-2">
-                            <button type="button" onClick={() => handleCorrectionSubmit([item.id])} disabled={submitting}
-                              className="px-4 py-1.5 rounded-lg bg-orange-600 text-white text-xs font-semibold disabled:opacity-40">제출</button>
-                            <button type="button"
-                              onClick={() => { setActiveInlineId(null); setInlineMemo(''); setInlineCategory('') }}
+                            <button type="button" onClick={() => handleCorrectionSubmit(item)}
+                              disabled={loadingItemIds.has(item.id) || !inlineMemo.trim() || !inlineCategory}
+                              className="px-4 py-1.5 rounded-lg bg-orange-600 text-white text-xs font-semibold disabled:opacity-40 flex items-center gap-1">
+                              {loadingItemIds.has(item.id)
+                                ? <><span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" /><span>처리중</span></>
+                                : '수정요청 제출'}
+                            </button>
+                            <button type="button" onClick={() => { setActiveInlineId(null); setInlineMemo(''); setInlineCategory('') }}
                               className="px-4 py-1.5 rounded-lg bg-gray-100 text-gray-600 text-xs font-semibold">취소</button>
                           </div>
                         </div>
@@ -564,14 +653,27 @@ function ManagerView({
       {filtered.length > 0 && (
         <div className="sm:hidden space-y-3">
           {filtered.map(item => (
-            <div key={item.id} className={`bg-white rounded-2xl border p-4 ${item.review_status === 'resubmitted' ? 'border-blue-200 bg-blue-50/10' : 'border-gray-100'}`}>
+            <div key={item.id} className={`rounded-2xl border p-4 ${
+              item.review_status === 'correction_request' ? 'bg-orange-50 border-orange-200' :
+              item.review_status === 'approved'           ? 'bg-green-50 border-green-200' :
+              item.review_status === 'deployed'           ? 'bg-teal-50 border-teal-200' :
+              item.review_status === 'resubmitted'        ? 'bg-blue-50/30 border-blue-200' :
+              'bg-white border-gray-100'
+            }`}>
               <div className="flex items-center gap-2 mb-3">
                 <input type="checkbox" checked={selectedIds.has(item.id)} onChange={() => toggleSelect(item.id)}
-                  disabled={!['generation_complete', 'resubmitted'].includes(item.review_status)}
+                  disabled={item.review_status !== 'generation_complete'}
                   className="rounded disabled:opacity-30 flex-shrink-0" />
                 <span className="font-bold text-[#1C2B1E] flex-1 min-w-0 truncate">{item.branch_name}</span>
                 <StatusBadge status={item.review_status} />
               </div>
+              {item.review_status === 'correction_request' && item.memo && (
+                <div className="mb-2 flex items-start gap-1 text-xs text-orange-700">
+                  <span>🔴</span>
+                  {item.memo_category && <span className="font-semibold">[{item.memo_category}]</span>}
+                  <span className="text-gray-600">{item.memo}</span>
+                </div>
+              )}
               <div className="flex gap-2 flex-wrap">
                 {item.pptx_url && (
                   <a href={item.pptx_url} target="_blank" rel="noopener noreferrer"
@@ -579,30 +681,41 @@ function ManagerView({
                 )}
                 {['generation_complete', 'resubmitted'].includes(item.review_status) && (
                   <>
-                    <button type="button" onClick={() => handleApprove([item.id])} disabled={submitting}
-                      className="px-3 py-1.5 rounded-xl bg-[#2E7D32] text-white text-xs font-semibold disabled:opacity-40">✅ 승인</button>
+                    <button type="button" onClick={() => handleApprove(item)} disabled={loadingItemIds.has(item.id)}
+                      className="px-3 py-1.5 rounded-xl bg-[#2E7D32] text-white text-xs font-semibold disabled:opacity-50 flex items-center gap-1">
+                      {loadingItemIds.has(item.id)
+                        ? <><span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" /><span>처리중</span></>
+                        : '✅ 승인'}
+                    </button>
                     <button type="button"
-                      onClick={() => { setActiveInlineId(item.id); setInlineMemo(''); setInlineCategory('') }}
+                      onClick={() => { setActiveInlineId(activeInlineId === item.id ? null : item.id); setInlineMemo(''); setInlineCategory('') }}
                       className="px-3 py-1.5 rounded-xl bg-orange-50 text-orange-700 text-xs font-semibold border border-orange-200">✏️ 수정요청</button>
                   </>
+                )}
+                {item.review_status === 'correction_request' && (
+                  <button type="button"
+                    onClick={() => { setActiveInlineId(activeInlineId === item.id ? null : item.id); setInlineMemo(''); setInlineCategory('') }}
+                    className="px-3 py-1.5 rounded-xl bg-orange-50 text-orange-700 text-xs font-semibold border border-orange-200">✏️ 재요청</button>
                 )}
               </div>
               {activeInlineId === item.id && (
                 <div className="mt-3 rounded-xl border border-orange-200 bg-orange-50/30 p-3 space-y-2">
-                  <div className="flex flex-wrap gap-1.5">
-                    {CORRECTION_CATEGORIES.map(cat => (
-                      <button key={cat} type="button" onClick={() => setInlineCategory(cat)}
-                        className={`px-2.5 py-1 rounded-lg text-xs font-medium border ${inlineCategory === cat ? 'bg-orange-600 text-white border-orange-600' : 'bg-white text-gray-600 border-gray-200'}`}>
-                        {cat}
-                      </button>
-                    ))}
-                  </div>
+                  <select value={inlineCategory} onChange={e => setInlineCategory(e.target.value)}
+                    className="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 bg-white focus:outline-none">
+                    <option value="">카테고리 선택 (필수)</option>
+                    {CORRECTION_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
                   <textarea value={inlineMemo} onChange={e => setInlineMemo(e.target.value)}
-                    placeholder="수정 요청 내용 (필수)" rows={2}
+                    placeholder="예) 3주차 목요일 메뉴 오타 수정 바랍니다" rows={2}
                     className="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 resize-none focus:outline-none" />
                   <div className="flex gap-2">
-                    <button type="button" onClick={() => handleCorrectionSubmit([item.id])} disabled={submitting}
-                      className="px-4 py-1.5 rounded-lg bg-orange-600 text-white text-xs font-semibold disabled:opacity-40">제출</button>
+                    <button type="button" onClick={() => handleCorrectionSubmit(item)}
+                      disabled={loadingItemIds.has(item.id) || !inlineMemo.trim() || !inlineCategory}
+                      className="px-4 py-1.5 rounded-lg bg-orange-600 text-white text-xs font-semibold disabled:opacity-40 flex items-center gap-1">
+                      {loadingItemIds.has(item.id)
+                        ? <><span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" /><span>처리중</span></>
+                        : '수정요청 제출'}
+                    </button>
                     <button type="button" onClick={() => { setActiveInlineId(null); setInlineMemo(''); setInlineCategory('') }}
                       className="px-4 py-1.5 rounded-lg bg-gray-100 text-gray-600 text-xs font-semibold">취소</button>
                   </div>
@@ -623,7 +736,7 @@ function NutritionistView({
   items:     ReviewItem[]
   year:      number
   month:     number
-  showToast: (msg: string) => void
+  showToast: (msg: string, type?: 'success' | 'error') => void
   onRefresh: () => void
 }) {
   const [tab,           setTab]           = useState<NutritionistTab>('correction')
@@ -1010,11 +1123,11 @@ function DietReviewPageInner() {
   const [search,       setSearch]       = useState('')
   const [managerTab,   setManagerTab]   = useState<ManagerTab>('all')
   const [loading,      setLoading]      = useState(true)
-  const [toast,        setToast]        = useState<string | null>(null)
+  const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null)
 
-  const showToast = useCallback((msg: string) => {
-    setToast(msg)
-    setTimeout(() => setToast(null), 4000)
+  const showToast = useCallback((msg: string, type: 'success' | 'error' = 'success') => {
+    setToast({ msg, type })
+    setTimeout(() => setToast(null), 3000)
   }, [])
 
   const fetchData = useCallback(async () => {
@@ -1117,8 +1230,11 @@ function DietReviewPageInner() {
 
       {/* 토스트 */}
       {toast && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-gray-800 text-white text-sm rounded-2xl px-5 py-3 shadow-lg z-50 whitespace-nowrap">
-          {toast}
+        <div className={`fixed top-4 right-4 z-50 flex items-center gap-2 px-4 py-3 rounded-2xl shadow-lg text-sm font-medium text-white transition-all max-w-sm ${
+          toast.type === 'success' ? 'bg-green-600' : 'bg-red-500'
+        }`}>
+          <span>{toast.type === 'success' ? '✅' : '❌'}</span>
+          <span>{toast.msg}</span>
         </div>
       )}
     </main>
