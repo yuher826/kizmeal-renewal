@@ -269,6 +269,7 @@ function ManagerView({
   useEffect(() => { setSelectedIds(new Set()) }, [tab])
   useEffect(() => { setSelectedIds(new Set()) }, [year, month])
   const selectAllRef                         = useRef<HTMLInputElement>(null)
+  const selectAllMobileRef                   = useRef<HTMLInputElement>(null)
   const [loadingItemIds,  setLoadingItemIds] = useState<Set<string>>(new Set())
   const [activeInlineId,  setActiveInlineId] = useState<string | null>(null)
   const [inlineMemo,      setInlineMemo]     = useState('')
@@ -302,6 +303,12 @@ function ManagerView({
     if (!selectAllRef.current) return
     selectAllRef.current.checked       = allChecked
     selectAllRef.current.indeterminate = someChecked && !allChecked
+  }, [allChecked, someChecked])
+
+  useEffect(() => {
+    if (!selectAllMobileRef.current) return
+    selectAllMobileRef.current.checked       = allChecked
+    selectAllMobileRef.current.indeterminate = someChecked && !allChecked
   }, [allChecked, someChecked])
 
   function toggleOne(id: string) {
@@ -717,6 +724,19 @@ function ManagerView({
       {/* 모바일 카드 */}
       {filtered.length > 0 && (
         <div className="sm:hidden space-y-3">
+          {/* 전체선택 (모바일) */}
+          {checkableIds.length > 0 && (
+            <div className="flex items-center gap-2 px-1 pb-1 border-b border-gray-100">
+              <input
+                ref={selectAllMobileRef}
+                type="checkbox"
+                onClick={e => { e.stopPropagation(); e.preventDefault(); toggleSelectAll() }}
+                onChange={() => {}}
+                className="rounded cursor-pointer"
+              />
+              <span className="text-sm text-gray-500">전체선택 ({checkableIds.length}개)</span>
+            </div>
+          )}
           {filtered.map(item => (
             <div key={item.id} className={`rounded-2xl border p-4 ${
               item.review_status === 'correction_request' ? 'bg-orange-50 border-orange-200' :
