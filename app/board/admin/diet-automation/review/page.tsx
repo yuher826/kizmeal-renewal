@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef, Suspense } from 'react'
+import { useState, useEffect, useCallback, useRef, Suspense, Fragment } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 
@@ -251,7 +251,7 @@ function CommonHeader({
 
 // ── Manager/SuperAdmin 화면 ────────────────────────────────────────
 function ManagerView({
-  items, showToast, onRefresh, tab, onTabChange,
+  items, stats, showToast, onRefresh, tab, onTabChange, patchItem,
 }: {
   items:       ReviewItem[]
   stats:       Stats
@@ -263,12 +263,8 @@ function ManagerView({
   onRefresh:   () => void
   tab:         ManagerTab
   onTabChange: (t: ManagerTab) => void
+  patchItem:   (id: string, patch: Partial<ReviewItem>) => void
 }) {
-  // 낙관적 업데이트용 로컬 아이템
-  const [localItems, setLocalItems] = useState<ReviewItem[]>(items)
-  useEffect(() => { setLocalItems(items) }, [items])
-
-  const [search]             = useState('')
   const [selectedIds,    setSelectedIds]    = useState<Set<string>>(new Set())
   useEffect(() => { setSelectedIds(new Set()) }, [tab])
   const [loadingItemIds, setLoadingItemIds] = useState<Set<string>>(new Set())
@@ -277,19 +273,6 @@ function ManagerView({
   const [inlineCategory, setInlineCategory] = useState('')
   const [expandedHistory, setExpandedHistory] = useState<Set<string>>(new Set())
   const [submitting,     setSubmitting]     = useState(false)
-
-  function patchItem(id: string, patch: Partial<ReviewItem>) {
-    setLocalItems(prev => prev.map(it => it.id === id ? { ...it, ...patch } : it))
-  }
-
-  const localStats: Stats = {
-    total:               localItems.length,
-    generation_complete: localItems.filter(i => i.review_status === 'generation_complete').length,
-    correction_request:  localItems.filter(i => i.review_status === 'correction_request').length,
-    resubmitted:         localItems.filter(i => i.review_status === 'resubmitted').length,
-    approved:            localItems.filter(i => i.review_status === 'approved').length,
-    deployed:            localItems.filter(i => i.review_status === 'deployed').length,
-  }
 
   const TAB_KEYS: { key: ManagerTab; label: string; icon: string }[] = [
     { key: 'all',                 label: '전체',    icon: '📋' },
@@ -300,16 +283,12 @@ function ManagerView({
     { key: 'deployed',            label: '배포완료', icon: '📤' },
   ]
   const tabCount: Record<ManagerTab, number> = {
-    all: localStats.total, generation_complete: localStats.generation_complete,
-    correction_request: localStats.correction_request, resubmitted: localStats.resubmitted,
-    approved: localStats.approved, deployed: localStats.deployed,
+    all: stats.total, generation_complete: stats.generation_complete,
+    correction_request: stats.correction_request, resubmitted: stats.resubmitted,
+    approved: stats.approved, deployed: stats.deployed,
   }
 
-  const filtered = localItems.filter(it => {
-    if (tab !== 'all' && it.review_status !== tab) return false
-    if (search && !it.branch_name.includes(search)) return false
-    return true
-  })
+  const filtered = items.filter(it => tab === 'all' || it.review_status === tab)
 
   // generation_complete만 체크 가능
   const selectableIds = filtered.filter(it => it.review_status === 'generation_complete').map(it => it.id)
@@ -353,7 +332,7 @@ function ManagerView({
   // 일괄 승인
   async function handleBatchApprove(ids: string[]) {
     setSubmitting(true)
-    const prevMap = new Map(ids.map(id => [id, localItems.find(i => i.id === id)?.review_status]))
+    const prevMap = new Map(ids.map(id => [id, items.find(i => i.id === id)?.review_status]))
     ids.forEach(id => patchItem(id, { review_status: 'approved' }))
     try {
       const res  = await fetch('/api/diet-review', {
@@ -517,8 +496,8 @@ function ManagerView({
             </thead>
             <tbody>
               {filtered.map((item, idx) => (
-                <>
-                  <tr key={item.id} className={`border-b border-gray-50 transition-colors ${rowBg(item.review_status) || (idx % 2 === 1 ? 'bg-gray-50/40' : '')}`}>
+                <Fragment key={item.id}>
+                  <tr className={`border-b border-gray-50 transition-colors ${rowBg(item.review_status) || (idx % 2 === 1 ? 'bg-gray-50/40' : '')}`}>
                     <td className="px-3 py-3 text-center">
                       <input type="checkbox" checked={selectedIds.has(item.id)} onChange={() => toggleSelect(item.id)}
                         disabled={item.review_status !== 'generation_complete'}
@@ -595,7 +574,7 @@ function ManagerView({
 
                   {/* 단건 수정요청 인라인 */}
                   {activeInlineId === item.id && (
-                    <tr key={`${item.id}-inline`}>
+                    <tr>
                       <td colSpan={7} className="px-4 pb-3 bg-orange-50/30">
                         <div className="rounded-xl border border-orange-200 bg-white p-3 space-y-2">
                           <p className="text-xs font-semibold text-orange-700">수정 요청 — {item.branch_name}</p>
@@ -625,7 +604,7 @@ function ManagerView({
 
                   {/* 수정이력 아코디언 */}
                   {expandedHistory.has(item.id) && (
-                    <tr key={`${item.id}-hist`}>
+                    <tr>
                       <td colSpan={7} className="px-4 pb-3 bg-gray-50/60">
                         <div className="space-y-1.5 pt-1">
                           {(item.memo_history ?? []).map((h, i) => (
@@ -642,7 +621,7 @@ function ManagerView({
                       </td>
                     </tr>
                   )}
-                </>
+                </Fragment>
               ))}
             </tbody>
           </table>
@@ -1116,6 +1095,8 @@ function DietReviewPageInner() {
   const [month, setMonth] = useState(() => Number(searchParams.get('month')) || now.getMonth() + 1)
 
   const [items,        setItems]        = useState<ReviewItem[]>([])
+  const [localItems,   setLocalItems]   = useState<ReviewItem[]>([])
+  useEffect(() => { setLocalItems(items) }, [items])
   const [stats,        setStats]        = useState<Stats>({
     total: 0, generation_complete: 0, correction_request: 0, resubmitted: 0, approved: 0, deployed: 0,
   })
@@ -1128,6 +1109,19 @@ function DietReviewPageInner() {
   const showToast = useCallback((msg: string, type: 'success' | 'error' = 'success') => {
     setToast({ msg, type })
     setTimeout(() => setToast(null), 3000)
+  }, [])
+
+  const localStats: Stats = {
+    total:               localItems.length,
+    generation_complete: localItems.filter(i => i.review_status === 'generation_complete').length,
+    correction_request:  localItems.filter(i => i.review_status === 'correction_request').length,
+    resubmitted:         localItems.filter(i => i.review_status === 'resubmitted').length,
+    approved:            localItems.filter(i => i.review_status === 'approved').length,
+    deployed:            localItems.filter(i => i.review_status === 'deployed').length,
+  }
+
+  const patchLocalItem = useCallback((id: string, patch: Partial<ReviewItem>) => {
+    setLocalItems(prev => prev.map(it => it.id === id ? { ...it, ...patch } : it))
   }, [])
 
   const fetchData = useCallback(async () => {
@@ -1155,8 +1149,8 @@ function DietReviewPageInner() {
   }
 
   const filteredItems = search
-    ? items.filter(i => i.branch_name.includes(search))
-    : items
+    ? localItems.filter(i => i.branch_name.includes(search))
+    : localItems
 
   const role       = currentAdmin?.role ?? ''
   const isManager  = ['super_admin', 'manager'].includes(role)
@@ -1184,7 +1178,7 @@ function DietReviewPageInner() {
       <div className="px-4 sm:px-6 space-y-5">
         {/* 공통 상단 */}
         <CommonHeader
-          year={year} month={month} stats={stats} search={search}
+          year={year} month={month} stats={localStats} search={search}
           onYearMonth={handleYearMonth} onSearch={setSearch}
           activeTab={isManager ? managerTab : undefined}
           onTabChange={isManager ? setManagerTab : undefined}
@@ -1206,11 +1200,12 @@ function DietReviewPageInner() {
         {/* 역할별 뷰 */}
         {!loading && items.length > 0 && isManager && (
           <ManagerView
-            items={filteredItems} stats={stats}
+            items={filteredItems} stats={localStats}
             year={year} month={month}
             adminId={currentAdmin!.id} adminName={currentAdmin!.name}
             showToast={showToast} onRefresh={fetchData}
             tab={managerTab} onTabChange={setManagerTab}
+            patchItem={patchLocalItem}
           />
         )}
 
