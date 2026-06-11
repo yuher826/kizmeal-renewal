@@ -251,7 +251,7 @@ function CommonHeader({
 
 // ── Manager/SuperAdmin 화면 ────────────────────────────────────────
 function ManagerView({
-  items, stats, showToast, onRefresh, tab, onTabChange, patchItem,
+  items, stats, showToast, onRefresh, tab, onTabChange, patchItem, year, month,
 }: {
   items:       ReviewItem[]
   stats:       Stats
@@ -265,14 +265,17 @@ function ManagerView({
   onTabChange: (t: ManagerTab) => void
   patchItem:   (id: string, patch: Partial<ReviewItem>) => void
 }) {
-  const [selectedIds,    setSelectedIds]    = useState<Set<string>>(new Set())
+  const [selectedIds,     setSelectedIds]    = useState<Set<string>>(new Set())
   useEffect(() => { setSelectedIds(new Set()) }, [tab])
-  const [loadingItemIds, setLoadingItemIds] = useState<Set<string>>(new Set())
-  const [activeInlineId, setActiveInlineId] = useState<string | null>(null)
-  const [inlineMemo,     setInlineMemo]     = useState('')
-  const [inlineCategory, setInlineCategory] = useState('')
+  useEffect(() => { setSelectedIds(new Set()) }, [year, month])
+  const selectAllRef                         = useRef<HTMLInputElement>(null)
+  const [loadingItemIds,  setLoadingItemIds] = useState<Set<string>>(new Set())
+  const [activeInlineId,  setActiveInlineId] = useState<string | null>(null)
+  const [inlineMemo,      setInlineMemo]     = useState('')
+  const [inlineCategory,  setInlineCategory] = useState('')
   const [expandedHistory, setExpandedHistory] = useState<Set<string>>(new Set())
-  const [submitting,     setSubmitting]     = useState(false)
+  const [submitting,      setSubmitting]     = useState(false)
+  const [showBatchConfirm, setShowBatchConfirm] = useState(false)
 
   const TAB_KEYS: { key: ManagerTab; label: string; icon: string }[] = [
     { key: 'all',                 label: '전체',    icon: '📋' },
@@ -291,15 +294,26 @@ function ManagerView({
   const filtered = items.filter(it => tab === 'all' || it.review_status === tab)
 
   // generation_complete만 체크 가능
-  const selectableIds = filtered.filter(it => it.review_status === 'generation_complete').map(it => it.id)
-  const allSelected   = selectableIds.length > 0 && selectableIds.every(id => selectedIds.has(id))
-  const someSelected  = selectedIds.size > 0
+  const checkableIds = filtered.filter(i => i.review_status === 'generation_complete').map(i => i.id)
+  const allChecked   = checkableIds.length > 0 && checkableIds.every(id => selectedIds.has(id))
+  const someChecked  = checkableIds.some(id => selectedIds.has(id))
 
-  function toggleSelect(id: string) {
-    setSelectedIds(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n })
+  useEffect(() => {
+    if (!selectAllRef.current) return
+    selectAllRef.current.checked       = allChecked
+    selectAllRef.current.indeterminate = someChecked && !allChecked
+  }, [allChecked, someChecked])
+
+  function toggleOne(id: string) {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
   }
   function toggleSelectAll() {
-    setSelectedIds(allSelected ? new Set() : new Set(selectableIds))
+    setSelectedIds(allChecked ? new Set() : new Set(checkableIds))
   }
 
   // 단건 승인 (낙관적 업데이트)
@@ -329,11 +343,14 @@ function ManagerView({
     }
   }
 
-  // 일괄 승인
-  async function handleBatchApprove(ids: string[]) {
+  // 일괄 승인 (모달 확인 후 실행)
+  async function handleBatchApprove() {
+    setShowBatchConfirm(false)
     setSubmitting(true)
+    const ids = Array.from(selectedIds)
     const prevMap = new Map(ids.map(id => [id, items.find(i => i.id === id)?.review_status]))
     ids.forEach(id => patchItem(id, { review_status: 'approved' }))
+    setSelectedIds(new Set())
     try {
       const res  = await fetch('/api/diet-review', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -341,12 +358,21 @@ function ManagerView({
       })
       const data = await res.json()
       if (data.success) {
-        showToast(`${data.updated?.length ?? 0}개 승인 완료`, 'success'); setSelectedIds(new Set())
+        fetch('/api/diet-review/notify', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'approved_to_nutritionist' }),
+        }).catch(() => {})
+        showToast(`${data.updated?.length ?? ids.length}개 원 승인 완료`, 'success')
       } else {
         ids.forEach(id => { const p = prevMap.get(id); if (p) patchItem(id, { review_status: p as ReviewItem['review_status'] }) })
+        setSelectedIds(new Set(ids))
         showToast(`오류: ${data.error}`, 'error')
       }
-    } catch { onRefresh(); showToast('네트워크 오류', 'error') }
+    } catch {
+      ids.forEach(id => { const p = prevMap.get(id); if (p) patchItem(id, { review_status: p as ReviewItem['review_status'] }) })
+      setSelectedIds(new Set(ids))
+      showToast('네트워크 오류', 'error')
+    }
     finally { setSubmitting(false) }
   }
 
@@ -432,17 +458,40 @@ function ManagerView({
       </div>
 
       {/* 일괄 액션 */}
-      {someSelected && (
-        <div className="flex gap-2 flex-wrap">
-          <button type="button" onClick={() => handleBatchApprove(Array.from(selectedIds))} disabled={submitting}
+      {selectedIds.size > 0 && (
+        <div className="flex gap-2 flex-wrap items-center">
+          <button type="button" onClick={() => setShowBatchConfirm(true)} disabled={submitting}
             className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#2E7D32] text-white text-sm font-semibold hover:bg-[#1B5E20] disabled:opacity-40 transition-colors">
-            ✅ 선택항목 승인 ({selectedIds.size}개)
+            {submitting
+              ? <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin inline-block" /><span>처리중...</span></>
+              : `✅ 선택 ${selectedIds.size}개 일괄승인`}
           </button>
           <button type="button"
             onClick={() => { setActiveInlineId('__batch__'); setInlineMemo(''); setInlineCategory('') }}
             className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-orange-50 text-orange-700 text-sm font-semibold hover:bg-orange-100 transition-colors border border-orange-200">
             ✏️ 선택항목 수정요청 ({selectedIds.size}개)
           </button>
+        </div>
+      )}
+
+      {/* 일괄승인 확인 모달 */}
+      {showBatchConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full space-y-4">
+            <p className="text-base font-bold text-[#1C2B1E] text-center leading-relaxed">
+              선택한 {selectedIds.size}개 원을<br />승인하시겠습니까?
+            </p>
+            <div className="flex gap-3">
+              <button type="button" onClick={() => setShowBatchConfirm(false)}
+                className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold text-gray-600 hover:bg-gray-50 transition-colors">
+                취소
+              </button>
+              <button type="button" onClick={handleBatchApprove}
+                className="flex-1 py-2.5 rounded-xl bg-[#2E7D32] text-white text-sm font-semibold hover:bg-[#1B5E20] transition-colors">
+                승인하기
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -484,7 +533,7 @@ function ManagerView({
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100 text-xs">
                 <th className="px-3 py-3 w-10">
-                  <input type="checkbox" checked={allSelected} onChange={toggleSelectAll} className="rounded" />
+                  <input ref={selectAllRef} type="checkbox" onChange={toggleSelectAll} className="rounded cursor-pointer" />
                 </th>
                 <th className="text-center px-3 py-3 font-semibold text-gray-500 w-8">#</th>
                 <th className="text-left   px-3 py-3 font-semibold text-gray-500">원명</th>
@@ -499,9 +548,14 @@ function ManagerView({
                 <Fragment key={item.id}>
                   <tr className={`border-b border-gray-50 transition-colors ${rowBg(item.review_status) || (idx % 2 === 1 ? 'bg-gray-50/40' : '')}`}>
                     <td className="px-3 py-3 text-center">
-                      <input type="checkbox" checked={selectedIds.has(item.id)} onChange={() => toggleSelect(item.id)}
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(item.id)}
+                        onChange={() => toggleOne(item.id)}
+                        onClick={e => e.stopPropagation()}
                         disabled={item.review_status !== 'generation_complete'}
-                        className="rounded disabled:opacity-30" />
+                        className="rounded cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                      />
                     </td>
                     <td className="text-center px-3 py-3 text-gray-400 text-xs">{idx + 1}</td>
                     <td className="px-3 py-3 font-medium text-[#1C2B1E]">
@@ -640,9 +694,14 @@ function ManagerView({
               'bg-white border-gray-100'
             }`}>
               <div className="flex items-center gap-2 mb-3">
-                <input type="checkbox" checked={selectedIds.has(item.id)} onChange={() => toggleSelect(item.id)}
+                <input
+                  type="checkbox"
+                  checked={selectedIds.has(item.id)}
+                  onChange={() => toggleOne(item.id)}
+                  onClick={e => e.stopPropagation()}
                   disabled={item.review_status !== 'generation_complete'}
-                  className="rounded disabled:opacity-30 flex-shrink-0" />
+                  className="rounded cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed flex-shrink-0"
+                />
                 <span className="font-bold text-[#1C2B1E] flex-1 min-w-0 truncate">{item.branch_name}</span>
                 <StatusBadge status={item.review_status} />
               </div>
