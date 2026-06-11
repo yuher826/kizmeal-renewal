@@ -205,7 +205,7 @@ function CommonHeader({
 
 // ── Manager/SuperAdmin 화면 ────────────────────────────────────────
 function ManagerView({
-  items, stats, year, month, menuRow, adminId, adminName, showToast, onRefresh,
+  items, stats, showToast, onRefresh,
 }: {
   items:     ReviewItem[]
   stats:     Stats
@@ -218,7 +218,7 @@ function ManagerView({
   onRefresh: () => void
 }) {
   const [tab,            setTab]            = useState<ManagerTab>('all')
-  const [search,         setSearch]         = useState('')
+  const [search]                             = useState('')
   const [selectedIds,    setSelectedIds]    = useState<Set<string>>(new Set())
   const [activeInlineId, setActiveInlineId] = useState<string | null>(null)
   const [inlineMemo,     setInlineMemo]     = useState('')
@@ -300,8 +300,6 @@ function ManagerView({
     }
     setSubmitting(false)
   }
-
-  const _ = { adminId, adminName, menuRow, year, month }
 
   return (
     <div className="space-y-4">
@@ -867,7 +865,6 @@ function DirectorView({
   year:   number
   month:  number
 }) {
-  const _ = { year, month }
   const sorted = [...items].sort((a, b) => {
     const priority: Record<string, number> = {
       generation_complete: 0, correction_request: 1, resubmitted: 2, approved: 3, deployed: 4,
