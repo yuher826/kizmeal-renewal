@@ -120,62 +120,17 @@ export async function GET(req: NextRequest) {
 
   const db = getDb(supabase)
 
-  const emptyStats = {
-    total: 0, generation_complete: 0, correction_request: 0,
-    resubmitted: 0, approved: 0, deployed: 0,
-  }
-
-  // 1단계: 해당 년월의 weekly_menu id 목록 조회 (제한 없이 전체)
-  const { data: menuIdRows } = await db
+  const { data: menuIds } = await db
     .from('weekly_menus')
-    .select('id, status, year, month, branch_id')
+    .select('id')
     .eq('year', year)
     .eq('month', month)
 
-  const ids = (menuIdRows ?? []).map((m: { id: string }) => m.id)
-
+  const ids = menuIds?.map((m: { id: string }) => m.id) ?? []
   if (ids.length === 0) {
-    return NextResponse.json({
-      menuRow: null, items: [], stats: emptyStats,
-      currentAdmin: { id: adminRow.id, name: adminRow.name, role: adminRow.role, diet_scope: adminRow.diet_scope },
-    })
+    return NextResponse.json({ items: [], stats: {} })
   }
 
-  // 글로벌 메뉴(branch_id=null) 우선, 없으면 첫 번째를 menuRow로 사용
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const menuRow = (menuIdRows ?? []).find((m: any) => m.branch_id === null) ?? (menuIdRows ?? [])[0]
-
-  // 2. diet_review_items 존재 확인 후 없으면 자동 생성
-  const { data: existingItems } = await db
-    .from('diet_review_items')
-    .select('id').eq('weekly_menu_id', menuRow.id).limit(1)
-
-  if (!existingItems || existingItems.length === 0) {
-    const { data: branchMenus } = await db
-      .from('weekly_menus')
-      .select('id, branch_id, pptx_url, jpg_url')
-      .eq('year', year).eq('month', month)
-      .not('branch_id', 'is', null)
-
-    if (branchMenus && branchMenus.length > 0) {
-      const branchIds = branchMenus.map((r: { branch_id: string }) => r.branch_id).filter(Boolean)
-      const { data: branches } = await db.from('branches').select('id, name').in('id', branchIds)
-      const nameMap = new Map<string, string>(
-        (branches ?? []).map((b: { id: string; name: string }) => [b.id, b.name])
-      )
-      const toInsert = branchMenus.map((r: { branch_id: string; pptx_url: string | null; jpg_url: string | null }) => ({
-        weekly_menu_id: menuRow.id,
-        branch_id:      r.branch_id,
-        branch_name:    nameMap.get(r.branch_id) ?? r.branch_id,
-        pptx_url:       r.pptx_url ?? null,
-        jpg_url:        r.jpg_url  ?? null,
-        review_status:  'generation_complete',
-      }))
-      await db.from('diet_review_items').insert(toInsert)
-    }
-  }
-
-  // 2단계: diet_review_items 조회 — weekly_menu_id IN (ids) (영양사: 접근 가능 브랜치만)
   let itemsQuery = db
     .from('diet_review_items')
     .select('*')
@@ -203,7 +158,7 @@ export async function GET(req: NextRequest) {
   }
 
   return NextResponse.json({
-    menuRow,
+    menuRow: null,
     items: allItems,
     stats,
     currentAdmin: {
