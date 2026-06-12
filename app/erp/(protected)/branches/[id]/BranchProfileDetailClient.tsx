@@ -159,7 +159,7 @@ export default function BranchProfileDetailClient({ id, isSuperAdmin }: Props) {
   if (notFound || !profile) {
     return (
       <main className="min-h-screen bg-[#F6FAF6] px-4 sm:px-6 py-6 sm:py-8">
-        <div className="max-w-3xl mx-auto text-center py-20">
+        <div className="text-center py-20">
           <p className="text-slate-500 mb-4">해당 원 프로파일을 찾을 수 없습니다.</p>
           <Link href="/erp/branches" className="text-emerald-600 hover:underline text-sm">
             ← 목록으로 돌아가기
@@ -178,7 +178,7 @@ export default function BranchProfileDetailClient({ id, isSuperAdmin }: Props) {
     <main className="min-h-screen bg-[#F6FAF6] px-4 sm:px-6 py-6 sm:py-8">
       {toast && <Toast msg={toast.msg} type={toast.type} />}
 
-      <div className="max-w-3xl mx-auto">
+      <div>
         {/* 헤더 */}
         <div className="flex items-center justify-between gap-3 mb-6">
           <div className="flex items-center gap-3 flex-wrap min-w-0">

@@ -653,7 +653,7 @@ export default function BranchProfileForm({
       </div>
 
       {/* ── 저장 버튼 (sticky) ─────────────────────────────────── */}
-      <div className="sticky bottom-0 bg-white border-t border-slate-200 px-6 py-4 flex justify-end gap-3 z-10 -mx-6 mt-4">
+      <div className="sticky bottom-0 bg-white border-t border-slate-200 px-4 sm:px-6 py-4 flex justify-end gap-3 z-10 -mx-4 sm:-mx-6 mt-4">
         {onCancel ? (
           <button
             type="button"

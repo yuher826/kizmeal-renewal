@@ -41,31 +41,29 @@ export default function BranchProfileNewPage() {
 
   return (
     <main className="min-h-screen bg-[#F6FAF6] px-4 sm:px-6 py-6 sm:py-8">
-      <div className="max-w-3xl mx-auto">
-        {/* 헤더 */}
-        <div className="flex items-center gap-3 mb-6">
-          <Link
-            href="/erp/branches"
-            className="text-slate-400 hover:text-slate-700 transition-colors"
-            aria-label="목록으로"
-          >
-            <ArrowLeft size={20} />
-          </Link>
-          <h1 className="text-lg font-bold text-slate-900">원 프로파일 신규 등록</h1>
-        </div>
-
-        {error && (
-          <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700 mb-4">
-            {error}
-          </div>
-        )}
-
-        <BranchProfileForm
-          onSave={handleSave}
-          isSaving={isSaving}
-          isNew
-        />
+      {/* 헤더 */}
+      <div className="flex items-center gap-3 mb-6">
+        <Link
+          href="/erp/branches"
+          className="text-slate-400 hover:text-slate-700 transition-colors"
+          aria-label="목록으로"
+        >
+          <ArrowLeft size={20} />
+        </Link>
+        <h1 className="text-lg font-bold text-slate-900">원 프로파일 신규 등록</h1>
       </div>
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700 mb-4">
+          {error}
+        </div>
+      )}
+
+      <BranchProfileForm
+        onSave={handleSave}
+        isSaving={isSaving}
+        isNew
+      />
     </main>
   )
 }
