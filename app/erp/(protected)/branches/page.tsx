@@ -148,7 +148,7 @@ export default function BranchesPage() {
   const ckCount       = rows.filter(r => r.diet_type === 'ck').length
   const conCount      = rows.filter(r => r.diet_type === 'consignment').length
   const deployedCount = rows.filter(r => r.this_month_deployed).length
-  const incompleteCount = rows.filter(r => !r.is_profile_complete).length
+  const incompleteCount = rows.filter(r => !r.is_profile_complete && r.contract_status === 'active').length
 
   // ── 그룹별 묶기 ─────────────────────────────────────────────────
   const grouped = useMemo(() => {

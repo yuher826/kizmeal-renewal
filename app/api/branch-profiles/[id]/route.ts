@@ -112,6 +112,50 @@ export async function GET(
   }
 }
 
+export async function DELETE(
+  _request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const supabase = createClient()
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return NextResponse.json({ error: '인증이 필요합니다' }, { status: 401 })
+
+    const { data: adminData } = await supabase
+      .from('admins').select('role').eq('auth_id', user.id).maybeSingle()
+    if (!adminData) return NextResponse.json({ error: '접근 권한이 없습니다' }, { status: 403 })
+    if (adminData.role !== 'super_admin')
+      return NextResponse.json({ error: '권한이 없습니다' }, { status: 403 })
+
+    const { data: current, error: selectError } = await supabase
+      .from('branch_profiles')
+      .select('contract_status')
+      .eq('id', params.id)
+      .maybeSingle()
+
+    if (selectError || !current)
+      return NextResponse.json({ error: '원을 찾을 수 없습니다' }, { status: 404 })
+
+    const newStatus = current.contract_status === 'active' ? 'inactive' : 'active'
+
+    const { error: updateError } = await supabase
+      .from('branch_profiles')
+      .update({ contract_status: newStatus, updated_at: new Date().toISOString() })
+      .eq('id', params.id)
+
+    if (updateError) {
+      console.error('[branch-profiles/[id] DELETE] 오류:', updateError)
+      return NextResponse.json({ error: '처리 중 오류가 발생했습니다' }, { status: 500 })
+    }
+
+    return NextResponse.json({ success: true, newStatus })
+  } catch (err) {
+    console.error('[branch-profiles/[id] DELETE] 예외:', err)
+    return NextResponse.json({ error: '서버 오류가 발생했습니다' }, { status: 500 })
+  }
+}
+
 export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } }

@@ -14,7 +14,7 @@ export default function BranchProfileAlert() {
       .then(r => r.json())
       .then(data => {
         if (Array.isArray(data)) {
-          setIncomplete(data.filter((r: BranchProfileRow) => !r.is_profile_complete))
+          setIncomplete(data.filter((r: BranchProfileRow) => !r.is_profile_complete && r.contract_status === 'active'))
         }
         setLoaded(true)
       })
