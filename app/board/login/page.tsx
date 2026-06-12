@@ -71,7 +71,10 @@ export default function BoardLoginPage() {
       if (adminData) { router.push('/board/admin'); router.refresh(); return }
 
       const { data: branchData } = await supabase.from('branches').select('id').eq('auth_id', data.user.id).maybeSingle()
-      if (branchData) { router.push('/board/dashboard'); router.refresh(); return }
+      if (branchData) {
+        await supabase.from('branches').update({ last_login_at: new Date().toISOString() }).eq('id', branchData.id)
+        router.push('/board/dashboard'); router.refresh(); return
+      }
 
       const { data: memberData } = await supabase.from('branch_members').select('id, role').eq('auth_id', data.user.id).maybeSingle()
       if (memberData) {
