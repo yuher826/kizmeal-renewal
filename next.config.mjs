@@ -25,8 +25,6 @@ const nextConfig = {
       // 원 관리
       { source: '/board/admin/branches',                destination: '/erp/centers',  permanent: false },
       { source: '/board/admin/branches/:path*',         destination: '/erp/centers/:path*', permanent: false },
-      // 가맹점 공지
-      { source: '/board/admin/notices',                 destination: '/erp/notices',  permanent: false },
       // 통계
       { source: '/board/admin/stats',                   destination: '/erp/stats',    permanent: false },
     ]

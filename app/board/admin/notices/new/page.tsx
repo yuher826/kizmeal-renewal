@@ -1,8 +1,40 @@
 'use client'
 
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 
 export default function AdminNoticesNewPage() {
+  const router = useRouter()
+  const [title, setTitle] = useState('')
+  const [content, setContent] = useState('')
+  const [isPinned, setIsPinned] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  async function handleSave() {
+    if (!title.trim()) return
+    setSaving(true)
+    setError('')
+    try {
+      const res = await fetch('/api/board/notices', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: title.trim(), content: content.trim() || null, is_pinned: isPinned }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        setError(data.error ?? '저장에 실패했습니다.')
+        return
+      }
+      router.push('/board/admin/notices')
+    } catch {
+      setError('네트워크 오류가 발생했습니다.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-[#F6FAF6] font-sans">
       <header className="bg-white border-b border-gray-100 px-4 sm:px-6 h-16 hidden sm:flex items-center gap-3 sticky top-0 z-10">
@@ -22,37 +54,38 @@ export default function AdminNoticesNewPage() {
           <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">제목</label>
           <input
             type="text"
+            value={title}
+            onChange={e => setTitle(e.target.value)}
             placeholder="공지 제목을 입력하세요"
             className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-[#2D6A4F] focus:border-transparent"
           />
         </div>
 
         <div>
-          <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">대상</label>
-          <select className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-[#2D6A4F] focus:border-transparent">
-            <option>전체</option>
-            <option>학부모</option>
-            <option>원장</option>
-          </select>
-        </div>
-
-        <div>
           <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">내용</label>
           <textarea
             rows={10}
+            value={content}
+            onChange={e => setContent(e.target.value)}
             placeholder="공지 내용을 입력하세요"
             className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-[#2D6A4F] focus:border-transparent resize-none"
           />
         </div>
 
         <div className="flex items-center gap-2">
-          <input type="checkbox" id="pinned" className="w-4 h-4 accent-[#2D6A4F]" />
+          <input
+            type="checkbox"
+            id="pinned"
+            checked={isPinned}
+            onChange={e => setIsPinned(e.target.checked)}
+            className="w-4 h-4 accent-[#2D6A4F]"
+          />
           <label htmlFor="pinned" className="text-sm text-gray-600 cursor-pointer">상단 고정</label>
         </div>
 
-        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-700">
-          공지 저장 기능은 준비 중입니다. 조만간 업데이트됩니다.
-        </div>
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-600 text-sm rounded-xl px-4 py-3">{error}</div>
+        )}
 
         <div className="flex gap-3 pt-2">
           <Link
@@ -63,10 +96,11 @@ export default function AdminNoticesNewPage() {
           </Link>
           <button
             type="button"
-            disabled
-            className="flex-1 py-3 rounded-xl bg-gray-200 text-sm font-semibold text-gray-400 cursor-not-allowed"
+            onClick={handleSave}
+            disabled={!title.trim() || saving}
+            className="flex-1 py-3 rounded-xl bg-[#2D6A4F] text-white text-sm font-semibold transition-colors hover:bg-[#1B4332] disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed"
           >
-            저장 (준비 중)
+            {saving ? '저장 중...' : '저장'}
           </button>
         </div>
       </div>
