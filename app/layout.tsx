@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Noto_Serif_KR, Noto_Sans_KR } from "next/font/google";
 import Navigation from "@/components/Navigation";
+import ConditionalNav from "@/components/ConditionalNav";
 import "./globals.css";
 
 const notoSerifKr = Noto_Serif_KR({
@@ -89,7 +90,9 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-title" content="키즈밀" />
       </head>
       <body className="antialiased font-sans bg-white text-[#0D1B0F]">
-        <Navigation />
+        <ConditionalNav>
+          <Navigation />
+        </ConditionalNav>
         {children}
       </body>
     </html>

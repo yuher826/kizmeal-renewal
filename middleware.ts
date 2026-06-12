@@ -37,9 +37,12 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/board/notifications') ||
     pathname.startsWith('/board/customer')
   const isAdminRoute = pathname.startsWith('/board/admin')
-  const isErpRoute = pathname.startsWith('/erp')
   const isBoardLogin = pathname === '/board/login'
   const isChangePassword = pathname === '/board/change-password'
+
+  // ERP routes
+  const isErpLogin     = pathname === '/erp/login'
+  const isErpProtected = pathname.startsWith('/erp') && !isErpLogin
 
   // Parent portal routes
   const isParentPortal = pathname.startsWith('/parent/dashboard') ||
@@ -59,25 +62,17 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/nutritionist/upload')
 
   // ── Board auth ──────────────────────────────────────────────
-  if (!user && (isCustomerRoute || isAdminRoute || isChangePassword || isErpRoute)) {
+  if (!user && (isCustomerRoute || isAdminRoute || isChangePassword)) {
     const url = request.nextUrl.clone()
     url.pathname = '/board/login'
     return NextResponse.redirect(url)
   }
 
-  // ── ERP auth (admins 테이블 확인) ────────────────────────────
-  if (user && isErpRoute) {
-    const { data: adminData } = await supabase
-      .from('admins')
-      .select('id')
-      .eq('auth_id', user.id)
-      .maybeSingle()
-
-    if (!adminData) {
-      const url = request.nextUrl.clone()
-      url.pathname = '/board/login'
-      return NextResponse.redirect(url)
-    }
+  // ── ERP auth (미인증 → /erp/login?next=) ─────────────────────
+  if (!user && isErpProtected) {
+    const redirectUrl = new URL('/erp/login', request.url)
+    redirectUrl.searchParams.set('next', pathname)
+    return NextResponse.redirect(redirectUrl)
   }
 
   // must_change_password 체크 (고객 라우트에서만)

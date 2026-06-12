@@ -36,7 +36,7 @@ export default function ErpSidebar({ user, open, setOpen }: Props) {
     setOpen(false)
     const supabase = createClient()
     await supabase.auth.signOut()
-    window.location.href = '/board/login'
+    window.location.href = '/erp/login'
   }
 
   const badge = ROLE_BADGE[user.role] ?? ROLE_BADGE.admin

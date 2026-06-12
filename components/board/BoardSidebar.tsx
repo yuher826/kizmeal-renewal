@@ -98,6 +98,14 @@ export default function BoardSidebar() {
               <div className="mt-auto pt-4">
                 <div className="bg-[#F6FAF6] border border-[#2D6A4F]/20 rounded-xl p-4">
                   <p className="text-sm leading-relaxed text-gray-600">{tab.description}</p>
+                  {tab.key === 'ops' && (
+                    <Link
+                      href="/erp"
+                      className="mt-3 flex items-center justify-center gap-1.5 w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium rounded-lg transition-colors"
+                    >
+                      ERP 바로가기 →
+                    </Link>
+                  )}
                 </div>
               </div>
             </>
