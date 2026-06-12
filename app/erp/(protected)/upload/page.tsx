@@ -162,7 +162,7 @@ export default function DietUploadPage() {
         </p>
       </div>
 
-      <div className="max-w-2xl mx-auto space-y-4">
+      <div className="space-y-4">
         {/* ── 연월 선택 ─────────────────────────────────────────── */}
         <div className="bg-white rounded-2xl border border-gray-100 p-5">
           <p className="text-sm font-bold text-[#1C2B1E] mb-3">대상 연월 선택</p>

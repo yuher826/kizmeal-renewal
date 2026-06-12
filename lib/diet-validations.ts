@@ -51,7 +51,7 @@ export const GENERATION_VALIDATIONS: ValidationResult[] = [] // C단계에서 �
 // D-05: 미확인 원 N일 경과 알림
 // D-06: 배포 완료 관리자 이메일 발송
 // D-07: 학부모 포털 동시 반영 확인
-// D-08: 소통허브 가맹점 동시 반영 확인
+// D-08: 소통허브 고객사 동시 반영 확인
 export const DEPLOY_VALIDATIONS: ValidationResult[] = [] // D단계에서 구현
 
 // ── 확장 레이어 (미래 추가용) ─────────────────────────

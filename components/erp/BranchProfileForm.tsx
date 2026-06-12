@@ -616,7 +616,7 @@ export default function BranchProfileForm({
       <div className="bg-white border border-slate-200 rounded-xl p-6 mb-4">
         <SectionHeader icon={<Settings2 size={18} />} title="원 특성" />
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8">
-          <ToggleRow label="이란 계열"     checked={form.is_elan}         onChange={v => set('is_elan', v)} />
+          <ToggleRow label="엘란 계열"     checked={form.is_elan}         onChange={v => set('is_elan', v)} />
           <ToggleRow label="잉파 계열"     checked={form.is_ingpa}        onChange={v => set('is_ingpa', v)} />
           <ToggleRow label="15행 표 형식"  checked={form.is_table_15row}  onChange={v => set('is_table_15row', v)} />
           <ToggleRow label="직납"          checked={form.direct_delivery} onChange={v => set('direct_delivery', v)} />

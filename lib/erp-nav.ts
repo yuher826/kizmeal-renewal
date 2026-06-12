@@ -2,7 +2,6 @@ import {
   Utensils,
   ClipboardCheck,
   Building2,
-  BookUser,
   Megaphone,
   MessageSquare,
   Mail,
@@ -20,16 +19,10 @@ export const ERP_NAV_GROUPS: ErpNavGroup[] = [
     ],
   },
   {
-    title: '원 관리',
-    items: [
-      { label: '원 정보 관리', href: '/erp/centers', icon: BookUser },
-      { label: '가맹점 공지',  href: '/erp/notices', icon: Megaphone },
-    ],
-  },
-  {
     title: '소통 관리',
     items: [
-      { label: '운영 문의', href: '/erp/inquiries', icon: MessageSquare },
+      { label: '고객사 공지', href: '/erp/notices',   icon: Megaphone },
+      { label: '운영 문의',   href: '/erp/inquiries', icon: MessageSquare },
     ],
   },
   {
