@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, Suspense } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
@@ -56,7 +56,7 @@ type PublicInquiry = {
   created_at: string
 }
 
-export default function AdminInquiriesPage() {
+function AdminInquiriesPageInner() {
   const searchParams = useSearchParams()
   const branchFilter = searchParams.get('branch') || ''
   const tab = searchParams.get('tab') || 'branch'
@@ -668,5 +668,17 @@ export default function AdminInquiriesPage() {
 
       </div>
     </div>
+  )
+}
+
+export default function AdminInquiriesPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-[#F6FAF6] flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600" />
+      </div>
+    }>
+      <AdminInquiriesPageInner />
+    </Suspense>
   )
 }
