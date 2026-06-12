@@ -405,6 +405,7 @@ export default function BranchesPage() {
             </button>
           )}
           <button
+            title="그룹당 원이 20개 초과일 때 자동 적용됩니다"
             onClick={() => setShowAllMode(false)}
             className={`rounded-lg px-3 py-1.5 text-sm transition-colors ${
               !showAllMode ? 'bg-emerald-600 text-white' : 'border border-slate-200 text-slate-600'
@@ -413,6 +414,7 @@ export default function BranchesPage() {
             20개씩
           </button>
           <button
+            title="모든 그룹의 원을 전체 표시합니다"
             onClick={() => setShowAllMode(true)}
             className={`rounded-lg px-3 py-1.5 text-sm transition-colors ${
               showAllMode ? 'bg-emerald-600 text-white' : 'border border-slate-200 text-slate-600'
