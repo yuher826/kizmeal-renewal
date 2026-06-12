@@ -75,6 +75,7 @@ export async function GET(
       contract_start_date: raw.contract_start_date,
       renew_date:          raw.contract_renew_date ?? null,
       updated_at:          raw.updated_at,
+      sort_order:          raw.sort_order ?? null,
       this_month_deployed: (deployed?.length ?? 0) > 0,
       is_profile_complete: calcComplete(raw),
       diet_plan_type:      raw.diet_plan_type,

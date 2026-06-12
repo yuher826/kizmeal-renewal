@@ -3,7 +3,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
-import { CATEGORY_LABELS, type InquiryCategory } from '@/lib/types'
 import {
   PieChart, Pie, Cell, Tooltip as PieTooltip, Legend as PieLegend,
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as BarTooltip,
@@ -29,21 +28,23 @@ function BarTopLabel(props: { x?: number; y?: number; width?: number; value?: nu
   )
 }
 
+const PARENT_INQ_LABELS: Record<string, string> = {
+  ALLERGY: '알레르기',
+  COMPLAINT: '컴플레인',
+  GENERAL: '일반문의',
+  MEAL: '식단문의',
+}
+
 export default function AdminDashboard() {
   const [adminName, setAdminName] = useState('')
   const [loading, setLoading] = useState(true)
-  const [stats, setStats] = useState({ today: 0, pending: 0, inProgress: 0, todayResolved: 0 })
-  const [avgResponse, setAvgResponse] = useState<string>('—')
-  const [monthTotal, setMonthTotal] = useState(0)
+  const [parentInqCount, setParentInqCount] = useState(0)
+  const [publicInquiryCount, setPublicInquiryCount] = useState(0)
   const [catData, setCatData] = useState<{ name: string; value: number; color: string }[]>([])
   const [dayData, setDayData] = useState<{ day: string; 문의수: number; fill: string }[]>([])
   const [expiryList, setExpiryList] = useState<{
     id: string; org: string; expires: string; days: number; mealCount: number; brand: string
   }[]>([])
-  const [publicInquiryCount, setPublicInquiryCount] = useState(0)
-  const [allergyCount, setAllergyCount] = useState(0)
-  const [complaintCount, setComplaintCount] = useState(0)
-  const [parentInqCount, setParentInqCount] = useState(0)
 
   const load = useCallback(async () => {
     const supabase = createClient()
@@ -54,101 +55,28 @@ export default function AdminDashboard() {
     }
 
     const now = new Date()
-    const todayStart = new Date(now); todayStart.setHours(0, 0, 0, 0)
-    const sevenAgo = new Date(now); sevenAgo.setDate(now.getDate() - 6); sevenAgo.setHours(0, 0, 0, 0)
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+    const sevenAgo = new Date(now); sevenAgo.setDate(now.getDate() - 6); sevenAgo.setHours(0, 0, 0, 0)
     const in60Days = new Date(now.getTime() + 60 * 86400000).toISOString().slice(0, 10)
     const today = now.toISOString().slice(0, 10)
 
-    // 오늘 처리 필요 위젯 카운트
-    const [complaintRes, allergyRes, parentInqRes] = await Promise.all([
-      supabase.from('inquiries').select('*', { count: 'exact', head: true })
-        .eq('category', 'COMPLAINT').in('status', ['pending', 'in_progress']),
-      supabase.from('parent_inquiries').select('*', { count: 'exact', head: true })
-        .eq('category', 'ALLERGY').in('status', ['pending', 'in_progress']),
-      supabase.from('parent_inquiries').select('*', { count: 'exact', head: true })
-        .eq('status', 'pending'),
-    ])
-    setComplaintCount(complaintRes.count || 0)
-    setAllergyCount(allergyRes.error ? 0 : (allergyRes.count || 0))
+    // 학부모 문의 미답변
+    const parentInqRes = await supabase
+      .from('parent_inquiries')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'pending')
     setParentInqCount(parentInqRes.error ? 0 : (parentInqRes.count || 0))
 
-    const [recent, allPending, allInProgress, expiryRes] = await Promise.all([
-      supabase
-        .from('inquiries')
-        .select('id, status, category, created_at, first_response_at')
-        .gte('created_at', sevenAgo.toISOString()),
-      supabase.from('inquiries').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
-      supabase.from('inquiries').select('*', { count: 'exact', head: true }).eq('status', 'in_progress'),
-      supabase
-        .from('branches')
-        .select('id, name, meal_count, contract_end, brands(name)')
-        .not('contract_end', 'is', null)
-        .gte('contract_end', today)
-        .lte('contract_end', in60Days)
-        .order('contract_end', { ascending: true })
-        .limit(10),
-    ])
+    // 계약 만료 임박
+    const expiryRes = await supabase
+      .from('branches')
+      .select('id, name, meal_count, contract_end, brands(name)')
+      .not('contract_end', 'is', null)
+      .gte('contract_end', today)
+      .lte('contract_end', in60Days)
+      .order('contract_end', { ascending: true })
+      .limit(10)
 
-    const inqs = recent.data || []
-
-    // Today
-    const todayInqs = inqs.filter(i => new Date(i.created_at) >= todayStart)
-    const todayResolved = inqs.filter(i => i.status === 'resolved' && new Date(i.created_at) >= todayStart)
-
-    // Month
-    const monthInqs = inqs.filter(i => new Date(i.created_at) >= monthStart)
-    setMonthTotal(monthInqs.length)
-
-    // Avg response (hours)
-    const withResp = inqs.filter(i => i.first_response_at)
-    if (withResp.length > 0) {
-      const avg = withResp.reduce((s, i) =>
-        s + (new Date(i.first_response_at!).getTime() - new Date(i.created_at).getTime()) / 3600000, 0
-      ) / withResp.length
-      setAvgResponse(avg < 1 ? `${Math.round(avg * 60)}분` : `${avg.toFixed(1)}시간`)
-    }
-
-    setStats({
-      today: todayInqs.length,
-      pending: allPending.count || 0,
-      inProgress: allInProgress.count || 0,
-      todayResolved: todayResolved.length,
-    })
-
-    // Category pie
-    const catMap: Record<string, number> = {}
-    monthInqs.forEach(i => { catMap[i.category] = (catMap[i.category] || 0) + 1 })
-    setCatData(
-      Object.entries(catMap)
-        .sort((a, b) => b[1] - a[1])
-        .map(([cat, n], idx) => ({
-          name: CATEGORY_LABELS[cat as InquiryCategory] || cat,
-          value: n,
-          color: PIE_COLORS[idx % PIE_COLORS.length],
-        }))
-    )
-
-    // Last 7 days bar
-    const dayMap: Record<string, number> = {}
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date(now); d.setDate(d.getDate() - i)
-      dayMap[d.toISOString().slice(0, 10)] = 0
-    }
-    inqs.forEach(i => {
-      const k = i.created_at.slice(0, 10)
-      if (k in dayMap) dayMap[k]++
-    })
-    const maxCount = Math.max(...Object.values(dayMap), 1)
-    setDayData(
-      Object.entries(dayMap).map(([dt, n]) => ({
-        day: DAY_KO[new Date(dt).getDay()],
-        문의수: n,
-        fill: n === maxCount && n > 0 ? '#2D6A4F' : '#52B788',
-      }))
-    )
-
-    // Expiry
     if (expiryRes.data) {
       setExpiryList(expiryRes.data.map(b => ({
         id: b.id,
@@ -160,14 +88,67 @@ export default function AdminDashboard() {
       })))
     }
 
-    // Public inquiry unanswered count
+    // 학부모 문의 이번달 카테고리별 집계 (파이 차트)
+    const parentInqMonth = await supabase
+      .from('parent_inquiries')
+      .select('category')
+      .gte('created_at', monthStart.toISOString())
+
+    // 서비스 문의 pending count + 최근 7일 추이
+    let piCount = 0
+    let piTrend: { created_at: string }[] = []
     try {
-      const piRes = await fetch('/api/public-inquiry/admin?status=pending')
-      if (piRes.ok) {
-        const piData = await piRes.json()
-        setPublicInquiryCount(piData.count || 0)
+      const [countRes, trendRes] = await Promise.all([
+        fetch('/api/public-inquiry/admin?status=pending'),
+        fetch('/api/public-inquiry/admin?mode=trend'),
+      ])
+      if (countRes.ok) {
+        const d = await countRes.json()
+        piCount = d.count || 0
+      }
+      if (trendRes.ok) {
+        const d = await trendRes.json()
+        piTrend = d.data || []
       }
     } catch { /* non-critical */ }
+
+    setPublicInquiryCount(piCount)
+
+    // 파이 차트: 학부모 문의 category별 + 서비스 문의
+    const catMap: Record<string, number> = {}
+    for (const row of (parentInqMonth.data ?? [])) {
+      const key = PARENT_INQ_LABELS[row.category as string] || row.category || '기타'
+      catMap[key] = (catMap[key] || 0) + 1
+    }
+    if (piCount > 0) catMap['서비스문의'] = piCount
+    setCatData(
+      Object.entries(catMap)
+        .sort((a, b) => b[1] - a[1])
+        .map(([name, value], idx) => ({
+          name,
+          value,
+          color: PIE_COLORS[idx % PIE_COLORS.length],
+        }))
+    )
+
+    // 바 차트: 서비스 문의 최근 7일 일별
+    const dayMap: Record<string, number> = {}
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(now); d.setDate(d.getDate() - i)
+      dayMap[d.toISOString().slice(0, 10)] = 0
+    }
+    for (const row of piTrend) {
+      const k = row.created_at.slice(0, 10)
+      if (k in dayMap) dayMap[k]++
+    }
+    const maxCount = Math.max(...Object.values(dayMap), 1)
+    setDayData(
+      Object.entries(dayMap).map(([dt, n]) => ({
+        day: DAY_KO[new Date(dt).getDay()],
+        문의수: n,
+        fill: n === maxCount && n > 0 ? '#2D6A4F' : '#52B788',
+      }))
+    )
 
     setLoading(false)
   }, [])
@@ -208,10 +189,7 @@ export default function AdminDashboard() {
         {/* 오늘 처리 필요 위젯 */}
         {(() => {
           const rows = [
-            { icon: '🚨', label: '알레르기 문의', count: allergyCount, href: '/board/admin/parent-inquiries', urgent: true },
-            { icon: '😤', label: '컴플레인', count: complaintCount, href: '/board/admin/inquiries', urgent: true },
             { icon: '💚', label: '학부모 문의 미답변', count: parentInqCount, href: '/board/admin/parent-inquiries', urgent: false },
-            { icon: '🟠', label: '운영 문의 미답변', count: stats.pending, href: '/board/admin/inquiries', urgent: false },
             { icon: '🔵', label: '서비스 문의 미답변', count: publicInquiryCount, href: '/board/admin/service-inquiries', urgent: false },
           ]
           const total = rows.reduce((s, r) => s + r.count, 0)
@@ -227,7 +205,7 @@ export default function AdminDashboard() {
                   <p className="text-sm font-semibold text-[#2D6A4F]">✅ 모든 문의가 처리되었습니다</p>
                 </div>
               ) : (
-                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                <div className="grid sm:grid-cols-2 gap-2">
                   {rows.map(r => (
                     <Link
                       key={r.label}
@@ -235,8 +213,6 @@ export default function AdminDashboard() {
                       className={`flex items-center justify-between px-4 py-3 rounded-xl border transition-colors ${
                         r.count === 0
                           ? 'border-gray-100 bg-gray-50/50 opacity-60'
-                          : r.urgent
-                          ? 'border-red-200 bg-red-50 hover:bg-red-100/60'
                           : 'border-gray-100 hover:bg-[#F8FDF8]'
                       }`}
                     >
@@ -244,7 +220,7 @@ export default function AdminDashboard() {
                         <span>{r.icon}</span>{r.label}
                       </span>
                       <span className={`text-sm font-bold ${
-                        r.count === 0 ? 'text-gray-300' : r.urgent ? 'text-red-600' : 'text-[#2D6A4F]'
+                        r.count === 0 ? 'text-gray-300' : 'text-[#2D6A4F]'
                       }`}>
                         {r.count}건
                       </span>
@@ -256,45 +232,37 @@ export default function AdminDashboard() {
           )
         })()}
 
-        {/* KPI Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* KPI 카드: 학부모 문의 + 서비스 문의 */}
+        <div className="grid grid-cols-2 gap-4">
           {loading ? (
-            Array.from({ length: 4 }).map((_, i) => (
+            Array.from({ length: 2 }).map((_, i) => (
               <div key={i} className="bg-white rounded-2xl border border-gray-100 h-28 animate-pulse" />
             ))
           ) : (
             <>
-              <Link href="/board/admin/inquiries" className="block">
-                <StatsCard icon="📬" label="오늘 신규 문의" value={`${stats.today}건`}
-                  sub={stats.today > 0 ? '빠른 응답이 필요합니다' : '오늘은 조용합니다'} />
+              <Link href="/board/admin/parent-inquiries" className="block">
+                <StatsCard icon="💚" label="학부모 문의 미답변" value={`${parentInqCount}건`}
+                  sub={parentInqCount > 0 ? '빠른 응답이 필요합니다' : '처리 완료'} highlight={parentInqCount > 0} />
               </Link>
-              <Link href="/board/admin/inquiries" className="block">
-                <StatsCard icon="⚡" label="미처리 건수" value={`${stats.pending}건`}
-                  sub="즉시 처리 필요" highlight={stats.pending > 0} />
-              </Link>
-              <Link href="/board/admin/inquiries" className="block">
-                <StatsCard icon="⏱️" label="평균 응답 시간" value={avgResponse}
-                  sub="최근 7일 평균" />
-              </Link>
-              <Link href="/board/admin/inquiries" className="block">
-                <StatsCard icon="✅" label="오늘 처리 완료" value={`${stats.todayResolved}건`}
-                  sub={`이번 달 총 ${monthTotal}건`} />
+              <Link href="/board/admin/service-inquiries" className="block">
+                <StatsCard icon="🔵" label="서비스 문의 미답변" value={`${publicInquiryCount}건`}
+                  sub={publicInquiryCount > 0 ? '영업 기회를 놓치지 마세요' : '처리 완료'} highlight={publicInquiryCount > 0} />
               </Link>
             </>
           )}
         </div>
 
-        {/* General inquiry quick access */}
+        {/* 서비스 문의 바로가기 */}
         <Link
-          href="/board/admin/inquiries?tab=public"
+          href="/board/admin/service-inquiries"
           className="block bg-white rounded-2xl border border-gray-100 p-5 hover:shadow-md transition-shadow"
         >
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <span className="text-2xl">💬</span>
               <div>
-                <h3 className="font-bold text-[#1C2B1E]">일반 문의 관리</h3>
-                <p className="text-xs text-gray-400 mt-0.5">홈페이지 비회원 문의</p>
+                <h3 className="font-bold text-[#1C2B1E]">서비스 문의 관리</h3>
+                <p className="text-xs text-gray-400 mt-0.5">홈페이지 방문자 도입/계약 문의</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -310,12 +278,12 @@ export default function AdminDashboard() {
 
         {/* Charts */}
         <div className="grid lg:grid-cols-2 gap-6">
-          {/* Donut */}
+          {/* 파이 차트: 서비스 + 학부모 문의 유형별 */}
           <div className="bg-white rounded-2xl border border-gray-100 p-6">
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h2 className="font-bold text-[#1C2B1E]">문의 유형별 비율</h2>
-                <p className="text-gray-400 text-xs mt-0.5">이번 달 누계 · 총 {monthTotal}건</p>
+                <p className="text-gray-400 text-xs mt-0.5">이번 달 · 서비스 + 학부모 문의</p>
               </div>
               <span className="text-xs bg-[#E8F5E9] text-[#2D6A4F] font-semibold px-2.5 py-1 rounded-full">
                 {new Date().getMonth() + 1}월
@@ -345,12 +313,12 @@ export default function AdminDashboard() {
             )}
           </div>
 
-          {/* Bar */}
+          {/* 바 차트: 서비스 문의 최근 7일 추이 */}
           <div className="bg-white rounded-2xl border border-gray-100 p-6">
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h2 className="font-bold text-[#1C2B1E]">최근 7일 문의 추이</h2>
-                <p className="text-gray-400 text-xs mt-0.5">일별 접수 현황</p>
+                <p className="text-gray-400 text-xs mt-0.5">서비스 문의 기준</p>
               </div>
             </div>
             {loading ? (
@@ -364,7 +332,7 @@ export default function AdminDashboard() {
                   <BarTooltip
                     cursor={{ fill: '#F8FDF8' }}
                     contentStyle={{ borderRadius: '12px', border: '1px solid #E8F5E9', fontSize: '12px' }}
-                    formatter={(v) => [`${v}건`, '문의수']}
+                    formatter={(v) => [`${v}건`, '서비스문의']}
                   />
                   <Bar dataKey="문의수" radius={[6, 6, 0, 0]} shape={<CustomBarShape />}
                     label={<BarTopLabel />} maxBarSize={48} />
@@ -374,7 +342,7 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* Contract expiry */}
+        {/* 계약 만료 임박 */}
         {(loading || expiryList.length > 0) && (
           <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
@@ -445,30 +413,20 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {/* Today summary */}
-        <div className="bg-white rounded-2xl border border-gray-100 p-6">
-          <h2 className="font-bold text-[#1C2B1E] mb-4">오늘의 처리 현황</h2>
-          <div className="grid grid-cols-3 gap-4">
-            {[
-              { label: '신규 접수', value: loading ? '—' : stats.today, color: 'bg-yellow-100 text-yellow-800' },
-              { label: '처리 완료', value: loading ? '—' : stats.todayResolved, color: 'bg-green-100 text-green-800' },
-              { label: '처리 중', value: loading ? '—' : stats.inProgress, color: 'bg-blue-100 text-blue-800' },
-            ].map(item => (
-              <div key={item.label} className="text-center">
-                <div className={`text-2xl font-bold rounded-xl py-3 mb-2 ${item.color}`}>{item.value}</div>
-                <div className="text-xs text-gray-400">{item.label}</div>
-              </div>
-            ))}
+        {/* ERP 바로가기 */}
+        <Link
+          href="/erp"
+          className="flex items-center justify-between bg-white rounded-2xl border border-gray-100 p-5 hover:shadow-md transition-shadow"
+        >
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">⚙️</span>
+            <div>
+              <h3 className="font-bold text-[#1C2B1E]">ERP 시스템</h3>
+              <p className="text-xs text-gray-400 mt-0.5">식단·원 관리 바로가기</p>
+            </div>
           </div>
-          <div className="mt-4 flex justify-end">
-            <Link
-              href="/board/admin/inquiries"
-              className="text-sm text-[#2D6A4F] font-medium hover:underline flex items-center gap-1"
-            >
-              전체 문의 보기 →
-            </Link>
-          </div>
-        </div>
+          <span className="text-gray-300 text-lg">→</span>
+        </Link>
 
       </div>
     </div>

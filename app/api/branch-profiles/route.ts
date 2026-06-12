@@ -29,8 +29,9 @@ export async function GET() {
         'id, branch_id, short_code, display_name, branch_full_name, ' +
         'group_tag, contract_status, diet_type, file_format, ' +
         'slide_count, distribution_emails, review_required, ' +
-        'contract_start_date, contract_renew_date, updated_at'
+        'contract_start_date, contract_renew_date, updated_at, sort_order'
       )
+      .order('sort_order', { ascending: true, nullsFirst: false })
       .order('group_tag', { ascending: true, nullsFirst: false })
       .order('short_code', { ascending: true })
 
@@ -68,6 +69,7 @@ export async function GET() {
       contract_start_date: p.contract_start_date,
       renew_date:          p.contract_renew_date ?? null,
       updated_at:          p.updated_at,
+      sort_order:          p.sort_order ?? null,
       this_month_deployed: deployedBranchIds.has(p.branch_id),
       is_profile_complete: calcComplete(p),
     }))

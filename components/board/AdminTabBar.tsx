@@ -8,7 +8,7 @@ import { ADMIN_TABS, getActiveAdminTab, type AdminTabKey } from '@/lib/admin-tab
 
 type Counts = Record<AdminTabKey, number>
 
-const ZERO: Counts = { home: 0, ops: 0, service: 0 }
+const ZERO: Counts = { home: 0, service: 0 }
 
 export default function AdminTabBar() {
   const pathname = usePathname()
@@ -22,19 +22,13 @@ export default function AdminTabBar() {
     const supabase = createClient()
 
     async function loadCounts() {
-      // 운영 문의 미답변 (pending)
-      const opsPromise = supabase
-        .from('inquiries')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'pending')
-
       // 학부모 승인 대기
       const parentsPromise = supabase
         .from('parents')
         .select('*', { count: 'exact', head: true })
         .eq('status', 'pending')
 
-      // 학부모 문의 미답변 (테이블이 없으면 0)
+      // 학부모 문의 미답변
       const parentInqPromise = supabase
         .from('parent_inquiries')
         .select('*', { count: 'exact', head: true })
@@ -46,19 +40,17 @@ export default function AdminTabBar() {
         .then(d => d?.count || 0)
         .catch(() => 0)
 
-      const [opsRes, parentsRes, parentInqRes, serviceCount] = await Promise.all([
-        opsPromise, parentsPromise, parentInqPromise, servicePromise,
+      const [parentsRes, parentInqRes, serviceCount] = await Promise.all([
+        parentsPromise, parentInqPromise, servicePromise,
       ])
 
       if (cancelled) return
 
-      const opsCount = opsRes.count || 0
       const parentsCount = parentsRes.count || 0
       const parentInqCount = parentInqRes.error ? 0 : (parentInqRes.count || 0)
 
       setCounts({
         home: parentsCount + parentInqCount,
-        ops: opsCount,
         service: serviceCount,
       })
     }

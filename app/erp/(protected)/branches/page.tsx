@@ -5,11 +5,56 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
   Building2, Utensils, Truck, CheckCircle, Search, AlertTriangle, Plus,
-  ChevronLeft, ChevronRight,
+  ChevronLeft, ChevronRight, ChevronDown, ChevronRight as ChevronRightIcon,
 } from 'lucide-react'
 import type { BranchProfileRow } from '@/types/branch-profile'
 
-const ITEMS_PER_PAGE = 20
+const ITEMS_PER_GROUP = 20
+
+const GROUPS = [
+  {
+    tag: 'E', label: 'ECC계열',
+    headerClass: 'bg-blue-50 border-blue-200',
+    badgeClass: 'bg-blue-100 text-blue-700',
+    dotClass: 'bg-blue-500',
+  },
+  {
+    tag: 'P', label: 'POLY계열',
+    headerClass: 'bg-green-50 border-green-200',
+    badgeClass: 'bg-green-100 text-green-700',
+    dotClass: 'bg-green-500',
+  },
+  {
+    tag: 'R', label: '라이즈계열',
+    headerClass: 'bg-purple-50 border-purple-200',
+    badgeClass: 'bg-purple-100 text-purple-700',
+    dotClass: 'bg-purple-500',
+  },
+  {
+    tag: 'MB', label: 'MB계열',
+    headerClass: 'bg-orange-50 border-orange-200',
+    badgeClass: 'bg-orange-100 text-orange-700',
+    dotClass: 'bg-orange-500',
+  },
+  {
+    tag: 'SLP', label: 'SLP계열',
+    headerClass: 'bg-pink-50 border-pink-200',
+    badgeClass: 'bg-pink-100 text-pink-700',
+    dotClass: 'bg-pink-500',
+  },
+  {
+    tag: 'AO', label: '알티오라',
+    headerClass: 'bg-teal-50 border-teal-200',
+    badgeClass: 'bg-teal-100 text-teal-700',
+    dotClass: 'bg-teal-500',
+  },
+  {
+    tag: '기타', label: '기타',
+    headerClass: 'bg-slate-50 border-slate-200',
+    badgeClass: 'bg-slate-100 text-slate-600',
+    dotClass: 'bg-slate-400',
+  },
+]
 
 // ── 유틸 ─────────────────────────────────────────────────────────────
 function displayName(row: BranchProfileRow) {
@@ -17,7 +62,10 @@ function displayName(row: BranchProfileRow) {
 }
 
 function normalizeGroup(g: string | null): string {
-  return g && g.trim() ? g.trim() : '기타'
+  if (!g || !g.trim()) return '기타'
+  const t = g.trim()
+  if (GROUPS.find(gr => gr.tag === t)) return t
+  return '기타'
 }
 
 // ── 배지 ─────────────────────────────────────────────────────────────
@@ -64,22 +112,10 @@ function SkeletonRow() {
     <tr>
       {[32, 120, 56, 72, 56, 72, 40, 40, 32, 32].map((w, i) => (
         <td key={i} className="px-4 py-3">
-          <div
-            className="animate-pulse bg-slate-100 rounded h-4"
-            style={{ width: w }}
-          />
+          <div className="animate-pulse bg-slate-100 rounded h-4" style={{ width: w }} />
         </td>
       ))}
     </tr>
-  )
-}
-
-function SkeletonCard() {
-  return (
-    <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-2">
-      <div className="animate-pulse bg-slate-100 rounded h-4 w-2/3" />
-      <div className="animate-pulse bg-slate-100 rounded h-3 w-1/3" />
-    </div>
   )
 }
 
@@ -104,40 +140,141 @@ function SummaryCard({ icon, label, value, color }: SummaryCardProps) {
   )
 }
 
-// ── 메인 ─────────────────────────────────────────────────────────────
-type FilterType = 'all' | 'ck' | 'consignment'
+// ── 그룹 내 페이지네이션 ─────────────────────────────────────────────
+function GroupPagination({
+  tag,
+  total,
+  current,
+  onPage,
+}: {
+  tag: string
+  total: number
+  current: number
+  onPage: (tag: string, page: number) => void
+}) {
+  const totalPages = Math.ceil(total / ITEMS_PER_GROUP)
+  if (totalPages <= 1) return null
 
+  const start = (current - 1) * ITEMS_PER_GROUP + 1
+  const end = Math.min(current * ITEMS_PER_GROUP, total)
+
+  function pages(): number[] {
+    if (totalPages <= 5) return Array.from({ length: totalPages }, (_, i) => i + 1)
+    let s = Math.max(1, current - 2)
+    let e = Math.min(totalPages, current + 2)
+    if (e - s < 4) {
+      if (s === 1) e = Math.min(totalPages, 5)
+      else s = Math.max(1, e - 4)
+    }
+    return Array.from({ length: e - s + 1 }, (_, i) => s + i)
+  }
+
+  return (
+    <div className="flex items-center justify-between px-4 py-3 border-t border-slate-100 bg-slate-50">
+      <span className="text-xs text-slate-400">
+        {start}–{end} / 총 {total}개
+      </span>
+      <div className="flex gap-1">
+        <button
+          onClick={() => onPage(tag, current - 1)}
+          disabled={current === 1}
+          className="w-7 h-7 flex items-center justify-center rounded bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          <ChevronLeft size={13} />
+        </button>
+        {pages().map(n => (
+          <button
+            key={n}
+            onClick={() => onPage(tag, n)}
+            className={`w-7 h-7 text-xs font-medium rounded transition-colors ${
+              n === current
+                ? 'bg-emerald-600 text-white'
+                : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+            }`}
+          >
+            {n}
+          </button>
+        ))}
+        <button
+          onClick={() => onPage(tag, current + 1)}
+          disabled={current === Math.ceil(total / ITEMS_PER_GROUP)}
+          className="w-7 h-7 flex items-center justify-center rounded bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          <ChevronRight size={13} />
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ── 메인 ─────────────────────────────────────────────────────────────
 export default function BranchesPage() {
   const router = useRouter()
   const [rows, setRows] = useState<BranchProfileRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [search, setSearch] = useState('')
-  const [filter, setFilter] = useState<FilterType>('all')
-  const [currentPage, setCurrentPage] = useState(1)
+
+  // 검색 / 필터
+  const [searchQuery, setSearchQuery] = useState('')
+  const [groupFilter, setGroupFilter] = useState('전체')
+  const [dietTypeFilter, setDietTypeFilter] = useState('전체')
+  const [fileFormatFilter, setFileFormatFilter] = useState('전체')
+  const [contractFilter, setContractFilter] = useState('전체')
+
+  // 아코디언 / 페이지네이션
+  const [openGroups, setOpenGroups] = useState<Set<string>>(new Set())
+  const [groupPages, setGroupPages] = useState<Map<string, number>>(new Map())
+  const [showAllMode, setShowAllMode] = useState(false)
 
   useEffect(() => {
     fetch('/api/branch-profiles')
       .then(r => r.json())
       .then(data => {
-        if (Array.isArray(data)) {
-          setRows(data)
-        } else {
-          setError('데이터를 불러오지 못했습니다. 새로고침 해주세요.')
-        }
+        if (Array.isArray(data)) setRows(data)
+        else setError('데이터를 불러오지 못했습니다. 새로고침 해주세요.')
       })
       .catch(() => setError('데이터를 불러오지 못했습니다. 새로고침 해주세요.'))
       .finally(() => setLoading(false))
   }, [])
 
-  // ── 클라이언트 필터링 ────────────────────────────────────────────
-  const filtered = useMemo(() => {
-    let list = rows
-    if (filter !== 'all') {
-      list = list.filter(r => r.diet_type === filter)
+  // 검색어 변경 시 일치하는 그룹 자동 열기
+  useEffect(() => {
+    if (!searchQuery.trim()) return
+    const q = searchQuery.trim().toLowerCase()
+    const matching = new Set<string>()
+    for (const row of rows) {
+      if (
+        (row.short_code ?? '').toLowerCase().includes(q) ||
+        (row.display_name ?? '').toLowerCase().includes(q) ||
+        (row.branch_full_name ?? '').toLowerCase().includes(q)
+      ) {
+        matching.add(normalizeGroup(row.group_tag))
+      }
     }
-    if (search.trim()) {
-      const q = search.trim().toLowerCase()
+    setOpenGroups(prev => {
+      const next = new Set(prev)
+      matching.forEach(g => next.add(g))
+      return next
+    })
+    setGroupPages(new Map())
+  }, [searchQuery, rows])
+
+  // 필터링된 데이터
+  const filteredData = useMemo(() => {
+    let list = rows
+    if (dietTypeFilter !== '전체') {
+      if (dietTypeFilter === 'CK') list = list.filter(r => r.diet_type === 'ck')
+      else if (dietTypeFilter === '위탁') list = list.filter(r => r.diet_type === 'consignment')
+    }
+    if (fileFormatFilter !== '전체') {
+      list = list.filter(r => (r.file_format ?? '') === fileFormatFilter)
+    }
+    if (contractFilter !== '전체') {
+      if (contractFilter === '계약중') list = list.filter(r => r.contract_status === 'active')
+      else if (contractFilter === '만료') list = list.filter(r => r.contract_status !== 'active')
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase()
       list = list.filter(r =>
         (r.short_code ?? '').toLowerCase().includes(q) ||
         (r.display_name ?? '').toLowerCase().includes(q) ||
@@ -145,131 +282,71 @@ export default function BranchesPage() {
       )
     }
     return list
-  }, [rows, filter, search])
+  }, [rows, dietTypeFilter, fileFormatFilter, contractFilter, searchQuery])
 
-  // ── 그룹 정렬 유지한 플랫 리스트 ────────────────────────────────
-  const sortedFlat = useMemo(() => {
-    const map = new Map<string, BranchProfileRow[]>()
-    for (const row of filtered) {
-      const g = normalizeGroup(row.group_tag)
-      if (!map.has(g)) map.set(g, [])
-      map.get(g)!.push(row)
-    }
-    const sorted = Array.from(map.entries()).sort(([a], [b]) => {
-      if (a === '기타') return 1
-      if (b === '기타') return -1
-      return a.localeCompare(b)
-    })
-    return sorted.flatMap(([, groupRows]) => groupRows)
-  }, [filtered])
-
-  // ── 페이지네이션 계산 ────────────────────────────────────────────
-  const totalPages = Math.ceil(sortedFlat.length / ITEMS_PER_PAGE)
-  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
-  const pageData   = sortedFlat.slice(startIndex, startIndex + ITEMS_PER_PAGE)
-  const rangeStart = sortedFlat.length === 0 ? 0 : startIndex + 1
-  const rangeEnd   = Math.min(currentPage * ITEMS_PER_PAGE, sortedFlat.length)
-
-  function changePage(n: number) {
-    setCurrentPage(n)
-    window.scrollTo({ top: 0, behavior: 'smooth' })
-  }
-
-  function getPageNumbers(): number[] {
-    if (totalPages <= 5) return Array.from({ length: totalPages }, (_, i) => i + 1)
-    let start = Math.max(1, currentPage - 2)
-    let end   = Math.min(totalPages, currentPage + 2)
-    if (end - start < 4) {
-      if (start === 1) end = Math.min(totalPages, 5)
-      else start = Math.max(1, end - 4)
-    }
-    return Array.from({ length: end - start + 1 }, (_, i) => start + i)
-  }
-
-  // ── 요약 집계 ───────────────────────────────────────────────────
+  // 요약 집계 (전체 rows 기준 고정)
   const total           = rows.length
   const ckCount         = rows.filter(r => r.diet_type === 'ck').length
   const conCount        = rows.filter(r => r.diet_type === 'consignment').length
   const deployedCount   = rows.filter(r => r.this_month_deployed).length
   const incompleteCount = rows.filter(r => !r.is_profile_complete && r.contract_status === 'active').length
 
+  function toggleGroup(tag: string) {
+    setOpenGroups(prev => {
+      const next = new Set(prev)
+      if (next.has(tag)) next.delete(tag)
+      else next.add(tag)
+      return next
+    })
+  }
+
+  function handleGroupFilter(tag: string) {
+    setGroupFilter(tag)
+    if (tag === '전체') {
+      setOpenGroups(new Set(GROUPS.map(g => g.tag)))
+    } else {
+      setOpenGroups(new Set([tag]))
+    }
+    setGroupPages(new Map())
+  }
+
+  function handleFilterChange(fn: () => void) {
+    fn()
+    setGroupPages(new Map())
+  }
+
+  function handleGroupPage(tag: string, page: number) {
+    setGroupPages(prev => new Map(prev).set(tag, page))
+  }
+
   function goToDetail(id: string) {
     router.push(`/erp/branches/${id}`)
   }
 
-  // ── 필터 버튼 ───────────────────────────────────────────────────
-  function FilterBtn({ value, label }: { value: FilterType; label: string }) {
-    const active = filter === value
-    return (
-      <button
-        onClick={() => { setFilter(value); setCurrentPage(1) }}
-        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-          active
-            ? 'bg-emerald-600 text-white'
-            : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
-        }`}
-      >
-        {label}
-      </button>
-    )
-  }
+  const isFiltered = filteredData.length !== rows.length || searchQuery.trim() !== ''
 
-  // ── 렌더 ────────────────────────────────────────────────────────
   return (
-    <div className="space-y-6">
-      {/* 요약 카드 */}
+    <div className="space-y-4">
+      {/* 요약 카드 (전체 rows 기준 고정) */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-        <SummaryCard
-          icon={<Building2 size={20} className="text-emerald-600" />}
-          label="총 원수"
-          value={total}
-          color="bg-emerald-50"
-        />
-        <SummaryCard
-          icon={<Utensils size={20} className="text-blue-600" />}
-          label="CK"
-          value={ckCount}
-          color="bg-blue-50"
-        />
-        <SummaryCard
-          icon={<Truck size={20} className="text-orange-600" />}
-          label="위탁"
-          value={conCount}
-          color="bg-orange-50"
-        />
-        <SummaryCard
-          icon={<CheckCircle size={20} className="text-green-600" />}
-          label="이번달 배포완료"
-          value={deployedCount}
-          color="bg-green-50"
-        />
-        <SummaryCard
-          icon={<AlertTriangle size={20} className="text-amber-600" />}
-          label="미완료 (PPTX 미설정)"
-          value={incompleteCount}
-          color="bg-amber-50"
-        />
+        <SummaryCard icon={<Building2 size={20} className="text-emerald-600" />} label="총 원수"             value={total}           color="bg-emerald-50" />
+        <SummaryCard icon={<Utensils   size={20} className="text-blue-600"    />} label="CK"                 value={ckCount}         color="bg-blue-50"    />
+        <SummaryCard icon={<Truck      size={20} className="text-orange-600"  />} label="위탁"               value={conCount}        color="bg-orange-50"  />
+        <SummaryCard icon={<CheckCircle size={20} className="text-green-600"  />} label="이번달 배포완료"    value={deployedCount}   color="bg-green-50"   />
+        <SummaryCard icon={<AlertTriangle size={20} className="text-amber-600"/>} label="미완료 (PPTX 미설정)" value={incompleteCount} color="bg-amber-50"   />
       </div>
 
-      {/* 검색 + 필터 + 신규 등록 */}
-      <div className="flex flex-col sm:flex-row gap-3">
+      {/* 검색창 + 신규 등록 */}
+      <div className="flex gap-3">
         <div className="relative flex-1">
-          <Search
-            size={16}
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
-          />
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
           <input
             type="text"
-            value={search}
-            onChange={e => { setSearch(e.target.value); setCurrentPage(1) }}
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
             placeholder="원명으로 검색..."
             className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
           />
-        </div>
-        <div className="flex gap-2">
-          <FilterBtn value="all"         label="전체" />
-          <FilterBtn value="ck"          label="CK" />
-          <FilterBtn value="consignment" label="위탁" />
         </div>
         <Link
           href="/erp/branches/new"
@@ -280,6 +357,97 @@ export default function BranchesPage() {
         </Link>
       </div>
 
+      {/* 프랜차이즈 필터 + 조건 필터 + 전체 펼침/접기 */}
+      <div className="flex flex-wrap gap-2 items-center justify-between">
+        {/* 프랜차이즈 버튼 */}
+        <div className="flex flex-wrap gap-1.5">
+          {['전체', ...GROUPS.map(g => g.tag)].map(tag => {
+            const label = tag === '전체' ? '전체' : (GROUPS.find(g => g.tag === tag)?.label.replace('계열', '') ?? tag)
+            const active = groupFilter === tag
+            return (
+              <button
+                key={tag}
+                onClick={() => handleGroupFilter(tag)}
+                className={`rounded-full px-3 py-1.5 text-sm transition-colors ${
+                  active
+                    ? 'bg-emerald-600 text-white'
+                    : 'border border-slate-200 text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                {label}
+              </button>
+            )
+          })}
+        </div>
+
+        {/* 우측 버튼 */}
+        <div className="flex gap-2">
+          <button
+            onClick={() => setOpenGroups(new Set(GROUPS.map(g => g.tag)))}
+            className="border border-slate-200 text-slate-600 rounded-lg px-3 py-1.5 text-sm hover:bg-slate-50 transition-colors"
+          >
+            전체 펼치기
+          </button>
+          <button
+            onClick={() => setOpenGroups(new Set())}
+            className="border border-slate-200 text-slate-600 rounded-lg px-3 py-1.5 text-sm hover:bg-slate-50 transition-colors"
+          >
+            전체 접기
+          </button>
+          <button
+            onClick={() => setShowAllMode(false)}
+            className={`rounded-lg px-3 py-1.5 text-sm transition-colors ${
+              !showAllMode ? 'bg-emerald-600 text-white' : 'border border-slate-200 text-slate-600'
+            }`}
+          >
+            20개씩
+          </button>
+          <button
+            onClick={() => setShowAllMode(true)}
+            className={`rounded-lg px-3 py-1.5 text-sm transition-colors ${
+              showAllMode ? 'bg-emerald-600 text-white' : 'border border-slate-200 text-slate-600'
+            }`}
+          >
+            전체보기
+          </button>
+        </div>
+      </div>
+
+      {/* 조건 필터 */}
+      <div className="flex flex-wrap gap-2 items-center">
+        <select
+          value={dietTypeFilter}
+          onChange={e => handleFilterChange(() => setDietTypeFilter(e.target.value))}
+          className="border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-600 focus:outline-none focus:border-emerald-500"
+        >
+          <option>전체</option>
+          <option>CK</option>
+          <option>위탁</option>
+        </select>
+        <select
+          value={fileFormatFilter}
+          onChange={e => handleFilterChange(() => setFileFormatFilter(e.target.value))}
+          className="border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-600 focus:outline-none focus:border-emerald-500"
+        >
+          <option>전체</option>
+          <option>PDF</option>
+          <option>JPG</option>
+          <option>PPT</option>
+        </select>
+        <select
+          value={contractFilter}
+          onChange={e => handleFilterChange(() => setContractFilter(e.target.value))}
+          className="border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-600 focus:outline-none focus:border-emerald-500"
+        >
+          <option>전체</option>
+          <option>계약중</option>
+          <option>만료</option>
+        </select>
+        <span className="text-sm text-slate-500 ml-auto">
+          {isFiltered ? `${filteredData.length}개원 검색됨` : `총 ${rows.length}개원`}
+        </span>
+      </div>
+
       {/* 에러 */}
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg px-4 py-3">
@@ -287,221 +455,168 @@ export default function BranchesPage() {
         </div>
       )}
 
-      {/* ── 데스크탑 테이블 ──────────────────────────────────────── */}
-      <div className="hidden md:block">
-        {/* 결과 정보 */}
-        {!loading && sortedFlat.length > 0 && (
-          <p className="text-sm text-slate-500 mb-2">
-            {rangeStart}–{rangeEnd} / 총 {sortedFlat.length}개원
-          </p>
-        )}
+      {/* 스켈레톤 */}
+      {loading && (
         <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
           <table className="w-full">
-            <thead>
-              <tr className="bg-slate-50 border-b border-slate-200">
-                {['#', '원명', '그룹', '계약상태', '식단타입', '파일형식', '슬라이드', '이메일수', '이번달', '설정'].map(h => (
-                  <th
-                    key={h}
-                    className={`px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wider whitespace-nowrap ${
-                      h === '#' ? 'w-12 text-center' : 'text-left'
-                    }`}
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
             <tbody>
-              {loading ? (
-                Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} />)
-              ) : pageData.length === 0 ? (
-                <tr>
-                  <td colSpan={10} className="text-center py-12 text-slate-400 text-sm">
-                    검색 결과가 없습니다
-                  </td>
-                </tr>
-              ) : (
-                pageData.map((row, idx) => (
-                  <tr
-                    key={row.id}
-                    onClick={() => goToDetail(row.id)}
-                    className={`border-b border-slate-100 hover:bg-emerald-50/30 cursor-pointer transition-colors duration-100 ${
-                      row.contract_status !== 'active' ? 'opacity-50' : ''
-                    }`}
-                  >
-                    <td className="px-4 py-3 text-sm text-slate-400 text-center w-12">
-                      {startIndex + idx + 1}
-                    </td>
-                    <td className="px-4 py-3 text-sm font-medium text-slate-800 whitespace-nowrap">
-                      {displayName(row)}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="text-xs bg-slate-100 text-slate-600 rounded px-2 py-0.5">
-                        {row.group_tag ?? '기타'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <ContractBadge status={row.contract_status} />
-                    </td>
-                    <td className="px-4 py-3">
-                      <DietBadge type={row.diet_type} />
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="text-xs bg-slate-100 text-slate-600 rounded px-2 py-0.5">
-                        {row.file_format ?? '-'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-slate-600 text-center">
-                      {row.slide_count ?? '-'}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-slate-600 text-center">
-                      {row.distribution_emails?.length ?? 0}
-                    </td>
-                    <td className="px-4 py-3 text-center text-sm">
-                      {row.this_month_deployed ? (
-                        <Link
-                          href="/erp/diet"
-                          onClick={e => e.stopPropagation()}
-                          title="식단 자동화 확인하기"
-                          className="text-emerald-500 hover:text-emerald-700 cursor-pointer transition-colors inline-block"
-                        >
-                          ✅
-                        </Link>
-                      ) : (
-                        <Link
-                          href="/erp/diet"
-                          onClick={e => e.stopPropagation()}
-                          title="식단 자동화에서 배포하기"
-                          className="text-slate-300 hover:text-amber-500 cursor-pointer transition-colors inline-block"
-                        >
-                          ⏳
-                        </Link>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-center text-sm">
-                      {row.is_profile_complete
-                        ? <span className="text-emerald-500" title="설정 완료">✅</span>
-                        : <span className="text-amber-500" title="PPTX 미설정">⚠️</span>
-                      }
-                    </td>
-                  </tr>
-                ))
-              )}
+              {Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} />)}
             </tbody>
           </table>
         </div>
+      )}
 
-        {/* 데스크탑 페이지네이션 */}
-        {!loading && totalPages > 1 && (
-          <div className="flex justify-center gap-1 mt-6">
-            <button
-              onClick={() => changePage(currentPage - 1)}
-              disabled={currentPage === 1}
-              className="w-9 h-9 flex items-center justify-center rounded-lg bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-            >
-              <ChevronLeft size={16} />
-            </button>
-            {getPageNumbers().map(n => (
-              <button
-                key={n}
-                onClick={() => changePage(n)}
-                className={`w-9 h-9 text-sm font-medium rounded-lg transition-colors ${
-                  n === currentPage
-                    ? 'bg-emerald-600 text-white'
-                    : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
-                }`}
-              >
-                {n}
-              </button>
-            ))}
-            <button
-              onClick={() => changePage(currentPage + 1)}
-              disabled={currentPage === totalPages}
-              className="w-9 h-9 flex items-center justify-center rounded-lg bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-            >
-              <ChevronRight size={16} />
-            </button>
-          </div>
-        )}
-      </div>
+      {/* 아코디언 그룹 목록 */}
+      {!loading && (
+        <div>
+          {GROUPS
+            .filter(g => groupFilter === '전체' || g.tag === groupFilter)
+            .map(g => {
+              const groupBranches = filteredData.filter(r => normalizeGroup(r.group_tag) === g.tag)
+              if (groupBranches.length === 0) return null
 
-      {/* ── 모바일 카드 뷰 ──────────────────────────────────────── */}
-      <div className="md:hidden space-y-3">
-        {loading ? (
-          Array.from({ length: 5 }).map((_, i) => <SkeletonCard key={i} />)
-        ) : pageData.length === 0 ? (
-          <p className="text-slate-400 text-center py-12 text-sm">검색 결과가 없습니다</p>
-        ) : (
-          pageData.map(row => (
-            <div
-              key={row.id}
-              onClick={() => goToDetail(row.id)}
-              className="bg-white border border-slate-200 rounded-xl p-4 hover:border-emerald-300 cursor-pointer transition-colors"
-            >
-              <div className="flex items-start justify-between gap-2">
-                <p className="text-sm font-medium text-slate-800 leading-snug">
-                  {displayName(row)}
-                </p>
-                {row.group_tag && (
-                  <span className="text-xs bg-slate-100 text-slate-600 rounded px-2 py-0.5 flex-shrink-0">
-                    {row.group_tag}
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center gap-2 mt-2 flex-wrap">
-                <ContractBadge status={row.contract_status} />
-                <DietBadge type={row.diet_type} />
-              </div>
-              <div className="flex items-center justify-between mt-3">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-slate-400">
-                    {row.file_format ?? '-'}
-                    {row.slide_count != null && ` · ${row.slide_count}p`}
-                  </span>
-                  {!row.is_profile_complete && (
-                    <span className="text-xs text-amber-600 flex items-center gap-0.5">
-                      <AlertTriangle size={11} />
-                      미설정
-                    </span>
+              const isOpen = openGroups.has(g.tag)
+              const currentPage = groupPages.get(g.tag) ?? 1
+              const needPagination = !showAllMode && groupBranches.length > ITEMS_PER_GROUP
+              const displayed = needPagination
+                ? groupBranches.slice((currentPage - 1) * ITEMS_PER_GROUP, currentPage * ITEMS_PER_GROUP)
+                : groupBranches
+
+              return (
+                <div key={g.tag}>
+                  {/* 그룹 헤더 */}
+                  <div
+                    className={`${g.headerClass} border rounded-xl px-4 py-3 flex items-center justify-between cursor-pointer mb-1 transition-all hover:brightness-95`}
+                    onClick={() => toggleGroup(g.tag)}
+                  >
+                    <div className="flex items-center">
+                      {isOpen
+                        ? <ChevronDown size={14} className="text-slate-500" />
+                        : <ChevronRightIcon size={14} className="text-slate-500" />}
+                      <div className={`${g.dotClass} w-2 h-2 rounded-full mx-2`} />
+                      <span className="text-sm font-semibold text-slate-700">{g.label}</span>
+                    </div>
+                    <span className="text-sm text-slate-400">{groupBranches.length}개원</span>
+                  </div>
+
+                  {/* 그룹 콘텐츠 */}
+                  {isOpen && (
+                    <div className="bg-white border border-slate-200 rounded-xl overflow-hidden mb-3">
+                      <table className="w-full">
+                        <thead>
+                          <tr className="bg-slate-50 border-b border-slate-200">
+                            {['#', '원명', '그룹', '계약상태', '식단타입', '파일형식', '슬라이드', '이메일수', '이번달', '설정'].map(h => (
+                              <th
+                                key={h}
+                                className={`px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wider whitespace-nowrap ${
+                                  h === '#' ? 'w-12 text-center' : 'text-left'
+                                }`}
+                              >
+                                {h}
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {displayed.length === 0 ? (
+                            <tr>
+                              <td colSpan={10} className="text-center py-8 text-slate-400 text-sm">
+                                검색 결과가 없습니다
+                              </td>
+                            </tr>
+                          ) : (
+                            displayed.map(row => (
+                              <tr
+                                key={row.id}
+                                onClick={() => goToDetail(row.id)}
+                                className={`border-b border-slate-100 hover:bg-emerald-50/30 cursor-pointer transition-colors duration-100 ${
+                                  row.contract_status !== 'active' ? 'opacity-50' : ''
+                                }`}
+                              >
+                                <td className="px-4 py-3 text-sm text-slate-400 text-center w-12">
+                                  {row.sort_order ?? '—'}
+                                </td>
+                                <td className="px-4 py-3 text-sm font-medium text-slate-800 whitespace-nowrap">
+                                  {displayName(row)}
+                                </td>
+                                <td className="px-4 py-3">
+                                  <span className={`text-xs rounded px-2 py-0.5 ${g.badgeClass}`}>
+                                    {row.group_tag ?? '기타'}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3">
+                                  <ContractBadge status={row.contract_status} />
+                                </td>
+                                <td className="px-4 py-3">
+                                  <DietBadge type={row.diet_type} />
+                                </td>
+                                <td className="px-4 py-3">
+                                  <span className="text-xs bg-slate-100 text-slate-600 rounded px-2 py-0.5">
+                                    {row.file_format ?? '-'}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3 text-sm text-slate-600 text-center">
+                                  {row.slide_count ?? '-'}
+                                </td>
+                                <td className="px-4 py-3 text-sm text-slate-600 text-center">
+                                  {row.distribution_emails?.length ?? 0}
+                                </td>
+                                <td className="px-4 py-3 text-center text-sm">
+                                  {row.this_month_deployed ? (
+                                    <Link
+                                      href="/erp/diet"
+                                      onClick={e => e.stopPropagation()}
+                                      title="식단 자동화 확인하기"
+                                      className="text-emerald-500 hover:text-emerald-700 cursor-pointer transition-colors inline-block"
+                                    >
+                                      ✅
+                                    </Link>
+                                  ) : (
+                                    <Link
+                                      href="/erp/diet"
+                                      onClick={e => e.stopPropagation()}
+                                      title="식단 자동화에서 배포하기"
+                                      className="text-slate-300 hover:text-amber-500 cursor-pointer transition-colors inline-block"
+                                    >
+                                      ⏳
+                                    </Link>
+                                  )}
+                                </td>
+                                <td className="px-4 py-3 text-center text-sm">
+                                  {row.is_profile_complete
+                                    ? <span className="text-emerald-500" title="설정 완료">✅</span>
+                                    : <span className="text-amber-500" title="PPTX 미설정">⚠️</span>
+                                  }
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+
+                      {/* 그룹 내 페이지네이션 */}
+                      {needPagination && (
+                        <GroupPagination
+                          tag={g.tag}
+                          total={groupBranches.length}
+                          current={currentPage}
+                          onPage={handleGroupPage}
+                        />
+                      )}
+                    </div>
                   )}
                 </div>
-                <span className="text-sm" onClick={e => e.stopPropagation()}>
-                  {row.this_month_deployed ? (
-                    <Link href="/erp/diet" className="text-emerald-600 hover:text-emerald-700 transition-colors">
-                      ✅ 배포완료
-                    </Link>
-                  ) : (
-                    <Link href="/erp/diet" className="text-slate-300 hover:text-amber-500 transition-colors">
-                      ⏳ 미배포
-                    </Link>
-                  )}
-                </span>
-              </div>
-            </div>
-          ))
-        )}
+              )
+            })}
 
-        {/* 모바일 페이지네이션 */}
-        {!loading && totalPages > 1 && (
-          <div className="flex justify-center items-center gap-3 mt-6">
-            <button
-              onClick={() => changePage(currentPage - 1)}
-              disabled={currentPage === 1}
-              className="w-9 h-9 flex items-center justify-center rounded-lg bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-            >
-              <ChevronLeft size={16} />
-            </button>
-            <span className="text-sm text-slate-600">{currentPage} / {totalPages}페이지</span>
-            <button
-              onClick={() => changePage(currentPage + 1)}
-              disabled={currentPage === totalPages}
-              className="w-9 h-9 flex items-center justify-center rounded-lg bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-            >
-              <ChevronRight size={16} />
-            </button>
-          </div>
-        )}
-      </div>
+          {/* 필터 결과 없음 */}
+          {filteredData.length === 0 && (
+            <div className="bg-white border border-slate-200 rounded-xl py-12 text-center text-slate-400 text-sm">
+              검색 결과가 없습니다
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

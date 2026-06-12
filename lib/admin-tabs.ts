@@ -1,9 +1,9 @@
 // ============================================================
-// 관리자 상단 탭 3분류 정의 (홈페이지&포털 / 운영관리 / 서비스문의)
+// 관리자 상단 탭 2분류 정의 (홈페이지&포털 / 서비스문의)
 // AdminTabBar · BoardSidebar · AdminMobileNav 가 공유한다.
 // ============================================================
 
-export type AdminTabKey = 'home' | 'ops' | 'service'
+export type AdminTabKey = 'home' | 'service'
 
 export interface AdminMenuItem {
   icon: string
@@ -35,16 +35,6 @@ export const ADMIN_TABS: AdminTab[] = [
     ],
   },
   {
-    key: 'ops',
-    icon: '⚙️',
-    label: '운영관리',
-    shortLabel: '운영관리',
-    description: '관리자 대시보드입니다. 식단·원 관리는 ERP에서 진행합니다.',
-    items: [
-      { icon: '🏠', label: '대시보드', href: '/board/admin' },
-    ],
-  },
-  {
     key: 'service',
     icon: '📋',
     label: '서비스문의',
@@ -57,7 +47,7 @@ export const ADMIN_TABS: AdminTab[] = [
 ]
 
 export function getAdminTab(key: AdminTabKey): AdminTab {
-  return ADMIN_TABS.find(t => t.key === key) || ADMIN_TABS[1]
+  return ADMIN_TABS.find(t => t.key === key) || ADMIN_TABS[0]
 }
 
 /**
@@ -82,6 +72,6 @@ export function getActiveAdminTab(pathname: string, type: string | null): AdminT
     return 'service'
   }
 
-  // 대시보드
-  return 'ops'
+  // 대시보드 포함 나머지는 홈페이지&포털
+  return 'home'
 }

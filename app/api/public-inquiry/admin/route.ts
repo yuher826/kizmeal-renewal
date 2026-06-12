@@ -35,6 +35,17 @@ export async function GET(req: Request) {
     return NextResponse.json({ data })
   }
 
+  // 최근 7일 일별 추이
+  if (url.searchParams.get('mode') === 'trend') {
+    const sevenAgo = new Date(Date.now() - 6 * 86400000)
+    sevenAgo.setHours(0, 0, 0, 0)
+    const { data } = await serviceRole
+      .from('public_inquiries')
+      .select('created_at')
+      .gte('created_at', sevenAgo.toISOString())
+    return NextResponse.json({ data: data ?? [] })
+  }
+
   const status = url.searchParams.get('status') || 'all'
   const search = url.searchParams.get('search') || ''
   const page = Math.max(1, parseInt(url.searchParams.get('page') || '1'))

@@ -14,6 +14,7 @@ export interface BranchProfileRow {
   contract_start_date: string | null
   renew_date: string | null
   updated_at: string | null
+  sort_order: number | null
   this_month_deployed: boolean
   is_profile_complete: boolean
 }
