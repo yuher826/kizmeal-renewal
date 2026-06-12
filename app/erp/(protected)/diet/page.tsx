@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import DietNotificationPanel, { type DietNotification } from '@/components/board/DietNotificationPanel'
+import BranchProfileAlert from '@/components/erp/BranchProfileAlert'
 
 // ── 상수 ──────────────────────────────────────────────────────────────
 const SEPARATE_CONTRACT_CODES = new Set(['로티스', '잉글리쉬파크', '잉파', 'KIS', 'KPI', '송파MB'])
@@ -504,6 +505,8 @@ function DietAutomationContent() {
 
   return (
     <main className="min-h-screen bg-[#F6FAF6] px-4 sm:px-6 py-6 sm:py-8">
+
+      <BranchProfileAlert />
 
       {/* ── 헤더 ──────────────────────────────────────────────────────── */}
       <div className="mb-8">

@@ -5,9 +5,11 @@ import { ChevronRight, Menu, Bell } from 'lucide-react'
 import type { ErpUser } from '@/types/erp'
 
 const BREADCRUMB_MAP: Record<string, { groups: string[]; page: string }> = {
-  '/erp/diet':      { groups: ['식단 관리'], page: '식단 자동화' },
-  '/erp/review':    { groups: ['식단 관리'], page: '식단 검토' },
-  '/erp/branches':  { groups: ['식단 관리'], page: '원 프로파일' },
+  '/erp/diet':            { groups: ['식단 관리'], page: '식단 자동화' },
+  '/erp/review':          { groups: ['식단 관리'], page: '식단 검토' },
+  '/erp/branches/new':    { groups: ['식단 관리', '원 프로파일'], page: '신규 등록' },
+  '/erp/branches/':       { groups: ['식단 관리', '원 프로파일'], page: '상세' },
+  '/erp/branches':        { groups: ['식단 관리'], page: '원 프로파일' },
   '/erp/centers':   { groups: ['원 관리'],   page: '원 정보 관리' },
   '/erp/notices':   { groups: ['원 관리'],   page: '가맹점 공지' },
   '/erp/inquiries': { groups: ['소통 관리'], page: '운영 문의' },

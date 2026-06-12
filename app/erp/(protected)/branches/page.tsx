@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import {
-  Building2, Utensils, Truck, CheckCircle, Search,
+  Building2, Utensils, Truck, CheckCircle, Search, AlertTriangle, Plus,
 } from 'lucide-react'
 import type { BranchProfileRow } from '@/types/branch-profile'
 
@@ -58,7 +59,7 @@ function DietBadge({ type }: { type: string | null }) {
 function SkeletonRow() {
   return (
     <tr>
-      {[120, 56, 72, 56, 72, 40, 40, 32].map((w, i) => (
+      {[120, 56, 72, 56, 72, 40, 40, 32, 32].map((w, i) => (
         <td key={i} className="px-4 py-3">
           <div
             className="animate-pulse bg-slate-100 rounded h-4"
@@ -143,10 +144,11 @@ export default function BranchesPage() {
   }, [rows, filter, search])
 
   // ── 요약 집계 ───────────────────────────────────────────────────
-  const total      = rows.length
-  const ckCount    = rows.filter(r => r.diet_type === 'ck').length
-  const conCount   = rows.filter(r => r.diet_type === 'consignment').length
+  const total         = rows.length
+  const ckCount       = rows.filter(r => r.diet_type === 'ck').length
+  const conCount      = rows.filter(r => r.diet_type === 'consignment').length
   const deployedCount = rows.filter(r => r.this_month_deployed).length
+  const incompleteCount = rows.filter(r => !r.is_profile_complete).length
 
   // ── 그룹별 묶기 ─────────────────────────────────────────────────
   const grouped = useMemo(() => {
@@ -189,7 +191,7 @@ export default function BranchesPage() {
   return (
     <div className="space-y-6">
       {/* 요약 카드 */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <SummaryCard
           icon={<Building2 size={20} className="text-emerald-600" />}
           label="총 원수"
@@ -214,9 +216,15 @@ export default function BranchesPage() {
           value={deployedCount}
           color="bg-green-50"
         />
+        <SummaryCard
+          icon={<AlertTriangle size={20} className="text-amber-600" />}
+          label="미완료 (PPTX 미설정)"
+          value={incompleteCount}
+          color="bg-amber-50"
+        />
       </div>
 
-      {/* 검색 + 필터 */}
+      {/* 검색 + 필터 + 신규 등록 */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
           <Search
@@ -236,6 +244,13 @@ export default function BranchesPage() {
           <FilterBtn value="ck"          label="CK" />
           <FilterBtn value="consignment" label="위탁" />
         </div>
+        <Link
+          href="/erp/branches/new"
+          className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-4 py-2.5 rounded-lg transition-colors whitespace-nowrap"
+        >
+          <Plus size={15} />
+          신규 등록
+        </Link>
       </div>
 
       {/* 에러 */}
@@ -250,7 +265,7 @@ export default function BranchesPage() {
         <table className="w-full">
           <thead>
             <tr className="bg-slate-50 border-b border-slate-200">
-              {['원명', '그룹', '계약상태', '식단타입', '파일형식', '슬라이드', '이메일수', '이번달'].map(h => (
+              {['원명', '그룹', '계약상태', '식단타입', '파일형식', '슬라이드', '이메일수', '이번달', '설정'].map(h => (
                 <th
                   key={h}
                   className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider whitespace-nowrap"
@@ -265,7 +280,7 @@ export default function BranchesPage() {
               Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} />)
             ) : filtered.length === 0 ? (
               <tr>
-                <td colSpan={8} className="text-center py-12 text-slate-400 text-sm">
+                <td colSpan={9} className="text-center py-12 text-slate-400 text-sm">
                   검색 결과가 없습니다
                 </td>
               </tr>
@@ -275,7 +290,7 @@ export default function BranchesPage() {
                   {/* 그룹 헤더 */}
                   <tr key={`hdr-${group}`}>
                     <td
-                      colSpan={8}
+                      colSpan={9}
                       className="px-4 py-2 text-xs font-semibold text-slate-400 uppercase tracking-widest bg-slate-50/50"
                     >
                       ── {group} 그룹 ({groupRows.length}개원) ──
@@ -320,6 +335,12 @@ export default function BranchesPage() {
                           : <span className="text-slate-300">⏳</span>
                         }
                       </td>
+                      <td className="px-4 py-3 text-center text-sm">
+                        {row.is_profile_complete
+                          ? <span className="text-emerald-500" title="설정 완료">✅</span>
+                          : <span className="text-amber-500" title="PPTX 미설정">⚠️</span>
+                        }
+                      </td>
                     </tr>
                   ))}
                 </>
@@ -357,10 +378,18 @@ export default function BranchesPage() {
                 <DietBadge type={row.diet_type} />
               </div>
               <div className="flex items-center justify-between mt-3">
-                <span className="text-xs text-slate-400">
-                  {row.file_format ?? '-'}
-                  {row.slide_count != null && ` · ${row.slide_count}p`}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-400">
+                    {row.file_format ?? '-'}
+                    {row.slide_count != null && ` · ${row.slide_count}p`}
+                  </span>
+                  {!row.is_profile_complete && (
+                    <span className="text-xs text-amber-600 flex items-center gap-0.5">
+                      <AlertTriangle size={11} />
+                      미설정
+                    </span>
+                  )}
+                </div>
                 <span className="text-sm">
                   {row.this_month_deployed
                     ? <span className="text-emerald-600">✅ 배포완료</span>
