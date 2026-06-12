@@ -37,6 +37,7 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/board/notifications') ||
     pathname.startsWith('/board/customer')
   const isAdminRoute = pathname.startsWith('/board/admin')
+  const isErpRoute = pathname.startsWith('/erp')
   const isBoardLogin = pathname === '/board/login'
   const isChangePassword = pathname === '/board/change-password'
 
@@ -58,10 +59,25 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/nutritionist/upload')
 
   // ── Board auth ──────────────────────────────────────────────
-  if (!user && (isCustomerRoute || isAdminRoute || isChangePassword)) {
+  if (!user && (isCustomerRoute || isAdminRoute || isChangePassword || isErpRoute)) {
     const url = request.nextUrl.clone()
     url.pathname = '/board/login'
     return NextResponse.redirect(url)
+  }
+
+  // ── ERP auth (admins 테이블 확인) ────────────────────────────
+  if (user && isErpRoute) {
+    const { data: adminData } = await supabase
+      .from('admins')
+      .select('id')
+      .eq('auth_id', user.id)
+      .maybeSingle()
+
+    if (!adminData) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/board/login'
+      return NextResponse.redirect(url)
+    }
   }
 
   // must_change_password 체크 (고객 라우트에서만)
@@ -145,6 +161,7 @@ export async function middleware(request: NextRequest) {
 export const config = {
   matcher: [
     '/board/(.*)',
+    '/erp/(.*)',
     '/parent/login',
     '/parent/(dashboard|menu|photos|recipes|mypage)(.*)',
     '/nutritionist/(.*)',
