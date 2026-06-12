@@ -183,7 +183,7 @@ export default function AdminDashboard() {
           <h2 className="text-2xl font-bold text-[#1C2B1E]">
             {loading ? '관리자님, 안녕하세요 👋' : `${adminName || '관리자'}님, 안녕하세요 👋`}
           </h2>
-          <p className="text-sm text-gray-500 mt-0.5">키즈밀 소통&운영 관리시스템</p>
+          <p className="text-sm text-gray-500 mt-0.5">키즈밀 소통 관리시스템</p>
         </div>
 
         {/* 오늘 처리 필요 위젯 */}

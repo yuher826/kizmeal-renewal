@@ -32,7 +32,7 @@ export default function AdminMobileNav() {
   const searchParams = useSearchParams()
   const router = useRouter()
 
-  const activeTab = getActiveAdminTab(pathname, searchParams.get('type'))
+  const activeTab = getActiveAdminTab(pathname)
   const [drawerTab, setDrawerTab] = useState<AdminTabKey>(activeTab)
 
   useEffect(() => { setOpen(false) }, [pathname])

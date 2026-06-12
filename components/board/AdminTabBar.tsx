@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { usePathname, useSearchParams } from 'next/navigation'
+import { usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { ADMIN_TABS, getActiveAdminTab, type AdminTabKey } from '@/lib/admin-tabs'
 
@@ -12,10 +12,9 @@ const ZERO: Counts = { home: 0, service: 0 }
 
 export default function AdminTabBar() {
   const pathname = usePathname()
-  const searchParams = useSearchParams()
   const [counts, setCounts] = useState<Counts>(ZERO)
 
-  const active = getActiveAdminTab(pathname, searchParams.get('type'))
+  const active = getActiveAdminTab(pathname)
 
   useEffect(() => {
     let cancelled = false

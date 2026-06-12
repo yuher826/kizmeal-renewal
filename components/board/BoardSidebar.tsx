@@ -85,7 +85,7 @@ export default function BoardSidebar() {
 
       <nav className="flex-1 overflow-y-auto py-4 px-3 flex flex-col">
         {role === 'admin' ? (() => {
-          const activeTab = getActiveAdminTab(pathname, searchParams.get('type'))
+          const activeTab = getActiveAdminTab(pathname)
           const tab = ADMIN_TABS.find(t => t.key === activeTab) || ADMIN_TABS[0]
           return (
             <>

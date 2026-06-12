@@ -381,19 +381,29 @@ export default function BranchesPage() {
         </div>
 
         {/* 우측 버튼 */}
+        {(() => {
+          const visibleTags = GROUPS
+            .filter(g => groupFilter === '전체' || g.tag === groupFilter)
+            .filter(g => filteredData.some(r => normalizeGroup(r.group_tag) === g.tag))
+            .map(g => g.tag)
+          const allOpen = visibleTags.length > 0 && visibleTags.every(t => openGroups.has(t))
+          return (
         <div className="flex gap-2">
-          <button
-            onClick={() => setOpenGroups(new Set(GROUPS.map(g => g.tag)))}
-            className="border border-slate-200 text-slate-600 rounded-lg px-3 py-1.5 text-sm hover:bg-slate-50 transition-colors"
-          >
-            전체 펼치기
-          </button>
-          <button
-            onClick={() => setOpenGroups(new Set())}
-            className="border border-slate-200 text-slate-600 rounded-lg px-3 py-1.5 text-sm hover:bg-slate-50 transition-colors"
-          >
-            전체 접기
-          </button>
+          {allOpen ? (
+            <button
+              onClick={() => setOpenGroups(new Set())}
+              className="border border-slate-200 text-slate-600 rounded-lg px-3 py-1.5 text-sm hover:bg-slate-50 transition-colors"
+            >
+              전체 접기
+            </button>
+          ) : (
+            <button
+              onClick={() => setOpenGroups(new Set(visibleTags))}
+              className="border border-slate-200 text-slate-600 rounded-lg px-3 py-1.5 text-sm hover:bg-slate-50 transition-colors"
+            >
+              전체 펼치기
+            </button>
+          )}
           <button
             onClick={() => setShowAllMode(false)}
             className={`rounded-lg px-3 py-1.5 text-sm transition-colors ${
@@ -411,6 +421,8 @@ export default function BranchesPage() {
             전체보기
           </button>
         </div>
+          )
+        })()}
       </div>
 
       {/* 조건 필터 */}
@@ -534,7 +546,9 @@ export default function BranchesPage() {
                                 }`}
                               >
                                 <td className="px-4 py-3 text-sm text-slate-400 text-center w-12">
-                                  {row.sort_order ?? '—'}
+                                  {groupFilter === '전체'
+                                    ? (row.sort_order ?? '—')
+                                    : groupBranches.indexOf(row) + 1}
                                 </td>
                                 <td className="px-4 py-3 text-sm font-medium text-slate-800 whitespace-nowrap">
                                   {displayName(row)}
