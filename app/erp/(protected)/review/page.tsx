@@ -281,6 +281,8 @@ function ManagerView({
   const [emergencyItem,     setEmergencyItem]     = useState<ReviewItem | null>(null)
   const [emergencyInput,    setEmergencyInput]    = useState('')
   const [emergencyLoading,  setEmergencyLoading]  = useState(false)
+  const [deployingIds,      setDeployingIds]      = useState<Set<string>>(new Set())
+  const [isDeployingAll,    setIsDeployingAll]    = useState(false)
 
   const TAB_KEYS: { key: ManagerTab; label: string; icon: string }[] = [
     { key: 'all',                 label: '전체',    icon: '📋' },
@@ -487,6 +489,68 @@ function ManagerView({
     }
   }
 
+  async function handleDeploy(item: ReviewItem) {
+    if (!confirm('이메일을 발송하시겠습니까?')) return
+    const prev = item.review_status
+    setDeployingIds(s => { const n = new Set(s); n.add(item.id); return n })
+    patchItem(item.id, { review_status: 'deployed' })
+    try {
+      const res  = await fetch('/api/pptx/deploy', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ year, month, branch_ids: [item.branch_id] }),
+      })
+      const data = await res.json()
+      if (res.ok && (data.sent ?? 0) > 0) {
+        showToast(`${item.branch_name} 배포 완료`, 'success')
+      } else {
+        patchItem(item.id, { review_status: prev })
+        showToast(`배포 실패: ${data.error ?? '이메일 발송 오류'}`, 'error')
+      }
+    } catch {
+      patchItem(item.id, { review_status: prev })
+      showToast('네트워크 오류', 'error')
+    } finally {
+      setDeployingIds(s => { const n = new Set(s); n.delete(item.id); return n })
+    }
+  }
+
+  async function handleBatchDeploy() {
+    const approvedItems = filtered.filter(i => i.review_status === 'approved')
+    if (!approvedItems.length) return
+    if (!confirm(`승인완료된 ${approvedItems.length}개 원에 이메일을 발송합니다.`)) return
+    setIsDeployingAll(true)
+    const prevMap = new Map(approvedItems.map(i => [i.id, i.review_status]))
+    approvedItems.forEach(i => patchItem(i.id, { review_status: 'deployed' }))
+    try {
+      const branch_ids = approvedItems.map(i => i.branch_id).filter(Boolean) as string[]
+      const res  = await fetch('/api/pptx/deploy', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ year, month, branch_ids }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        const failedNames: string[] = data.results?.failed ?? []
+        if (failedNames.length > 0) {
+          failedNames.forEach(name => {
+            const it = approvedItems.find(i => i.branch_name === name)
+            if (it) patchItem(it.id, { review_status: prevMap.get(it.id) as ReviewItem['review_status'] })
+          })
+          showToast(`${failedNames.length}개 원 발송 실패: ${failedNames.slice(0, 3).join(', ')}`, 'error')
+        } else {
+          showToast(`${data.sent}개 원 배포 완료`, 'success')
+        }
+      } else {
+        approvedItems.forEach(i => patchItem(i.id, { review_status: prevMap.get(i.id) as ReviewItem['review_status'] }))
+        showToast(`배포 실패: ${data.error}`, 'error')
+      }
+    } catch {
+      approvedItems.forEach(i => patchItem(i.id, { review_status: prevMap.get(i.id) as ReviewItem['review_status'] }))
+      showToast('네트워크 오류', 'error')
+    } finally {
+      setIsDeployingAll(false)
+    }
+  }
+
   function rowBg(status: string) {
     if (status === 'correction_request') return 'bg-orange-50'
     if (status === 'resubmitted')        return 'bg-blue-50/30'
@@ -512,6 +576,25 @@ function ManagerView({
           </button>
         ))}
       </div>
+
+      {/* 승인완료 탭 일괄 배포 버튼 */}
+      {tab === 'approved' && filtered.length > 0 && ['super_admin', 'manager'].includes(role) && (
+        <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-2xl px-4 py-3">
+          <span className="text-sm font-semibold text-green-700">
+            승인완료 {filtered.length}개 원이 배포 대기 중입니다.
+          </span>
+          <button
+            type="button"
+            onClick={handleBatchDeploy}
+            disabled={isDeployingAll}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-teal-600 text-white text-sm font-semibold hover:bg-teal-700 disabled:opacity-40 transition-colors"
+          >
+            {isDeployingAll
+              ? <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin inline-block" /><span>배포 중...</span></>
+              : `📧 전체 배포 (${filtered.length}개)`}
+          </button>
+        </div>
+      )}
 
       {/* 선택 항목 액션 바 */}
       {selectedIds.size > 0 && (
@@ -727,6 +810,16 @@ function ManagerView({
                       {item.review_status === 'approved' && (
                         <div className="flex flex-col items-center gap-1">
                           <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-bold">✅ 승인완료</span>
+                          {['super_admin', 'manager'].includes(role) && (
+                            <button type="button"
+                              onClick={() => handleDeploy(item)}
+                              disabled={deployingIds.has(item.id)}
+                              className="px-2 py-1 rounded-lg bg-teal-600 text-white text-xs font-semibold hover:bg-teal-700 disabled:opacity-40 flex items-center gap-1 transition-colors">
+                              {deployingIds.has(item.id)
+                                ? <><span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" /><span>배포중</span></>
+                                : '📧 배포'}
+                            </button>
+                          )}
                           {role === 'super_admin' && (
                             <button type="button"
                               onClick={() => { setEmergencyItem(item); setEmergencyInput('') }}
@@ -866,6 +959,16 @@ function ManagerView({
                   <button type="button"
                     onClick={() => { setActiveInlineId(activeInlineId === item.id ? null : item.id); setInlineMemo(''); setInlineCategory('') }}
                     className="px-3 py-1.5 rounded-xl bg-orange-50 text-orange-700 text-xs font-semibold border border-orange-200">✏️ 재요청</button>
+                )}
+                {item.review_status === 'approved' && ['super_admin', 'manager'].includes(role) && (
+                  <button type="button"
+                    onClick={() => handleDeploy(item)}
+                    disabled={deployingIds.has(item.id)}
+                    className="px-3 py-1.5 rounded-xl bg-teal-600 text-white text-xs font-semibold hover:bg-teal-700 disabled:opacity-40 flex items-center gap-1">
+                    {deployingIds.has(item.id)
+                      ? <><span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" /><span>배포중</span></>
+                      : '📧 배포'}
+                  </button>
                 )}
                 {item.review_status === 'approved' && role === 'super_admin' && (
                   <button type="button"
@@ -1351,7 +1454,7 @@ function DietReviewPageInner() {
       const res  = await fetch(`/api/diet-review?year=${year}&month=${month}`)
       const data = await res.json()
       if (!res.ok) {
-        if (res.status === 403) { router.push('/board/admin'); return }
+        if (res.status === 403) { router.push('/erp/diet'); return }
         showToast(`오류: ${data.error}`)
         return
       }
@@ -1397,6 +1500,12 @@ function DietReviewPageInner() {
       </div>
 
       <div className="px-4 sm:px-6 space-y-5">
+        {/* TEST MODE 배지 */}
+        {process.env.NEXT_PUBLIC_EMAIL_TEST_MODE === 'true' && (
+          <div className="flex items-center gap-2 px-4 py-2 bg-yellow-50 border border-yellow-300 rounded-xl text-yellow-800 text-xs font-semibold">
+            <span>⚠️ TEST MODE 활성화됨 — 이메일이 실제 수신자 대신 테스트 주소로만 발송됩니다.</span>
+          </div>
+        )}
         {/* 공통 상단 */}
         <CommonHeader
           year={year} month={month} stats={localStats} search={search}
