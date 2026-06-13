@@ -83,7 +83,7 @@ export async function POST(req: NextRequest) {
     .eq('auth_id', user.id)
     .maybeSingle()
 
-  if (!['nutritionist', 'super_admin'].includes(adminRow?.role ?? '')) {
+  if (!['nutritionist', 'super_admin', 'manager'].includes(adminRow?.role ?? '')) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
