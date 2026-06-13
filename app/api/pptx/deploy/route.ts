@@ -104,22 +104,22 @@ export async function POST(req: NextRequest) {
   const isTestMode = process.env.EMAIL_TEST_MODE === 'true'
   const testEmail  = process.env.TEST_EMAIL || 'yuher@kizmeal.com'
 
-  // 글로벌 weekly_menu 조회
-  const { data: menuRow } = await db
+  // weekly_menus 조회 (branch_id IS NULL 조건 제거 — 원별 메뉴도 커버)
+  const { data: menuRows } = await db
     .from('weekly_menus')
     .select('id, status')
-    .eq('year', year).eq('month', month).eq('diet_type', 'CK').is('branch_id', null)
-    .maybeSingle()
+    .eq('year', year).eq('month', month).eq('diet_type', 'CK')
 
-  if (!menuRow) {
+  const menuIds = (menuRows ?? []).map(r => r.id)
+  if (!menuIds.length) {
     return NextResponse.json({ error: '식단 데이터를 찾을 수 없습니다.' }, { status: 404 })
   }
 
-  // diet_review_items 조회
+  // diet_review_items 조회 (branch_id 직접 필터)
   let itemsQuery = db
     .from('diet_review_items')
     .select('id, branch_id, branch_name, pptx_url, jpg_url, review_status, memo_history')
-    .eq('weekly_menu_id', menuRow.id)
+    .in('weekly_menu_id', menuIds)
 
   if (branch_ids && branch_ids.length > 0) {
     itemsQuery = itemsQuery.in('branch_id', branch_ids)
@@ -254,7 +254,7 @@ export async function POST(req: NextRequest) {
       status:      'deployed',
       deployed_at: now,
       deployed_by: adminRow!.id,
-    }).eq('id', menuRow.id)
+    }).in('id', menuIds)
   }
 
   // 배포 완료 알림
@@ -265,7 +265,7 @@ export async function POST(req: NextRequest) {
       title:          `${year}년 ${month}월 식단표 배포 완료`,
       message:        `${branchList} 배포가 완료되었습니다. (총 ${success.length}개원)`,
       recipient_role: 'manager',
-      weekly_menu_id: menuRow.id,
+      weekly_menu_id: menuIds[0],
       year,
       month,
     })
