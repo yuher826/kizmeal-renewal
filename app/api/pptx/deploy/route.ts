@@ -15,24 +15,39 @@ type BranchProfile = {
   distribution_emails: string[] | null
   diet_type:           string | null
   review_required:     boolean | null
+  file_format:         string | null
 }
 
 type ReviewItemRow = {
   id:           string
   branch_id:    string | null
   branch_name:  string
-  pptx_url:      string | null
-  jpg_url:       string | null
+  pptx_url:     string | null
+  jpg_url:      string | null
   review_status: string
   memo_history:  unknown[]
 }
 
+type DownloadButton = { label: string; url: string }
+
 function buildDietEmailHtml(
-  branchName: string,
-  year:       number,
-  month:      number,
-  pptxUrl:    string,
+  branchName:  string,
+  year:        number,
+  month:       number,
+  buttons:     DownloadButton[],
+  testBanner?: string,
 ): string {
+  const testBannerHtml = testBanner
+    ? `<div style="background:#FEF3C7;border:1px solid #F59E0B;border-radius:8px;padding:12px 16px;margin-bottom:20px;text-align:left;">
+        <p style="color:#92400E;font-size:13px;font-weight:bold;margin:0 0 4px;">⚠️ 테스트 발송입니다.</p>
+        <p style="color:#92400E;font-size:12px;margin:0;">실제 수신자: ${testBanner}</p>
+      </div>`
+    : ''
+
+  const buttonsHtml = buttons.map(b =>
+    `<a href="${b.url}" style="display:inline-block;background:#1565C0;color:white;text-decoration:none;font-size:15px;font-weight:bold;padding:14px 40px;border-radius:14px;margin-bottom:12px;">${b.label}</a>`
+  ).join('<br>')
+
   return `
 <div style="font-family:'Apple SD Gothic Neo',Malgun Gothic,sans-serif;max-width:520px;margin:0 auto;background:#F6FAF6;padding:24px 16px;">
   <div style="background:white;border-radius:24px;padding:40px 32px;text-align:center;">
@@ -42,16 +57,12 @@ function buildDietEmailHtml(
     <h1 style="color:#1C2B1E;font-size:20px;font-weight:bold;margin:0 0 8px;">
       ${year}년 ${month}월 식단표가 도착했습니다 🥗
     </h1>
+    ${testBannerHtml}
     <p style="color:#6B7280;font-size:14px;line-height:1.7;margin:0 0 24px;">
       안녕하세요, <strong>${branchName}</strong> 담당자님!<br>
       ${year}년 ${month}월 식단표를 아래 버튼에서 다운로드해 주세요.
     </p>
-    <a
-      href="${pptxUrl}"
-      style="display:inline-block;background:#1565C0;color:white;text-decoration:none;font-size:15px;font-weight:bold;padding:14px 40px;border-radius:14px;margin-bottom:12px;"
-    >
-      📊 식단표 PPTX 다운로드
-    </a>
+    ${buttonsHtml}
     <p style="color:#9CA3AF;font-size:12px;margin:24px 0 0;line-height:1.6;">
       파일은 Supabase Storage에 안전하게 보관됩니다.<br>
       문의사항은 키즈밀 관리팀으로 연락해주세요.
@@ -90,6 +101,9 @@ export async function POST(req: NextRequest) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
   const db = serviceKey ? createAdminClient(supabaseUrl, serviceKey) : supabase
 
+  const isTestMode = process.env.EMAIL_TEST_MODE === 'true'
+  const testEmail  = process.env.TEST_EMAIL || 'yuher@kizmeal.com'
+
   // 글로벌 weekly_menu 조회
   const { data: menuRow } = await db
     .from('weekly_menus')
@@ -118,11 +132,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: '배포할 항목이 없습니다.' }, { status: 400 })
   }
 
-  // branch_profiles 조회 (diet_type, review_required 포함)
+  // branch_profiles 조회 (file_format 포함)
   const branchIds = allItems.map(i => i.branch_id).filter(Boolean) as string[]
   const { data: profiles } = await db
     .from('branch_profiles')
-    .select('id, short_code, display_name, distribution_email, distribution_emails, diet_type, review_required')
+    .select('id, short_code, display_name, distribution_email, distribution_emails, diet_type, review_required, file_format')
     .in('id', branchIds)
 
   const profileMap = new Map<string, BranchProfile>(
@@ -139,9 +153,15 @@ export async function POST(req: NextRequest) {
     allItems.map(async item => {
       const profile = item.branch_id ? profileMap.get(item.branch_id) : undefined
 
+      // 이미 배포 완료된 원 스킵
+      if (item.review_status === 'deployed') {
+        console.log(`[deploy] 스킵 (이미 배포됨): ${item.branch_name}`)
+        return
+      }
+
       // 배포 가능 조건 체크
-      const isCk                = profile?.diet_type === 'ck' || profile?.diet_type == null
-      const reviewRequired      = profile?.review_required ?? false
+      const isCk                     = profile?.diet_type === 'ck' || profile?.diet_type == null
+      const reviewRequired           = profile?.review_required ?? false
       const canDeployWithoutApproval = !isCk && !reviewRequired
 
       if (!canDeployWithoutApproval && item.review_status !== 'approved') {
@@ -149,13 +169,29 @@ export async function POST(req: NextRequest) {
         return
       }
 
-      if (!item.pptx_url) {
+      // 파일형식별 다운로드 버튼 구성
+      // diet_review_items에 pdf_url 컬럼 없음 → PDF 형식은 pptx_url로 대체
+      const fileFormat = (profile?.file_format ?? 'PPTX').toUpperCase()
+      const buttons: DownloadButton[] = []
+
+      if (fileFormat === 'JPG') {
+        if (item.jpg_url) buttons.push({ label: '🖼️ 식단표 JPG 다운로드', url: item.jpg_url })
+      } else if (fileFormat === 'PDF') {
+        if (item.pptx_url) buttons.push({ label: '📄 식단표 PDF 다운로드', url: item.pptx_url })
+      } else if (fileFormat === 'PDF+JPG') {
+        if (item.pptx_url) buttons.push({ label: '📄 식단표 PDF 다운로드', url: item.pptx_url })
+        if (item.jpg_url)  buttons.push({ label: '🖼️ 식단표 JPG 다운로드', url: item.jpg_url })
+      } else {
+        if (item.pptx_url) buttons.push({ label: '📊 식단표 PPTX 다운로드', url: item.pptx_url })
+      }
+
+      if (!buttons.length) {
         failed.push(item.branch_name)
         return
       }
 
       const emails: string[] = []
-      if (profile?.distribution_email)      emails.push(profile.distribution_email)
+      if (profile?.distribution_email)       emails.push(profile.distribution_email)
       if (profile?.distribution_emails?.length) {
         for (const e of profile.distribution_emails) {
           if (e && !emails.includes(e)) emails.push(e)
@@ -169,12 +205,21 @@ export async function POST(req: NextRequest) {
 
       const displayName = profile?.display_name || item.branch_name
 
+      // 테스트모드: 수신자 교체 + 배너 추가
+      const toEmails    = isTestMode ? [testEmail] : emails
+      const testBanner  = isTestMode ? emails.join(', ') : undefined
+      const subjectPfx  = isTestMode ? '[TEST] ' : ''
+
+      if (isTestMode) {
+        console.log(`[테스트모드] ${item.branch_name} → ${emails.join(', ')} 대신 ${testEmail}로 발송`)
+      }
+
       try {
         await resend.emails.send({
           from:    FROM,
-          to:      emails,
-          subject: `[키즈밀] ${year}년 ${month}월 식단표가 도착했습니다 🥗`,
-          html:    buildDietEmailHtml(displayName, year, month, item.pptx_url),
+          to:      toEmails,
+          subject: `${subjectPfx}[키즈밀] ${year}년 ${month}월 식단표가 도착했습니다 🥗`,
+          html:    buildDietEmailHtml(displayName, year, month, buttons, testBanner),
         })
 
         const history = [
@@ -183,7 +228,7 @@ export async function POST(req: NextRequest) {
             by:     user.email ?? adminRow!.name ?? adminRow!.id,
             role:   adminRow!.role,
             action: 'deployed',
-            memo:   '이메일 배포 완료',
+            memo:   isTestMode ? '이메일 배포 완료 (테스트모드)' : '이메일 배포 완료',
             at:     now,
           },
         ]
