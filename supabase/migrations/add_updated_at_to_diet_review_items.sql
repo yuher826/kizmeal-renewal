@@ -1,0 +1,2 @@
+ALTER TABLE diet_review_items
+ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ;

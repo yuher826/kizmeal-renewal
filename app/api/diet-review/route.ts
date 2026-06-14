@@ -234,7 +234,7 @@ export async function POST(req: NextRequest) {
       const history = appendHistory(item.memo_history, adminRow, 'correction_request', {
         memo, category: memo_category,
       })
-      const { data: u } = await db
+      const { data: u, error: updateError } = await db
         .from('diet_review_items')
         .update({
           review_status:   'correction_request',
@@ -249,7 +249,16 @@ export async function POST(req: NextRequest) {
         .eq('id', item.id)
         .select()
         .single()
-      if (u) updated.push(u as ReviewItemRow)
+      if (updateError) {
+        console.error('업데이트 실패:', updateError)
+        skippedIds.push(item.id)
+      } else if (u) {
+        updated.push(u as ReviewItemRow)
+      }
+    }
+
+    if (updated.length === 0) {
+      return NextResponse.json({ success: false, error: '업데이트 실패' }, { status: 500 })
     }
 
     // 영양사에게 알림
@@ -291,7 +300,7 @@ export async function POST(req: NextRequest) {
 
     for (const item of eligibleItems as ReviewItemRow[]) {
       const history = appendHistory(item.memo_history, adminRow, 'approved')
-      const { data: u } = await db
+      const { data: u, error: updateError } = await db
         .from('diet_review_items')
         .update({
           review_status: 'approved',
@@ -303,7 +312,16 @@ export async function POST(req: NextRequest) {
         .eq('id', item.id)
         .select()
         .single()
-      if (u) updated.push(u as ReviewItemRow)
+      if (updateError) {
+        console.error('업데이트 실패:', updateError)
+        skippedIds.push(item.id)
+      } else if (u) {
+        updated.push(u as ReviewItemRow)
+      }
+    }
+
+    if (updated.length === 0) {
+      return NextResponse.json({ success: false, error: '업데이트 실패' }, { status: 500 })
     }
 
     // 영양사에게 승인 알림
@@ -337,7 +355,7 @@ export async function POST(req: NextRequest) {
     const now = new Date().toISOString()
     const history = appendHistory(current.memo_history, adminRow, 'resubmit', { memo })
 
-    const { data: updated } = await db
+    const { data: updated, error: updateError } = await db
       .from('diet_review_items')
       .update({
         review_status:  'resubmitted',
@@ -348,6 +366,11 @@ export async function POST(req: NextRequest) {
       .eq('id', item_id)
       .select()
       .single()
+
+    if (updateError) {
+      console.error('업데이트 실패:', updateError)
+      return NextResponse.json({ success: false, error: '업데이트 실패' }, { status: 500 })
+    }
 
     // 매니저에게 재제출 알림
     await db.from('diet_notifications').insert({
@@ -402,8 +425,16 @@ export async function POST(req: NextRequest) {
         })
         .eq('id', item.id)
 
-      if (error) skipped.push(item.branch_name)
-      else       success.push(item.branch_name)
+      if (error) {
+        console.error('업데이트 실패:', error)
+        skipped.push(item.branch_name)
+      } else {
+        success.push(item.branch_name)
+      }
+    }
+
+    if (success.length === 0) {
+      return NextResponse.json({ success: false, error: '업데이트 실패', skipped }, { status: 500 })
     }
 
     if (success.length > 0) {
