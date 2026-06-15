@@ -146,8 +146,9 @@ export async function POST(req: NextRequest) {
   const resend = new Resend(process.env.RESEND_API_KEY)
   const now    = new Date().toISOString()
 
-  const success: string[] = []
+  const success: { id: string; branch_name: string }[] = []
   const failed:  string[] = []
+  const skipped: string[] = []
 
   await Promise.all(
     allItems.map(async item => {
@@ -156,6 +157,7 @@ export async function POST(req: NextRequest) {
       // 이미 배포 완료된 원 스킵
       if (item.review_status === 'deployed') {
         console.log(`[deploy] 스킵 (이미 배포됨): ${item.branch_name}`)
+        skipped.push(item.branch_name)
         return
       }
 
@@ -241,7 +243,7 @@ export async function POST(req: NextRequest) {
           updated_at:    now,
         }).eq('id', item.id)
 
-        success.push(item.branch_name)
+        success.push({ id: item.id, branch_name: item.branch_name })
       } catch {
         failed.push(item.branch_name)
       }
@@ -259,7 +261,7 @@ export async function POST(req: NextRequest) {
 
   // 배포 완료 알림
   if (success.length > 0) {
-    const branchList = success.slice(0, 3).join(', ') + (success.length > 3 ? ` 외 ${success.length - 3}개원` : '')
+    const branchList = success.slice(0, 3).map(s => s.branch_name).join(', ') + (success.length > 3 ? ` 외 ${success.length - 3}개원` : '')
     await db.from('diet_notifications').insert({
       type:           'deployed_complete',
       title:          `${year}년 ${month}월 식단표 배포 완료`,
@@ -271,5 +273,11 @@ export async function POST(req: NextRequest) {
     })
   }
 
-  return NextResponse.json({ success: failed.length === 0, sent: success.length, failed: failed.length, results: { success, failed } })
+  return NextResponse.json({
+    success: failed.length === 0,
+    sent:    success.length,
+    failed:  failed.length,
+    skipped: skipped.length,
+    results: { success, failed, skipped },
+  })
 }
