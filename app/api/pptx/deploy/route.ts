@@ -5,7 +5,7 @@ import { Resend } from 'resend'
 
 export const maxDuration = 60
 
-const FROM               = 'onboarding@resend.dev'
+const FROM               = 'noreply@kizmeal.com'
 const DEPLOY_CHUNK_SIZE     = 5
 const DEPLOY_CHUNK_DELAY_MS = 1000
 const EMAIL_REGEX           = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
