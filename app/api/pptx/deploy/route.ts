@@ -19,6 +19,7 @@ type BranchProfile = {
   diet_type:           string | null
   review_required:     boolean | null
   file_format:         string | null
+  direct_delivery:     boolean | null
 }
 
 type ReviewItemRow = {
@@ -139,7 +140,7 @@ export async function POST(req: NextRequest) {
   const branchIds = allItems.map(i => i.branch_id).filter(Boolean) as string[]
   const { data: profiles } = await db
     .from('branch_profiles')
-    .select('id, short_code, display_name, distribution_email, distribution_emails, diet_type, review_required, file_format')
+    .select('id, short_code, display_name, distribution_email, distribution_emails, diet_type, review_required, file_format, direct_delivery')
     .in('id', branchIds)
 
   const profileMap = new Map<string, BranchProfile>(
@@ -209,7 +210,12 @@ export async function POST(req: NextRequest) {
       }
 
       if (!emails.length) {
-        failed.push(item.branch_name)
+        if (profile?.direct_delivery) {
+          skipped.push(item.branch_name)
+          console.log(`[deploy] 직접전달 원 스킵: ${item.branch_name}`)
+        } else {
+          failed.push(item.branch_name)
+        }
         return
       }
 
