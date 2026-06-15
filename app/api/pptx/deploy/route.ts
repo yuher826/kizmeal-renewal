@@ -8,6 +8,7 @@ export const maxDuration = 60
 const FROM               = 'onboarding@resend.dev'
 const DEPLOY_CHUNK_SIZE     = 5
 const DEPLOY_CHUNK_DELAY_MS = 1000
+const EMAIL_REGEX           = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 type BranchProfile = {
   id:                  string
@@ -196,10 +197,14 @@ export async function POST(req: NextRequest) {
       }
 
       const emails: string[] = []
-      if (profile?.distribution_email)       emails.push(profile.distribution_email)
+      if (
+        profile?.distribution_email &&
+        EMAIL_REGEX.test(profile.distribution_email) &&
+        !emails.includes(profile.distribution_email)
+      ) emails.push(profile.distribution_email)
       if (profile?.distribution_emails?.length) {
         for (const e of profile.distribution_emails) {
-          if (e && !emails.includes(e)) emails.push(e)
+          if (e && EMAIL_REGEX.test(e) && !emails.includes(e)) emails.push(e)
         }
       }
 
@@ -211,9 +216,8 @@ export async function POST(req: NextRequest) {
       const displayName = profile?.display_name || item.branch_name
 
       // 테스트모드: 수신자 교체 + 배너 추가
-      const toEmails    = isTestMode ? [testEmail] : emails
-      const testBanner  = isTestMode ? emails.join(', ') : undefined
-      const subjectPfx  = isTestMode ? '[TEST] ' : ''
+      const testBanner = isTestMode ? emails.join(', ') : undefined
+      const subjectPfx = isTestMode ? '[TEST] ' : ''
 
       if (isTestMode) {
         console.log(`[테스트모드] ${item.branch_name} → ${emails.join(', ')} 대신 ${testEmail}로 발송`)
@@ -222,7 +226,8 @@ export async function POST(req: NextRequest) {
       try {
         await resend.emails.send({
           from:    FROM,
-          to:      toEmails,
+          to:      isTestMode ? [testEmail] : [emails[0]],
+          bcc:     !isTestMode && emails.length > 1 ? emails.slice(1) : undefined,
           subject: `${subjectPfx}[키즈밀] ${year}년 ${month}월 식단표가 도착했습니다 🥗`,
           html:    buildDietEmailHtml(displayName, year, month, buttons, testBanner),
         })
@@ -275,7 +280,7 @@ export async function POST(req: NextRequest) {
       title:          `${year}년 ${month}월 식단표 배포 완료`,
       message:        `${branchList} 배포가 완료되었습니다. (총 ${success.length}개원)`,
       recipient_role: 'manager',
-      weekly_menu_id: menuIds[0],
+      weekly_menu_id: menuIds[0] ?? null,
       year,
       month,
     })
