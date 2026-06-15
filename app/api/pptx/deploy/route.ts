@@ -5,7 +5,9 @@ import { Resend } from 'resend'
 
 export const maxDuration = 60
 
-const FROM = 'onboarding@resend.dev'
+const FROM               = 'onboarding@resend.dev'
+const DEPLOY_CHUNK_SIZE     = 5
+const DEPLOY_CHUNK_DELAY_MS = 1000
 
 type BranchProfile = {
   id:                  string
@@ -150,8 +152,9 @@ export async function POST(req: NextRequest) {
   const failed:  string[] = []
   const skipped: string[] = []
 
-  await Promise.all(
-    allItems.map(async item => {
+  for (let i = 0; i < allItems.length; i += DEPLOY_CHUNK_SIZE) {
+    const chunk = allItems.slice(i, i + DEPLOY_CHUNK_SIZE)
+    await Promise.all(chunk.map(async (item) => {
       const profile = item.branch_id ? profileMap.get(item.branch_id) : undefined
 
       // 이미 배포 완료된 원 스킵
@@ -244,11 +247,16 @@ export async function POST(req: NextRequest) {
         }).eq('id', item.id)
 
         success.push({ id: item.id, branch_name: item.branch_name })
-      } catch {
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        console.error(`[deploy] 발송 실패 - ${item.branch_name}:`, msg)
         failed.push(item.branch_name)
       }
-    }),
-  )
+    }))
+    if (i + DEPLOY_CHUNK_SIZE < allItems.length) {
+      await new Promise<void>(r => setTimeout(r, DEPLOY_CHUNK_DELAY_MS))
+    }
+  }
 
   // 전체 배포 시 weekly_menus.status → 'deployed'
   if (!branch_ids || branch_ids.length === 0) {
