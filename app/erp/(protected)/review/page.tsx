@@ -283,6 +283,8 @@ function ManagerView({
   const [emergencyLoading,  setEmergencyLoading]  = useState(false)
   const [deployingIds,      setDeployingIds]      = useState<Set<string>>(new Set())
   const [isDeployingAll,    setIsDeployingAll]    = useState(false)
+  const [deployFailedNames, setDeployFailedNames] = useState<string[]>([])
+  const isDeploying = deployingIds.size > 0 || isDeployingAll
 
   const TAB_KEYS: { key: ManagerTab; label: string; icon: string }[] = [
     { key: 'all',                 label: '전체',    icon: '📋' },
@@ -490,6 +492,7 @@ function ManagerView({
   }
 
   async function handleDeploy(item: ReviewItem) {
+    if (item.review_status !== 'approved') return
     if (!confirm('이메일을 발송하시겠습니까?')) return
     const prev = item.review_status
     setDeployingIds(s => { const n = new Set(s); n.add(item.id); return n })
@@ -500,15 +503,30 @@ function ManagerView({
         body: JSON.stringify({ year, month, branch_ids: [item.branch_id] }),
       })
       const data = await res.json()
-      if (res.ok && (data.sent ?? 0) > 0) {
-        showToast(`${item.branch_name} 배포 완료`, 'success')
+      if (res.ok) {
+        const failedNames: string[] = data.results?.failed  ?? []
+        const skippedCount: number  = data.skipped ?? 0
+        if (failedNames.length > 0) {
+          patchItem(item.id, { review_status: prev })
+          if (failedNames.length === 1) {
+            showToast(`배포 실패: ${failedNames[0]}`, 'error')
+          } else {
+            setDeployFailedNames(failedNames)
+          }
+        } else if ((data.sent ?? 0) > 0) {
+          const skippedMsg = skippedCount > 0 ? ` (${skippedCount}개 이미 배포됨)` : ''
+          showToast(`${item.branch_name} 배포 완료! 🎉${skippedMsg}`, 'success')
+        } else {
+          patchItem(item.id, { review_status: prev })
+          showToast('배포 실패. 관리자에게 문의하세요', 'error')
+        }
       } else {
         patchItem(item.id, { review_status: prev })
         showToast(`배포 실패: ${data.error ?? '이메일 발송 오류'}`, 'error')
       }
     } catch {
       patchItem(item.id, { review_status: prev })
-      showToast('네트워크 오류', 'error')
+      showToast('배포 중 오류 발생, 다시 시도해주세요', 'error')
     } finally {
       setDeployingIds(s => { const n = new Set(s); n.delete(item.id); return n })
     }
@@ -529,15 +547,30 @@ function ManagerView({
       })
       const data = await res.json()
       if (res.ok) {
-        const failedNames: string[] = data.results?.failed ?? []
-        if (failedNames.length > 0) {
-          failedNames.forEach(name => {
-            const it = approvedItems.find(i => i.branch_name === name)
-            if (it) patchItem(it.id, { review_status: prevMap.get(it.id) as ReviewItem['review_status'] })
-          })
-          showToast(`${failedNames.length}개 원 발송 실패: ${failedNames.slice(0, 3).join(', ')}`, 'error')
+        const successItems: { id: string; branch_name: string }[] = data.results?.success ?? []
+        const failedNames:  string[] = data.results?.failed  ?? []
+        const skippedCount: number   = data.skipped ?? 0
+        failedNames.forEach(name => {
+          const it = approvedItems.find(i => i.branch_name === name)
+          if (it) patchItem(it.id, { review_status: prevMap.get(it.id) as ReviewItem['review_status'] })
+        })
+        if (successItems.length > 0) {
+          const successIds = new Set(successItems.map(s => s.id))
+          setSelectedIds(prev => new Set(Array.from(prev).filter(id => !successIds.has(id))))
+        }
+        if (successItems.length > 0 && failedNames.length === 0) {
+          const skippedMsg = skippedCount > 0 ? ` (${skippedCount}개 이미 배포됨)` : ''
+          showToast(`${successItems.length}개 원 배포 완료! 🎉${skippedMsg}`, 'success')
+        } else if (successItems.length > 0 && failedNames.length > 0) {
+          if (failedNames.length === 1) {
+            showToast(`${successItems.length}개 완료, 배포 실패: ${failedNames[0]}`, 'error')
+          } else {
+            showToast(`${successItems.length}개 완료`, 'success')
+            setDeployFailedNames(failedNames)
+          }
         } else {
-          showToast(`${data.sent}개 원 배포 완료`, 'success')
+          approvedItems.forEach(i => patchItem(i.id, { review_status: prevMap.get(i.id) as ReviewItem['review_status'] }))
+          showToast('배포 실패. 관리자에게 문의하세요', 'error')
         }
       } else {
         approvedItems.forEach(i => patchItem(i.id, { review_status: prevMap.get(i.id) as ReviewItem['review_status'] }))
@@ -545,7 +578,7 @@ function ManagerView({
       }
     } catch {
       approvedItems.forEach(i => patchItem(i.id, { review_status: prevMap.get(i.id) as ReviewItem['review_status'] }))
-      showToast('네트워크 오류', 'error')
+      showToast('배포 중 오류 발생, 다시 시도해주세요', 'error')
     } finally {
       setIsDeployingAll(false)
     }
@@ -586,7 +619,7 @@ function ManagerView({
           <button
             type="button"
             onClick={handleBatchDeploy}
-            disabled={isDeployingAll}
+            disabled={isDeploying}
             className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-teal-600 text-white text-sm font-semibold hover:bg-teal-700 disabled:opacity-40 transition-colors"
           >
             {isDeployingAll
@@ -706,6 +739,28 @@ function ManagerView({
         </div>
       )}
 
+      {/* 배포 실패 목록 모달 */}
+      {deployFailedNames.length > 0 && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full space-y-4">
+            <p className="text-base font-bold text-red-600 text-center">배포 실패 원 목록</p>
+            <div className="max-h-48 overflow-y-auto space-y-1">
+              {deployFailedNames.map((name, i) => (
+                <div key={i} className="flex items-center gap-2 text-sm text-gray-700">
+                  <span className="text-red-500">✗</span>
+                  <span>{name}</span>
+                </div>
+              ))}
+            </div>
+            <button type="button"
+              onClick={() => setDeployFailedNames([])}
+              className="w-full py-2.5 rounded-xl bg-gray-100 text-sm font-semibold text-gray-700 hover:bg-gray-200 transition-colors">
+              닫기
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* 빈 상태 */}
       {filtered.length === 0 && (
         <div className="bg-white rounded-2xl border border-gray-100 p-10 text-center">
@@ -813,7 +868,7 @@ function ManagerView({
                           {['super_admin', 'manager'].includes(role) && (
                             <button type="button"
                               onClick={() => handleDeploy(item)}
-                              disabled={deployingIds.has(item.id)}
+                              disabled={isDeploying}
                               className="px-2 py-1 rounded-lg bg-teal-600 text-white text-xs font-semibold hover:bg-teal-700 disabled:opacity-40 flex items-center gap-1 transition-colors">
                               {deployingIds.has(item.id)
                                 ? <><span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" /><span>배포중</span></>
@@ -963,7 +1018,7 @@ function ManagerView({
                 {item.review_status === 'approved' && ['super_admin', 'manager'].includes(role) && (
                   <button type="button"
                     onClick={() => handleDeploy(item)}
-                    disabled={deployingIds.has(item.id)}
+                    disabled={isDeploying}
                     className="px-3 py-1.5 rounded-xl bg-teal-600 text-white text-xs font-semibold hover:bg-teal-700 disabled:opacity-40 flex items-center gap-1">
                     {deployingIds.has(item.id)
                       ? <><span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" /><span>배포중</span></>
@@ -1044,11 +1099,13 @@ function NutritionistView({
 }) {
   const [tab,           setTab]           = useState<NutritionistTab>('correction')
   const [selectedIds,   setSelectedIds]   = useState<Set<string>>(new Set())
-  const [confirmModal,  setConfirmModal]  = useState<{ ids: string[]; names: string[] } | null>(null)
-  const [uploading,     setUploading]     = useState<Record<string, boolean>>({})
-  const [resubmitOpen,  setResubmitOpen]  = useState<Record<string, boolean>>({})
-  const [fileMap,       setFileMap]       = useState<Record<string, File>>({})
+  const [confirmModal,     setConfirmModal]     = useState<{ ids: string[]; branch_ids: string[]; names: string[] } | null>(null)
+  const [uploading,        setUploading]        = useState<Record<string, boolean>>({})
+  const [resubmitOpen,     setResubmitOpen]     = useState<Record<string, boolean>>({})
+  const [fileMap,          setFileMap]          = useState<Record<string, File>>({})
   const fileRefs = useRef<Record<string, HTMLInputElement | null>>({})
+  const [isDeploying,      setIsDeploying]      = useState(false)
+  const [deployFailedNames, setDeployFailedNames] = useState<string[]>([])
 
   const correctionItems = items.filter(i => i.review_status === 'correction_request')
   const approvedItems   = items.filter(i => i.review_status === 'approved')
@@ -1064,25 +1121,45 @@ function NutritionistView({
     setSelectedIds(allSelected ? new Set() : new Set(approvedSelectableIds))
   }
 
-  async function handleDeploy(ids: string[]) {
-    const res  = await fetch('/api/pptx/deploy', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ year, month, branch_ids: ids }),
-    })
-    const data = await res.json()
-    if (res.ok) {
-      showToast(`배포 완료! ${data.sent}개원 발송${data.failed > 0 ? ` (실패 ${data.failed})` : ''}`)
-      onRefresh()
-    } else {
-      showToast(`배포 오류: ${data.error}`)
+  async function handleDeploy(branch_ids: string[]) {
+    setIsDeploying(true)
+    try {
+      const res  = await fetch('/api/pptx/deploy', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ year, month, branch_ids }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        const failedNames:  string[] = data.results?.failed  ?? []
+        const skippedCount: number   = data.skipped ?? 0
+        if (failedNames.length === 0) {
+          const skippedMsg = skippedCount > 0 ? ` (${skippedCount}개 이미 배포됨)` : ''
+          showToast(`배포 완료! ${data.sent}개원 발송${skippedMsg}`, 'success')
+          onRefresh()
+        } else if ((data.sent ?? 0) > 0) {
+          showToast(`${data.sent}개 완료`, 'success')
+          setDeployFailedNames(failedNames)
+          onRefresh()
+        } else {
+          showToast('배포 실패. 관리자에게 문의하세요', 'error')
+        }
+      } else {
+        showToast(`배포 오류: ${data.error}`, 'error')
+      }
+    } catch {
+      showToast('배포 중 오류 발생, 다시 시도해주세요', 'error')
+    } finally {
+      setIsDeploying(false)
+      setConfirmModal(null)
+      setSelectedIds(new Set())
     }
-    setConfirmModal(null)
-    setSelectedIds(new Set())
   }
 
   function openConfirm(ids: string[]) {
-    const names = ids.map(id => approvedItems.find(i => i.id === id)?.branch_name ?? id)
-    setConfirmModal({ ids, names })
+    const found      = ids.map(id => approvedItems.find(i => i.id === id))
+    const names      = found.map(i => i?.branch_name ?? '')
+    const branch_ids = found.map(i => i?.branch_id).filter((id): id is string => !!id)
+    setConfirmModal({ ids, branch_ids, names })
   }
 
   async function handleResubmit(item: ReviewItem) {
@@ -1229,8 +1306,9 @@ function NutritionistView({
                 {selectedIds.size > 0 && (
                   <button type="button"
                     onClick={() => openConfirm(Array.from(selectedIds))}
-                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-teal-600 text-white text-sm font-semibold hover:bg-teal-700">
-                    📧 선택 일괄배포 ({selectedIds.size}개)
+                    disabled={isDeploying}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-teal-600 text-white text-sm font-semibold hover:bg-teal-700 disabled:opacity-40 transition-colors">
+                    {isDeploying ? <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin inline-block" /><span>배포 중...</span></> : `📧 선택 일괄배포 (${selectedIds.size}개)`}
                   </button>
                 )}
               </div>
@@ -1243,7 +1321,8 @@ function NutritionistView({
                     {item.reviewed_at && <span className="text-xs text-gray-400 hidden sm:block">{formatKST(item.reviewed_at)}</span>}
                     <button type="button"
                       onClick={() => openConfirm([item.id])}
-                      className="px-3 py-1.5 rounded-xl bg-teal-600 text-white text-xs font-semibold hover:bg-teal-700 flex-shrink-0">
+                      disabled={isDeploying}
+                      className="px-3 py-1.5 rounded-xl bg-teal-600 text-white text-xs font-semibold hover:bg-teal-700 disabled:opacity-40 flex-shrink-0 transition-colors">
                       배포
                     </button>
                   </div>
@@ -1303,15 +1382,38 @@ function NutritionistView({
             )}
             <div className="flex gap-2">
               <button type="button"
-                onClick={() => handleDeploy(confirmModal.ids)}
-                className="flex-1 px-4 py-2.5 rounded-xl bg-teal-600 text-white text-sm font-semibold hover:bg-teal-700">
-                📧 배포하기
+                onClick={() => handleDeploy(confirmModal.branch_ids)}
+                disabled={isDeploying}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-teal-600 text-white text-sm font-semibold hover:bg-teal-700 disabled:opacity-40 transition-colors flex items-center justify-center gap-1.5">
+                {isDeploying ? <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /><span>배포 중...</span></> : '📧 배포하기'}
               </button>
               <button type="button" onClick={() => setConfirmModal(null)}
                 className="flex-1 px-4 py-2.5 rounded-xl bg-gray-100 text-gray-600 text-sm font-semibold hover:bg-gray-200">
                 취소
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 배포 실패 목록 모달 */}
+      {deployFailedNames.length > 0 && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full space-y-4">
+            <p className="text-base font-bold text-red-600 text-center">배포 실패 원 목록</p>
+            <div className="max-h-48 overflow-y-auto space-y-1">
+              {deployFailedNames.map((name, i) => (
+                <div key={i} className="flex items-center gap-2 text-sm text-gray-700">
+                  <span className="text-red-500">✗</span>
+                  <span>{name}</span>
+                </div>
+              ))}
+            </div>
+            <button type="button"
+              onClick={() => setDeployFailedNames([])}
+              className="w-full py-2.5 rounded-xl bg-gray-100 text-sm font-semibold text-gray-700 hover:bg-gray-200 transition-colors">
+              닫기
+            </button>
           </div>
         </div>
       )}
