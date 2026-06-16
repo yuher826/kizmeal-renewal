@@ -157,7 +157,7 @@ def fetch_menu_data():
 def fetch_branch_cfgs():
     profiles = client.select(
         'branch_profiles',
-        'id,short_code,display_name,distribution_email,distribution_emails,'
+        'id,branch_id,short_code,display_name,distribution_email,distribution_emails,'
         'slide_count,snack_morning,snack_afternoon,snack_childcare,'
         'needs_english,has_yonder,has_dessert_fruit,file_format,'
         'snack_label,morning_snack_fixed,morning_snack_fixed_menu',
@@ -190,6 +190,11 @@ def fetch_branch_cfgs():
         if p.get('morning_snack_fixed') and p.get('morning_snack_fixed_menu'):
             fixed_am = {'menu': p['morning_snack_fixed_menu'], 'nutrition': ''}
 
+        branch_uuid = p.get('branch_id')
+        if not branch_uuid:
+            print(f'  [경고] branch_id 없음 — 스킵: {short_code}')
+            continue
+
         cfgs.append({
             'name':         short_code,
             'display_name': (p.get('display_name') or short_code).strip(),
@@ -201,7 +206,7 @@ def fetch_branch_cfgs():
             'file_fmt':     (p.get('file_format') or 'PDF').upper(),
             'use_pm_as_am': (not p.get('snack_morning') and bool(p.get('snack_afternoon'))),
             'fixed_am':     fixed_am,
-            'branch_uuid':  p.get('id', ''),
+            'branch_uuid':  branch_uuid,
         })
     return cfgs
 
