@@ -65,7 +65,7 @@ export default function ParentPhotosPage() {
 
   return (
     <div className="min-h-screen bg-[#F6FAF6] pb-20">
-      <header className="bg-white border-b border-gray-100 px-4 py-4 sticky top-16 z-10">
+      <header className="bg-white border-b border-gray-100 px-4 py-4 sticky top-0 z-10">
         <h1 className="font-bold text-[#1C2B1E]">급식 사진</h1>
       </header>
 

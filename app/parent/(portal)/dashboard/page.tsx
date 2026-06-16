@@ -75,7 +75,7 @@ export default function ParentDashboardPage() {
   return (
     <div className="min-h-screen bg-[#F6FAF6] pb-20">
       {/* Header */}
-      <header className="bg-white border-b border-gray-100 px-4 py-4 flex items-center justify-between sticky top-16 z-10">
+      <header className="bg-white border-b border-gray-100 px-4 py-4 flex items-center justify-between sticky top-0 z-10">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 bg-gradient-to-br from-[#2D6A4F] to-[#52B788] rounded-xl flex items-center justify-center text-white font-bold text-sm shadow-sm">
             K

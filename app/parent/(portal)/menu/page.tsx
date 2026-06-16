@@ -1,21 +1,29 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { getParentProfile, getContentsForBranch, getYearMonth } from '@/lib/parent-auth'
-import type { Child, Content } from '@/lib/parent-auth'
+import { createClient } from '@/lib/supabase'
+import { getParentProfile, getYearMonth } from '@/lib/parent-auth'
+import type { Child } from '@/lib/parent-auth'
 import BottomNav from '@/components/parent/BottomNav'
 import ChildTab from '@/components/parent/ChildTab'
 import EmptyState from '@/components/parent/EmptyState'
-import Lightbox from '@/components/parent/Lightbox'
+
+type WeeklyMenu = {
+  id: string
+  year: number
+  month: number
+  pptx_url: string | null
+  pdf_url: string | null
+  jpg_url: string | null
+  status: string
+}
 
 export default function ParentMenuPage() {
   const [children, setChildren] = useState<Child[]>([])
   const [selectedChildId, setSelectedChildId] = useState<string | null>(null)
   const [month, setMonth] = useState(getYearMonth())
-  const [menus, setMenus] = useState<Content[]>([])
+  const [menu, setMenu] = useState<WeeklyMenu | null>(null)
   const [loading, setLoading] = useState(true)
-  const [lightboxImages, setLightboxImages] = useState<string[]>([])
-  const [lightboxIndex, setLightboxIndex] = useState(0)
 
   useEffect(() => {
     getParentProfile().then(({ children }) => {
@@ -32,11 +40,23 @@ export default function ParentMenuPage() {
     if (!selectedChildId) return
     const child = children.find(c => c.id === selectedChildId)
     if (!child?.branch_id) return
+
+    const [y, m] = month.split('-').map(Number)
     setLoading(true)
-    getContentsForBranch(child.branch_id, 'menu', { month }).then(data => {
-      setMenus(data)
-      setLoading(false)
-    })
+
+    const supabase = createClient()
+    supabase
+      .from('weekly_menus')
+      .select('id, year, month, pptx_url, pdf_url, jpg_url, status')
+      .eq('branch_id', child.branch_id)
+      .eq('year', y)
+      .eq('month', m)
+      .eq('status', 'deployed')
+      .maybeSingle()
+      .then(({ data }) => {
+        setMenu(data as WeeklyMenu | null)
+        setLoading(false)
+      })
   }, [selectedChildId, month, children])
 
   function handleSelectChild(id: string) {
@@ -44,25 +64,27 @@ export default function ParentMenuPage() {
     localStorage.setItem('selectedChildId', id)
   }
 
-  function openLightbox(images: string[], index: number) {
-    setLightboxImages(images)
-    setLightboxIndex(index)
-  }
-
   const [y, m] = month.split('-').map(Number)
+
+  const downloads: { key: string; label: string; icon: string; url: string | null }[] = menu
+    ? [
+        { key: 'pptx', label: 'PPTX', icon: '📊', url: menu.pptx_url },
+        { key: 'pdf',  label: 'PDF',  icon: '📄', url: menu.pdf_url  },
+        { key: 'jpg',  label: 'JPG',  icon: '🖼️', url: menu.jpg_url  },
+      ]
+    : []
 
   return (
     <div className="min-h-screen bg-[#F6FAF6] pb-20">
-      <header className="bg-white border-b border-gray-100 px-4 py-4 sticky top-16 z-10">
+      <header className="bg-white border-b border-gray-100 px-4 py-4 sticky top-0 z-10">
         <h1 className="font-bold text-[#1C2B1E]">식단표</h1>
       </header>
 
-      <div className="max-w-2xl mx-auto px-4 py-5 space-y-4">
+      <div className="px-4 py-5 space-y-4">
         {children.length > 1 && (
           <ChildTab items={children} selectedId={selectedChildId} onSelect={handleSelectChild} />
         )}
 
-        {/* Month selector */}
         <div className="flex items-center justify-between bg-white rounded-2xl border border-gray-100 px-5 py-3">
           <button
             type="button"
@@ -92,49 +114,45 @@ export default function ParentMenuPage() {
         </div>
 
         {loading ? (
-          <div className="space-y-3">
-            {[1,2,3].map(i => <div key={i} className="bg-white rounded-2xl h-32 animate-pulse" />)}
-          </div>
-        ) : menus.length === 0 ? (
-          <EmptyState icon="🥗" title="등록된 식단표가 없습니다" description={`${y}년 ${m}월 식단표가 아직 등록되지 않았습니다.`} />
+          <div className="bg-white rounded-2xl h-40 animate-pulse" />
+        ) : !menu ? (
+          <EmptyState
+            icon="🥗"
+            title="이번 달 식단표가 아직 등록되지 않았습니다"
+            description={`${y}년 ${m}월 식단표가 준비 중입니다.`}
+          />
         ) : (
-          <div className="space-y-3">
-            {menus.map(menu => (
-              <div key={menu.id} className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-                <div className="px-5 py-4">
-                  <p className="font-bold text-[#1C2B1E]">{menu.title}</p>
-                  {menu.date && (
-                    <p className="text-xs text-gray-400 mt-0.5">
-                      {new Date(menu.date).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' })}
-                    </p>
-                  )}
-                  {menu.body && <p className="text-sm text-gray-600 mt-2 whitespace-pre-line">{menu.body}</p>}
-                </div>
-                {menu.image_urls && menu.image_urls.length > 0 && (
-                  <div className="grid grid-cols-2 gap-1 px-4 pb-4">
-                    {menu.image_urls.map((url, i) => (
-                      <button key={i} type="button" onClick={() => openLightbox(menu.image_urls!, i)}>
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={url} alt="" className="w-full aspect-video object-cover rounded-xl" />
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ))}
+          <div className="bg-white rounded-2xl border border-gray-100 p-5 space-y-3">
+            <p className="font-bold text-[#1C2B1E]">{y}년 {m}월 식단표</p>
+            <div className="flex flex-col gap-2">
+              {downloads.map(dl =>
+                dl.url ? (
+                  <a
+                    key={dl.key}
+                    href={dl.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 px-4 py-3 rounded-xl bg-[#2D6A4F] text-white font-semibold text-sm hover:bg-[#1B4332] transition-colors"
+                  >
+                    <span>{dl.icon}</span>
+                    <span>식단표 {dl.label} 다운로드</span>
+                  </a>
+                ) : (
+                  <button
+                    key={dl.key}
+                    type="button"
+                    disabled
+                    className="flex items-center gap-2 px-4 py-3 rounded-xl bg-gray-100 text-gray-400 font-semibold text-sm cursor-not-allowed"
+                  >
+                    <span>{dl.icon}</span>
+                    <span>식단표 {dl.label} 다운로드</span>
+                  </button>
+                )
+              )}
+            </div>
           </div>
         )}
       </div>
-
-      {lightboxImages.length > 0 && (
-        <Lightbox
-          images={lightboxImages}
-          index={lightboxIndex}
-          onClose={() => setLightboxImages([])}
-          onPrev={() => setLightboxIndex(i => (i - 1 + lightboxImages.length) % lightboxImages.length)}
-          onNext={() => setLightboxIndex(i => (i + 1) % lightboxImages.length)}
-        />
-      )}
 
       <BottomNav />
     </div>
