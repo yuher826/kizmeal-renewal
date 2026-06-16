@@ -77,7 +77,11 @@ export default function ParentMenuPage() {
   return (
     <div className="min-h-screen bg-[#F6FAF6] pb-20">
       <header className="bg-white border-b border-gray-100 px-4 py-4 sticky top-0 z-10">
-        <h1 className="font-bold text-[#1C2B1E]">식단표</h1>
+        <h1 className="font-bold text-[#1C2B1E]">
+          {children.find(c => c.id === selectedChildId)?.branches?.name
+            ? `${children.find(c => c.id === selectedChildId)!.branches!.name} 식단표`
+            : '식단표'}
+        </h1>
       </header>
 
       <div className="px-4 py-5 space-y-4">
@@ -123,35 +127,25 @@ export default function ParentMenuPage() {
           />
         ) : (
           <div className="bg-white rounded-2xl border border-gray-100 p-5 space-y-3">
-            <p className="text-sm text-gray-500 mb-1">
-              {children.find(c => c.id === selectedChildId)?.branches?.name ?? ''}
-            </p>
+            {children.find(c => c.id === selectedChildId)?.branches?.name && (
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-[#E8F5E9] text-[#2D6A4F]">
+                🏫 {children.find(c => c.id === selectedChildId)!.branches!.name}
+              </span>
+            )}
             <p className="font-bold text-[#1C2B1E]">{y}년 {m}월 식단표</p>
             <div className="flex flex-col gap-2">
-              {downloads.map(dl =>
-                dl.url ? (
-                  <a
-                    key={dl.key}
-                    href={dl.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-2 px-4 py-3 rounded-xl bg-[#2D6A4F] text-white font-semibold text-sm hover:bg-[#1B4332] transition-colors"
-                  >
-                    <span>{dl.icon}</span>
-                    <span>식단표 {dl.label} 다운로드</span>
-                  </a>
-                ) : (
-                  <button
-                    key={dl.key}
-                    type="button"
-                    disabled
-                    className="flex items-center gap-2 px-4 py-3 rounded-xl bg-gray-100 text-gray-400 font-semibold text-sm cursor-not-allowed"
-                  >
-                    <span>{dl.icon}</span>
-                    <span>식단표 {dl.label} 다운로드</span>
-                  </button>
-                )
-              )}
+              {downloads.filter(dl => dl.url).map(dl => (
+                <a
+                  key={dl.key}
+                  href={dl.url!}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 px-4 py-3 rounded-xl bg-[#2D6A4F] text-white font-semibold text-sm hover:bg-[#1B4332] transition-colors"
+                >
+                  <span>{dl.icon}</span>
+                  <span>식단표 {dl.label} 다운로드</span>
+                </a>
+              ))}
             </div>
           </div>
         )}
