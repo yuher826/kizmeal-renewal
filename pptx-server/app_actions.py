@@ -190,7 +190,7 @@ def fetch_branch_cfgs():
         if p.get('morning_snack_fixed') and p.get('morning_snack_fixed_menu'):
             fixed_am = {'menu': p['morning_snack_fixed_menu'], 'nutrition': ''}
 
-        branch_uuid = p.get('branch_id')
+        branch_uuid = p.get('id')
         if not branch_uuid:
             print(f'  [경고] branch_id 없음 — 스킵: {short_code}')
             continue
