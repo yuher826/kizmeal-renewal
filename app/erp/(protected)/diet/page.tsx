@@ -133,13 +133,13 @@ function DietAutomationContent() {
         .not('branch_id', 'is', null),
       supabase
         .from('branch_profiles')
-        .select('branch_id, short_code, display_name, distribution_email')
+        .select('id, branch_id, short_code, display_name, distribution_email')
         .eq('contract_status', 'active'),
     ])
 
     const profileMap = new Map<string, { short_code: string | null; display_name: string | null; distribution_email: string | null }>(
-      ((profileRes.data ?? []) as { branch_id: string; short_code: string | null; display_name: string | null; distribution_email: string | null }[])
-        .map(p => [p.branch_id, { short_code: p.short_code, display_name: p.display_name, distribution_email: p.distribution_email }])
+      ((profileRes.data ?? []) as { id: string; branch_id: string; short_code: string | null; display_name: string | null; distribution_email: string | null }[])
+        .map(p => [p.id, { short_code: p.short_code, display_name: p.display_name, distribution_email: p.distribution_email }])
     )
 
     const rows: BranchMenuRow[] = ((menuRes.data ?? []) as { id: string; branch_id: string; pptx_url: string | null; pdf_url: string | null; status: string }[]).map(row => ({
