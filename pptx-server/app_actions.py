@@ -248,6 +248,11 @@ def upsert_branch_row(branch_id, status, pptx_url):
         },
         on_conflict='branch_id,year,month,diet_type',
     )
+    rows = client.select(
+        'weekly_menus', 'id',
+        filters={'branch_id': branch_id, 'year': YEAR, 'month': MONTH, 'diet_type': 'CK'},
+    )
+    return rows[0]['id'] if rows else None
 
 
 def update_common_row_status(status):
@@ -260,6 +265,30 @@ def update_common_row_status(status):
             client.update('weekly_menus', {'status': status}, filters={'id': rows[0]['id']})
     except Exception as exc:
         print(f'[공통 row 업데이트 오류] {exc}')
+
+
+def upsert_diet_review_item(weekly_menu_id, branch_uuid, branch_name, pptx_url):
+    existing = client.select(
+        'diet_review_items', 'id',
+        filters={'weekly_menu_id': weekly_menu_id, 'branch_id': branch_uuid},
+    )
+    if existing:
+        client.update(
+            'diet_review_items',
+            {'pptx_url': pptx_url or None},
+            filters={'id': existing[0]['id']},
+        )
+    else:
+        client.insert(
+            'diet_review_items',
+            {
+                'weekly_menu_id': weekly_menu_id,
+                'branch_id':      branch_uuid,
+                'branch_name':    branch_name,
+                'pptx_url':       pptx_url or None,
+                'review_status':  'generation_complete',
+            },
+        )
 
 
 # ════════════════════════════════════════════════════════════════════
@@ -297,7 +326,9 @@ def main():
                 try:
                     gen_pptx(cfg, adapted_menu, TEMPLATE_PATH, out_pptx, date_map=date_map)
                     pptx_url = upload_pptx(out_pptx, storage_path)
-                    upsert_branch_row(branch_uuid, 'generated', pptx_url)
+                    weekly_menu_id = upsert_branch_row(branch_uuid, 'generated', pptx_url)
+                    if weekly_menu_id:
+                        upsert_diet_review_item(weekly_menu_id, branch_uuid, cfg['display_name'], pptx_url)
                     print(f'  ✅ {short_code}')
                     succeeded += 1
                 except Exception as exc:
