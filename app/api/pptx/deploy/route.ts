@@ -81,24 +81,27 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+  let body: { year?: number; month?: number; branch_ids?: string[]; is_emergency?: boolean }
+  try { body = await req.json() } catch {
+    return NextResponse.json({ error: '요청 형식 오류' }, { status: 400 })
+  }
+
+  const { year, month, branch_ids, is_emergency } = body
+  if (!year || !month) {
+    return NextResponse.json({ error: 'year, month 필드가 필요합니다.' }, { status: 400 })
+  }
+
   const { data: adminRow } = await supabase
     .from('admins')
     .select('id, name, role')
     .eq('auth_id', user.id)
     .maybeSingle()
 
-  if (!['nutritionist', 'super_admin', 'manager'].includes(adminRow?.role ?? '')) {
+  const allowedRoles = is_emergency === true
+    ? ['super_admin', 'manager']
+    : ['nutritionist', 'super_admin']
+  if (!allowedRoles.includes(adminRow?.role ?? '')) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-  }
-
-  let body: { year?: number; month?: number; branch_ids?: string[] }
-  try { body = await req.json() } catch {
-    return NextResponse.json({ error: '요청 형식 오류' }, { status: 400 })
-  }
-
-  const { year, month, branch_ids } = body
-  if (!year || !month) {
-    return NextResponse.json({ error: 'year, month 필드가 필요합니다.' }, { status: 400 })
   }
 
   const serviceKey  = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -171,7 +174,7 @@ export async function POST(req: NextRequest) {
       const reviewRequired           = profile?.review_required ?? false
       const canDeployWithoutApproval = !isCk && !reviewRequired
 
-      if (!canDeployWithoutApproval && item.review_status !== 'approved') {
+      if (is_emergency !== true && !canDeployWithoutApproval && item.review_status !== 'approved') {
         failed.push(item.branch_name)
         return
       }
@@ -244,7 +247,9 @@ export async function POST(req: NextRequest) {
             by:     user.email ?? adminRow!.name ?? adminRow!.id,
             role:   adminRow!.role,
             action: 'deployed',
-            memo:   isTestMode ? '이메일 배포 완료 (테스트모드)' : '이메일 배포 완료',
+            memo:   is_emergency === true
+              ? '비상배포 완료'
+              : (isTestMode ? '이메일 배포 완료 (테스트모드)' : '이메일 배포 완료'),
             at:     now,
           },
         ]

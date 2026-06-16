@@ -469,7 +469,7 @@ function ManagerView({
     try {
       const res  = await fetch('/api/pptx/deploy', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ year, month, branch_ids: [item.branch_id] }),
+        body: JSON.stringify({ year, month, branch_ids: [item.branch_id], is_emergency: true }),
       })
       const data = await res.json()
       if (res.ok) {
@@ -500,7 +500,7 @@ function ManagerView({
     try {
       const res  = await fetch('/api/pptx/deploy', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ year, month, branch_ids: [item.branch_id] }),
+        body: JSON.stringify({ year, month, branch_ids: [item.branch_id], is_emergency: false }),
       })
       const data = await res.json()
       if (res.ok) {
@@ -543,7 +543,7 @@ function ManagerView({
       const branch_ids = approvedItems.map(i => i.branch_id).filter(Boolean) as string[]
       const res  = await fetch('/api/pptx/deploy', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ year, month, branch_ids }),
+        body: JSON.stringify({ year, month, branch_ids, is_emergency: false }),
       })
       const data = await res.json()
       if (res.ok) {
@@ -611,7 +611,7 @@ function ManagerView({
       </div>
 
       {/* 승인완료 탭 일괄 배포 버튼 */}
-      {tab === 'approved' && filtered.length > 0 && ['super_admin', 'manager'].includes(role) && (
+      {tab === 'approved' && filtered.length > 0 && role === 'super_admin' && (
         <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-2xl px-4 py-3">
           <span className="text-sm font-semibold text-green-700">
             승인완료 {filtered.length}개 원이 배포 대기 중입니다.
@@ -865,7 +865,7 @@ function ManagerView({
                       {item.review_status === 'approved' && (
                         <div className="flex flex-col items-center gap-1">
                           <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-bold">✅ 승인완료</span>
-                          {['super_admin', 'manager'].includes(role) && (
+                          {role === 'super_admin' && (
                             <button type="button"
                               onClick={() => handleDeploy(item)}
                               disabled={isDeploying}
@@ -1015,7 +1015,7 @@ function ManagerView({
                     onClick={() => { setActiveInlineId(activeInlineId === item.id ? null : item.id); setInlineMemo(''); setInlineCategory('') }}
                     className="px-3 py-1.5 rounded-xl bg-orange-50 text-orange-700 text-xs font-semibold border border-orange-200">✏️ 재요청</button>
                 )}
-                {item.review_status === 'approved' && ['super_admin', 'manager'].includes(role) && (
+                {item.review_status === 'approved' && role === 'super_admin' && (
                   <button type="button"
                     onClick={() => handleDeploy(item)}
                     disabled={isDeploying}
@@ -1126,7 +1126,7 @@ function NutritionistView({
     try {
       const res  = await fetch('/api/pptx/deploy', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ year, month, branch_ids }),
+        body: JSON.stringify({ year, month, branch_ids, is_emergency: false }),
       })
       const data = await res.json()
       if (res.ok) {
