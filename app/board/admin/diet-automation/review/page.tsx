@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef, Suspense, Fragment } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { isNutritionist } from '@/lib/roles'
 
 // ── 타입 ──────────────────────────────────────────────────────────
 type HistoryEntry = {
@@ -1478,7 +1479,7 @@ function DietReviewPageInner() {
 
   const role       = currentAdmin?.role ?? ''
   const isManager  = ['super_admin', 'manager'].includes(role)
-  const isNutri    = role === 'nutritionist'
+  const isNutri    = isNutritionist(role)
   const isDirector = role === 'director'
 
   return (

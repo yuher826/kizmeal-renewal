@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
+import { UPLOAD_ROLES } from '@/lib/roles'
 
 // ── 타입 ───────────────────────────────────────────────────────────────
 type ValidationIssue = { location: string; message: string; suggestion: string }
@@ -23,7 +24,7 @@ type UploadResult = {
   warnings: ValidationIssue[]
 }
 
-const ALLOWED_ROLES = ['super_admin', 'manager', 'nutritionist_ck']
+const ALLOWED_ROLES = UPLOAD_ROLES
 
 export default function DietUploadPage() {
   const router = useRouter()

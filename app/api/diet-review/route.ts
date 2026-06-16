@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase-server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
+import { REVIEW_ALLOWED_ROLES, DEPLOY_ROLES, RESUBMIT_ROLES, isNutritionist } from '@/lib/roles'
 
 // ── 타입 ──────────────────────────────────────────────────────────
 type AdminRow = {
@@ -106,7 +107,7 @@ export async function GET(req: NextRequest) {
 
   if (!adminRow) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-  const ALLOWED = ['super_admin', 'manager', 'director', 'nutritionist']
+  const ALLOWED = REVIEW_ALLOWED_ROLES
   if (!ALLOWED.includes(adminRow.role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
@@ -137,7 +138,7 @@ export async function GET(req: NextRequest) {
     .in('weekly_menu_id', ids)
     .order('branch_name')
 
-  if (adminRow.role === 'nutritionist') {
+  if (isNutritionist(adminRow.role)) {
     const branchIds = await getNutritionistBranchIds(db, adminRow)
     if (branchIds !== null && branchIds.length > 0) {
       itemsQuery = itemsQuery.in('branch_id', branchIds)
@@ -267,7 +268,7 @@ export async function POST(req: NextRequest) {
         type:           'correction_to_nutritionist',
         title:          '수정 요청이 도착했습니다',
         message:        `${adminRow.name}이(가) ${updated.length}개 원 식단표 수정을 요청했습니다.`,
-        recipient_role: 'nutritionist',
+        recipient_role: 'nutritionist_ck', // 위탁 영양사 알림은 추후 별도 구현 예정
       })
     }
 
@@ -330,7 +331,7 @@ export async function POST(req: NextRequest) {
         type:           'approved_to_nutritionist',
         title:          '식단표가 승인되었습니다',
         message:        `${adminRow.name}이(가) ${updated.length}개 원 식단표를 승인했습니다.`,
-        recipient_role: 'nutritionist',
+        recipient_role: 'nutritionist_ck', // 위탁 영양사 알림은 추후 별도 구현 예정
       })
     }
 
@@ -339,7 +340,7 @@ export async function POST(req: NextRequest) {
 
   // ── resubmit ────────────────────────────────────────────────────
   if (action === 'resubmit') {
-    if (!['nutritionist', 'super_admin'].includes(adminRow.role)) {
+    if (!RESUBMIT_ROLES.includes(adminRow.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
     if (!item_id) return NextResponse.json({ error: 'item_id 필요' }, { status: 400 })
@@ -385,7 +386,7 @@ export async function POST(req: NextRequest) {
 
   // ── deployed (단건) ─────────────────────────────────────────────
   if (action === 'deployed') {
-    if (!['nutritionist', 'super_admin'].includes(adminRow.role)) {
+    if (!DEPLOY_ROLES.includes(adminRow.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import * as XLSX from 'xlsx'
 import { createClient } from '@/lib/supabase-server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
+import { UPLOAD_ROLES } from '@/lib/roles'
 
 // ── 화이트리스트 ───────────────────────────────────────────────────────
 const VALID_BRANCHES = [
@@ -471,7 +472,7 @@ export async function POST(req: NextRequest) {
   const { data: admin } = await supabase
     .from('admins').select('role').eq('auth_id', user.id).maybeSingle()
 
-  const allowed = ['super_admin', 'manager', 'nutritionist_ck']
+  const allowed = UPLOAD_ROLES
   if (!allowed.includes(admin?.role ?? '')) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }

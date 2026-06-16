@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
         type,
         title:          `${period}식단표 수정 요청`,
         message:        `${adminRow.name}이(가) 수정을 요청했습니다. 확인 후 수정 파일을 재제출해주세요.`,
-        recipient_role: 'nutritionist',
+        recipient_role: 'nutritionist_ck', // 위탁 영양사 알림은 추후 별도 구현 예정
         weekly_menu_id: weekly_menu_id ?? null,
         year:           year ?? null,
         month:          month ?? null,
@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
         type,
         title:          `${period}식단표 승인 완료`,
         message:        `${adminRow.name}이(가) 식단표를 승인했습니다. 배포를 진행해주세요.`,
-        recipient_role: 'nutritionist',
+        recipient_role: 'nutritionist_ck', // 위탁 영양사 알림은 추후 별도 구현 예정
         weekly_menu_id: weekly_menu_id ?? null,
         year:           year ?? null,
         month:          month ?? null,
