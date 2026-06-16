@@ -123,6 +123,9 @@ export default function ParentMenuPage() {
           />
         ) : (
           <div className="bg-white rounded-2xl border border-gray-100 p-5 space-y-3">
+            <p className="text-sm text-gray-500 mb-1">
+              {children.find(c => c.id === selectedChildId)?.branches?.name ?? ''}
+            </p>
             <p className="font-bold text-[#1C2B1E]">{y}년 {m}월 식단표</p>
             <div className="flex flex-col gap-2">
               {downloads.map(dl =>
