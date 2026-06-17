@@ -51,7 +51,8 @@ export default function ParentMenuPage() {
       .eq('branch_id', child.branch_id)
       .eq('year', y)
       .eq('month', m)
-      .eq('status', 'deployed')
+      .neq('status', 'error')
+      .not('pptx_url', 'is', null)
       .maybeSingle()
       .then(({ data }) => {
         setMenu(data as WeeklyMenu | null)

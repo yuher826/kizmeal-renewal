@@ -236,6 +236,20 @@ def upload_pptx(local_path, storage_path):
 # weekly_menus 업서트
 # ════════════════════════════════════════════════════════════════════
 def upsert_branch_row(branch_id, status, pptx_url):
+    # 기존 행 조회 — approved/deployed 상태이면 status 덮어쓰기 금지
+    existing = client.select(
+        'weekly_menus', 'id,status',
+        filters={'branch_id': branch_id, 'year': YEAR, 'month': MONTH, 'diet_type': 'CK'},
+    )
+    if existing and existing[0].get('status') in ('approved', 'deployed'):
+        # 이미 승인/배포된 원: pptx_url만 갱신, status 보존 (학부모 포털 유지)
+        client.update(
+            'weekly_menus',
+            {'pptx_url': pptx_url or None},
+            filters={'id': existing[0]['id']},
+        )
+        return existing[0]['id']
+
     client.upsert(
         'weekly_menus',
         {

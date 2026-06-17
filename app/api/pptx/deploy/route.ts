@@ -275,7 +275,20 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // 전체 배포 시 weekly_menus.status → 'deployed'
+  // 배포 성공한 원의 weekly_menus branch 행 → 'deployed' (부분/전체 공통)
+  if (success.length > 0) {
+    const successBranchIds = success
+      .map(s => allItems.find(i => i.id === s.id)?.branch_id)
+      .filter((id): id is string => !!id)
+    if (successBranchIds.length > 0) {
+      await db.from('weekly_menus')
+        .update({ status: 'deployed', deployed_at: now })
+        .eq('year', year).eq('month', month).eq('diet_type', 'CK')
+        .in('branch_id', successBranchIds)
+    }
+  }
+
+  // 전체 배포 시 공통 row (branch_id IS NULL 포함) 전체 업데이트
   if (!branch_ids || branch_ids.length === 0) {
     await db.from('weekly_menus').update({
       status:      'deployed',
