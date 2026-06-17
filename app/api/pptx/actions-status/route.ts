@@ -31,7 +31,15 @@ export async function GET(req: NextRequest) {
   const generated  = list.filter(r => r.status === 'generated').length
   const error      = list.filter(r => r.status === 'error').length
   const generating = list.filter(r => r.status === 'generating').length
-  const total      = 49
+
+  // 활성 계약원 수를 DB에서 조회 (하드코딩 49 대신)
+  const { count: branchCount } = await dbClient
+    .from('branch_profiles')
+    .select('*', { count: 'exact', head: true })
+    .eq('contract_status', 'active')
+    .not('short_code', 'is', null)
+    .neq('short_code', '')
+  const total = branchCount ?? (list.length > 0 ? list.length : 49)
 
   return NextResponse.json({
     total,
