@@ -216,10 +216,15 @@ export async function POST(req: NextRequest) {
     const targetIds = ids?.length ? ids : item_id ? [item_id] : []
     if (!targetIds.length) return NextResponse.json({ error: 'item_id 또는 ids 필요' }, { status: 400 })
 
-    const { data: currentItems } = await db
+    const { data: currentItems, error: fetchError } = await db
       .from('diet_review_items')
       .select('id, review_status, correction_count, memo_history')
       .in('id', targetIds)
+
+    if (fetchError) {
+      console.error('diet_review_items 조회 실패:', fetchError)
+      return NextResponse.json({ success: false, error: `DB 조회 실패: ${fetchError.message}` }, { status: 500 })
+    }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const eligibleItems = ((currentItems ?? []) as any[]).filter((i) =>
@@ -230,6 +235,7 @@ export async function POST(req: NextRequest) {
 
     const now = new Date().toISOString()
     const updated: ReviewItemRow[] = []
+    let lastUpdateError: string | null = null
 
     for (const item of eligibleItems as ReviewItemRow[]) {
       const history = appendHistory(item.memo_history, adminRow, 'correction_request', {
@@ -253,23 +259,26 @@ export async function POST(req: NextRequest) {
       if (updateError) {
         console.error('업데이트 실패:', updateError)
         skippedIds.push(item.id)
+        if (!lastUpdateError) lastUpdateError = updateError.message
       } else if (u) {
         updated.push(u as ReviewItemRow)
       }
     }
 
     if (updated.length === 0) {
-      return NextResponse.json({ success: false, error: '업데이트 실패' }, { status: 500 })
+      return NextResponse.json({ success: false, error: lastUpdateError ?? '업데이트 실패' }, { status: 500 })
     }
 
     // 영양사에게 알림
-    if (updated.length > 0) {
+    try {
       await db.from('diet_notifications').insert({
         type:           'correction_to_nutritionist',
         title:          '수정 요청이 도착했습니다',
         message:        `${adminRow.name}이(가) ${updated.length}개 원 식단표 수정을 요청했습니다.`,
-        recipient_role: 'nutritionist_ck', // 위탁 영양사 알림은 추후 별도 구현 예정
+        recipient_role: 'nutritionist_ck',
       })
+    } catch (e) {
+      console.error('알림 삽입 실패:', e)
     }
 
     return NextResponse.json({ success: true, updated, skipped: skippedIds })
@@ -284,10 +293,15 @@ export async function POST(req: NextRequest) {
     const targetIds = ids?.length ? ids : item_id ? [item_id] : []
     if (!targetIds.length) return NextResponse.json({ error: 'item_id 또는 ids 필요' }, { status: 400 })
 
-    const { data: currentItems } = await db
+    const { data: currentItems, error: fetchError2 } = await db
       .from('diet_review_items')
       .select('id, review_status, memo_history, weekly_menu_id')
       .in('id', targetIds)
+
+    if (fetchError2) {
+      console.error('diet_review_items 조회 실패:', fetchError2)
+      return NextResponse.json({ success: false, error: `DB 조회 실패: ${fetchError2.message}` }, { status: 500 })
+    }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const eligibleItems = ((currentItems ?? []) as any[]).filter((i) =>
@@ -298,6 +312,7 @@ export async function POST(req: NextRequest) {
 
     const now = new Date().toISOString()
     const updated: ReviewItemRow[] = []
+    let lastUpdateError2: string | null = null
 
     for (const item of eligibleItems as ReviewItemRow[]) {
       const history = appendHistory(item.memo_history, adminRow, 'approved')
@@ -316,23 +331,26 @@ export async function POST(req: NextRequest) {
       if (updateError) {
         console.error('업데이트 실패:', updateError)
         skippedIds.push(item.id)
+        if (!lastUpdateError2) lastUpdateError2 = updateError.message
       } else if (u) {
         updated.push(u as ReviewItemRow)
       }
     }
 
     if (updated.length === 0) {
-      return NextResponse.json({ success: false, error: '업데이트 실패' }, { status: 500 })
+      return NextResponse.json({ success: false, error: lastUpdateError2 ?? '업데이트 실패' }, { status: 500 })
     }
 
     // 영양사에게 승인 알림
-    if (updated.length > 0) {
+    try {
       await db.from('diet_notifications').insert({
         type:           'approved_to_nutritionist',
         title:          '식단표가 승인되었습니다',
         message:        `${adminRow.name}이(가) ${updated.length}개 원 식단표를 승인했습니다.`,
-        recipient_role: 'nutritionist_ck', // 위탁 영양사 알림은 추후 별도 구현 예정
+        recipient_role: 'nutritionist_ck',
       })
+    } catch (e) {
+      console.error('알림 삽입 실패:', e)
     }
 
     return NextResponse.json({ success: true, updated, skipped: skippedIds })
