@@ -42,13 +42,15 @@ type ActionsProgress = {
 
 type BranchMenuRow = {
   id:            string
-  branch_id:     string
+  branch_id:     string     // branch_profiles.id (PK) = weekly_menus.branch_id
+  branches_id:   string | null  // branch_profiles.branch_id (FK → branches.id) — 프로파일 링크에 사용
   pptx_url:      string | null
   pdf_url:       string | null
   status:        string
   short_code:    string | null
   display_name:  string | null
   deploy_email:  string | null
+  file_format:   string | null
 }
 
 // ── 헬퍼 ──────────────────────────────────────────────────────────────
@@ -132,20 +134,24 @@ function DietAutomationContent() {
         .not('branch_id', 'is', null),
       supabase
         .from('branch_profiles')
-        .select('branch_id, short_code, display_name, distribution_email')
+        // id(PK)로 join: weekly_menus.branch_id = branch_profiles.id
+        .select('id, branch_id, short_code, display_name, distribution_email, file_format')
         .eq('contract_status', 'active'),
     ])
 
-    const profileMap = new Map<string, { short_code: string | null; display_name: string | null; distribution_email: string | null }>(
-      ((profileRes.data ?? []) as { branch_id: string; short_code: string | null; display_name: string | null; distribution_email: string | null }[])
-        .map(p => [p.branch_id, { short_code: p.short_code, display_name: p.display_name, distribution_email: p.distribution_email }])
+    // profileMap 키를 branch_profiles.id(PK)로 사용 (FK branch_id 아님)
+    const profileMap = new Map<string, { branches_id: string | null; short_code: string | null; display_name: string | null; distribution_email: string | null; file_format: string | null }>(
+      ((profileRes.data ?? []) as { id: string; branch_id: string; short_code: string | null; display_name: string | null; distribution_email: string | null; file_format: string | null }[])
+        .map(p => [p.id, { branches_id: p.branch_id, short_code: p.short_code, display_name: p.display_name, distribution_email: p.distribution_email, file_format: p.file_format }])
     )
 
     const rows: BranchMenuRow[] = ((menuRes.data ?? []) as { id: string; branch_id: string; pptx_url: string | null; pdf_url: string | null; status: string }[]).map(row => ({
       ...row,
+      branches_id:  profileMap.get(row.branch_id)?.branches_id        ?? null,
       short_code:   profileMap.get(row.branch_id)?.short_code          ?? null,
       display_name: profileMap.get(row.branch_id)?.display_name        ?? null,
       deploy_email: profileMap.get(row.branch_id)?.distribution_email  ?? null,
+      file_format:  profileMap.get(row.branch_id)?.file_format         ?? null,
     }))
 
     setBranchMenuRows(rows)
@@ -169,14 +175,18 @@ function DietAutomationContent() {
       setHasMenuData(!!data.menu_data)
       if (data.generation_results) {
         setGenResults(data.generation_results as GenerationResults)
-        if (['generated','review_requested','approved','deployed'].includes(data.status)) {
-          setGenStatus('done')
-        }
       } else {
         setGenResults(null)
-        if (data.status !== 'generating') setGenStatus('idle')
       }
-      if (data.status === 'generating') setGenStatus('generating')
+      // 상태별 genStatus 설정
+      if (data.status === 'generating') {
+        setGenStatus('generating')
+      } else if (['generated','review_requested','approved','deployed'].includes(data.status)) {
+        // generation_results 없어도 이미 생성된 상태면 done 처리 (새로고침 복원)
+        setGenStatus('done')
+      } else {
+        setGenStatus('idle')
+      }
       if (['review_requested','approved','deployed'].includes(data.status)) setReviewSent(true)
     } else {
       setMenuRowId(null)
@@ -188,13 +198,10 @@ function DietAutomationContent() {
     }
   }, [pptxYear, pptxMonth])
 
-  useEffect(() => { fetchMenuRow() }, [fetchMenuRow])
-  useEffect(() => { fetchStats()   }, [fetchStats])
-
-  // done 상태가 되면 브랜치 결과 rows 로드
-  useEffect(() => {
-    if (genStatus === 'done') fetchBranchMenuRows()
-  }, [genStatus, fetchBranchMenuRows])
+  useEffect(() => { fetchMenuRow()       }, [fetchMenuRow])
+  useEffect(() => { fetchStats()         }, [fetchStats])
+  // 마운트 및 연/월 변경 시 DB에서 브랜치 결과 로드 (새로고침 복원)
+  useEffect(() => { fetchBranchMenuRows() }, [fetchBranchMenuRows])
 
   // ── PPTX 생성 (GitHub Actions 트리거) ─────────────────────────────
   async function handleGenerate() {
@@ -234,6 +241,8 @@ function DietAutomationContent() {
         const data: ActionsProgress = await res.json()
         setActionsProgress(data)
         if (data.is_complete) {
+          // 완료 즉시 폴링 중단 (React 상태 업데이트 전에 추가 poll 방지)
+          if (pollingRef.current) { clearInterval(pollingRef.current); pollingRef.current = null }
           setGenStatus('done')
           await fetchMenuRow()
           await fetchBranchMenuRows()
@@ -405,11 +414,17 @@ function DietAutomationContent() {
     }
   }
 
-  // ── 결과 행 헬퍼 ──────────────────────────────────────────────────
-  function getFileBadge(branchName: string) {
-    if (MANUAL_PROCESS_CODES.has(branchName)) return { label: '수동처리', color: '#E65100', bg: '#FFF3E0' }
-    if (JPG_ONLY_CODES.has(branchName))       return { label: 'JPG',      color: '#633806', bg: '#FAEEDA' }
-    if (PDF_JPG_CODES.has(branchName))        return { label: 'PDF+JPG',  color: '#3C3489', bg: '#EEEDFE' }
+  // ── 결과 행 헬퍼: DB file_format 우선, 없을 때 레거시 이름 기반 ──
+  function getFileBadge(fileFormat: string | null | undefined, branchName?: string) {
+    const fmt = (fileFormat || '').toLowerCase()
+    if (fmt === 'pdf+jpg')               return { label: 'PDF+JPG',   color: '#3C3489', bg: '#EEEDFE' }
+    if (fmt === 'jpg')                   return { label: 'JPG',       color: '#633806', bg: '#FAEEDA' }
+    if (fmt === 'ppt' || fmt === 'pptx') return { label: '수동처리',  color: '#E65100', bg: '#FFF3E0' }
+    if (fmt === 'pdf')                   return { label: 'PDF',       color: '#27500A', bg: '#EAF3DE' }
+    // file_format 없을 때 레거시 이름 기반
+    if (branchName && MANUAL_PROCESS_CODES.has(branchName)) return { label: '수동처리', color: '#E65100', bg: '#FFF3E0' }
+    if (branchName && JPG_ONLY_CODES.has(branchName))       return { label: 'JPG',      color: '#633806', bg: '#FAEEDA' }
+    if (branchName && PDF_JPG_CODES.has(branchName))        return { label: 'PDF+JPG',  color: '#3C3489', bg: '#EEEDFE' }
     return { label: 'PDF', color: '#27500A', bg: '#EAF3DE' }
   }
 
@@ -425,10 +440,10 @@ function DietAutomationContent() {
     ?? genResults?.succeeded
     ?? branchMenuRows.filter(r => r.status === 'generated').length
 
-  const totalBranchCount = actionsProgress?.total ?? 49
+  const totalBranchCount = actionsProgress?.total ?? totalActiveBranches ?? 49
 
   // 통합 결과 rows (genResults 우선, 없으면 branchMenuRows)
-  const displayRows: { branchName: string; pptxUrl: string|null; pdfUrl: string|null; status: string; errorMsg?: string; branchId?: string|null; deployEmail?: string|null; shortCode?: string|null }[] =
+  const displayRows: { branchName: string; pptxUrl: string|null; pdfUrl: string|null; status: string; errorMsg?: string; branchId?: string|null; branchesId?: string|null; deployEmail?: string|null; shortCode?: string|null; fileFormat?: string|null }[] =
     genResults
       ? genResults.results.map(r => ({
           branchName:  r.branch_name,
@@ -437,8 +452,10 @@ function DietAutomationContent() {
           status:      r.status,
           errorMsg:    r.error_msg,
           branchId:    r.branch_id,
+          branchesId:  null,
           deployEmail: null,
           shortCode:   null,
+          fileFormat:  null,
         }))
       : branchMenuRows.map(r => ({
           branchName:  r.short_code || r.branch_id.slice(0, 8),
@@ -446,8 +463,10 @@ function DietAutomationContent() {
           pdfUrl:      r.pdf_url,
           status:      r.status === 'generated' ? 'success' : r.status,
           branchId:    r.branch_id,
+          branchesId:  r.branches_id,
           deployEmail: r.deploy_email,
           shortCode:   r.short_code,
+          fileFormat:  r.file_format,
         }))
 
   const compareRows = displayRows.filter(r => r.status === 'success')
@@ -908,7 +927,7 @@ function DietAutomationContent() {
                     </thead>
                     <tbody>
                       {displayRows.map((row, idx) => {
-                        const badge     = getFileBadge(row.branchName)
+                        const badge     = getFileBadge(row.fileFormat, row.branchName)
                         const isManual  = MANUAL_PROCESS_CODES.has(row.branchName)
                         const isSep     = SEPARATE_CONTRACT_CODES.has(row.branchName)
                         const isSuccess = row.status === 'success' || row.status === 'generated'
@@ -935,9 +954,9 @@ function DietAutomationContent() {
                               <p className="text-[15px] font-medium text-[#1C2B1E] truncate">{row.branchName}</p>
                               {row.deployEmail ? (
                                 <p className="text-xs text-gray-400 truncate mt-0.5">{row.deployEmail}</p>
-                              ) : row.branchId ? (
+                              ) : row.branchesId ?? row.branchId ? (
                                 <Link
-                                  href={`/board/admin/diet/branch-profile/${row.branchId}`}
+                                  href={`/board/admin/diet/branch-profile/${row.branchesId ?? row.branchId}`}
                                   className="text-xs text-red-400 hover:underline mt-0.5 inline-block"
                                 >
                                   이메일 미설정 →
@@ -987,9 +1006,9 @@ function DietAutomationContent() {
                             <td className="px-3 py-[14px]">
                               {row.deployEmail ? (
                                 <span className="text-xs text-gray-500 truncate block">{row.deployEmail}</span>
-                              ) : row.branchId ? (
+                              ) : row.branchesId ?? row.branchId ? (
                                 <Link
-                                  href={`/board/admin/diet/branch-profile/${row.branchId}`}
+                                  href={`/board/admin/diet/branch-profile/${row.branchesId ?? row.branchId}`}
                                   className="inline-flex items-center gap-1 text-xs text-red-500 hover:underline"
                                   title="원 프로파일에서 이메일을 설정해주세요"
                                 >
