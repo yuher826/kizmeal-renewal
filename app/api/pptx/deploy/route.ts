@@ -280,21 +280,45 @@ export async function POST(req: NextRequest) {
     const successBranchIds = success
       .map(s => allItems.find(i => i.id === s.id)?.branch_id)
       .filter((id): id is string => !!id)
+    console.log('[deploy] weekly_menus UPDATE 파라미터:', { year, month, successBranchIds })
     if (successBranchIds.length > 0) {
-      await db.from('weekly_menus')
-        .update({ status: 'deployed', deployed_at: now })
-        .eq('year', year).eq('month', month).eq('diet_type', 'CK')
+      const { data: updatedMenus, error: wm1Error } = await db
+        .from('weekly_menus')
+        .update({
+          status: 'deployed',
+          deployed_at: now,
+          deployed_by: adminRow!.id,
+        })
+        .eq('year', year)
+        .eq('month', month)
         .in('branch_id', successBranchIds)
+        .select('id')
+
+      if (wm1Error) {
+        console.error('[deploy] weekly_menus 개별 업데이트 실패:', JSON.stringify(wm1Error))
+      } else {
+        console.log(`[deploy] weekly_menus ${updatedMenus?.length ?? 0}건 deployed 처리됨`)
+      }
     }
   }
 
   // 전체 배포 시 공통 row (branch_id IS NULL 포함) 전체 업데이트
   if (!branch_ids || branch_ids.length === 0) {
-    await db.from('weekly_menus').update({
-      status:      'deployed',
-      deployed_at: now,
-      deployed_by: adminRow!.id,
-    }).in('id', menuIds)
+    const { data: updatedAll, error: wm2Error } = await db
+      .from('weekly_menus')
+      .update({
+        status: 'deployed',
+        deployed_at: now,
+        deployed_by: adminRow!.id,
+      })
+      .in('id', menuIds)
+      .select('id')
+
+    if (wm2Error) {
+      console.error('[deploy] weekly_menus 전체 업데이트 실패:', JSON.stringify(wm2Error))
+    } else {
+      console.log(`[deploy] weekly_menus 전체 ${updatedAll?.length ?? 0}건 deployed 처리됨`)
+    }
   }
 
   // 배포 완료 알림
