@@ -45,19 +45,33 @@ export default function ParentMenuPage() {
     setLoading(true)
 
     const supabase = createClient()
-    supabase
-      .from('weekly_menus')
-      .select('id, year, month, pptx_url, pdf_url, jpg_url, status')
-      .eq('branch_id', child.branch_id)
-      .eq('year', y)
-      .eq('month', m)
-      .neq('status', 'error')
-      .not('pptx_url', 'is', null)
-      .maybeSingle()
-      .then(({ data }) => {
-        setMenu(data as WeeklyMenu | null)
+    ;(async () => {
+      // children.branch_id(=branches.id) → branch_profiles.id 변환
+      const { data: bpRow } = await supabase
+        .from('branch_profiles')
+        .select('id')
+        .eq('branch_id', child.branch_id)
+        .maybeSingle()
+
+      if (!bpRow) {
+        setMenu(null)
         setLoading(false)
-      })
+        return
+      }
+
+      const { data } = await supabase
+        .from('weekly_menus')
+        .select('id, year, month, pptx_url, pdf_url, jpg_url, status')
+        .eq('branch_id', bpRow.id)
+        .eq('year', y)
+        .eq('month', m)
+        .neq('status', 'error')
+        .not('pptx_url', 'is', null)
+        .maybeSingle()
+
+      setMenu(data as WeeklyMenu | null)
+      setLoading(false)
+    })()
   }, [selectedChildId, month, children])
 
   function handleSelectChild(id: string) {
