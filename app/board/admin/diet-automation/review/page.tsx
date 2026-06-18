@@ -1381,6 +1381,7 @@ function DirectorView({
                 <th className="text-left px-4 py-3 font-semibold text-gray-500">원명</th>
                 <th className="text-center px-3 py-3 font-semibold text-gray-500">상태</th>
                 <th className="text-center px-3 py-3 font-semibold text-gray-500">최근업데이트</th>
+                <th className="text-center px-3 py-3 font-semibold text-gray-500">PPTX</th>
               </tr>
             </thead>
             <tbody>
@@ -1392,6 +1393,20 @@ function DirectorView({
                     <td className="text-center px-3 py-3"><StatusBadge status={item.review_status} /></td>
                     <td className="text-center px-3 py-3 text-xs text-gray-400">
                       {lastUpdate ? formatKST(lastUpdate) : '-'}
+                    </td>
+                    <td className="text-center px-3 py-3">
+                      {item.review_status === 'deployed' && item.pptx_url ? (
+                        <a
+                          href={`/api/pptx/download-proxy?url=${encodeURIComponent(item.pptx_url)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-2.5 py-1.5 rounded-lg bg-[#E3F2FD] text-[#1565C0] text-xs font-bold hover:bg-[#BBDEFB] transition-colors"
+                        >
+                          PPTX
+                        </a>
+                      ) : (
+                        <span className="text-gray-300">—</span>
+                      )}
                     </td>
                   </tr>
                 )
