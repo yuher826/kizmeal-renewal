@@ -1,17 +1,34 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef, Suspense } from 'react'
+import { useState, useEffect, useCallback, useRef, Suspense, Fragment } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { ChevronDown, ChevronRight as ChevronRightIcon } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
 import DietNotificationPanel, { type DietNotification } from '@/components/board/DietNotificationPanel'
-import { UPLOAD_ROLES } from '@/lib/roles'
+import { UPLOAD_ROLES, ROLES } from '@/lib/roles'
 
 // ── 상수 ──────────────────────────────────────────────────────────────
 const SEPARATE_CONTRACT_CODES = new Set(['로티스', '잉글리쉬파크', '잉파', 'KIS', 'KPI', '송파MB'])
 const MANUAL_PROCESS_CODES    = new Set(['덕양P'])
 const JPG_ONLY_CODES          = new Set(['정발P'])
 const PDF_JPG_CODES           = new Set(['엘란'])
+
+// ── 그룹(프랜차이즈 계열) 정의 — branches/page.tsx와 동일 ───────────────
+const GROUPS = [
+  { tag: 'E',   label: 'ECC계열',  headerClass: 'bg-blue-50 border-blue-200',    badgeClass: 'bg-blue-100 text-blue-700',   dotClass: 'bg-blue-500' },
+  { tag: 'P',   label: 'POLY계열', headerClass: 'bg-green-50 border-green-200',   badgeClass: 'bg-green-100 text-green-700', dotClass: 'bg-green-500' },
+  { tag: 'R',   label: '라이즈계열', headerClass: 'bg-purple-50 border-purple-200', badgeClass: 'bg-purple-100 text-purple-700', dotClass: 'bg-purple-500' },
+  { tag: 'MB',  label: 'MB계열',   headerClass: 'bg-orange-50 border-orange-200', badgeClass: 'bg-orange-100 text-orange-700', dotClass: 'bg-orange-500' },
+  { tag: 'SLP', label: 'SLP계열',  headerClass: 'bg-pink-50 border-pink-200',     badgeClass: 'bg-pink-100 text-pink-700',   dotClass: 'bg-pink-500' },
+  { tag: 'AO',  label: '알티오라',  headerClass: 'bg-teal-50 border-teal-200',     badgeClass: 'bg-teal-100 text-teal-700',   dotClass: 'bg-teal-500' },
+  { tag: '기타', label: '기타',     headerClass: 'bg-slate-50 border-slate-200',   badgeClass: 'bg-slate-100 text-slate-600', dotClass: 'bg-slate-400' },
+]
+function normalizeGroup(g: string | null): string {
+  if (!g || !g.trim()) return '기타'
+  const t = g.trim()
+  return GROUPS.find(gr => gr.tag === t) ? t : '기타'
+}
 
 // ── 타입 ──────────────────────────────────────────────────────────────
 type HubTab = 'workflow' | 'notifications'
@@ -42,16 +59,19 @@ type ActionsProgress = {
 }
 
 type BranchMenuRow = {
-  id:            string
-  branch_id:     string     // branch_profiles.id (PK) = weekly_menus.branch_id
-  branches_id:   string | null  // branch_profiles.branch_id (FK → branches.id) — 프로파일 링크에 사용
-  pptx_url:      string | null
-  pdf_url:       string | null
-  status:        string
-  short_code:    string | null
-  display_name:  string | null
-  deploy_email:  string | null
-  file_format:   string | null
+  id:               string
+  branch_id:        string     // branch_profiles.id (PK) = weekly_menus.branch_id
+  branches_id:      string | null  // branch_profiles.branch_id (FK → branches.id) — 프로파일 링크에 사용
+  pptx_url:         string | null
+  pdf_url:          string | null
+  status:           string
+  short_code:       string | null
+  display_name:     string | null
+  deploy_email:     string | null
+  file_format:      string | null
+  sort_order:       number | null
+  group_tag:        string | null
+  branch_full_name: string | null
 }
 
 // ── 헬퍼 ──────────────────────────────────────────────────────────────
@@ -115,6 +135,12 @@ function DietAutomationContent() {
   // ── 현재 사용자 역할 ───────────────────────────────────────────────
   const [userRole, setUserRole] = useState<string | null>(null)
 
+  // ── 결과 테이블 그룹 아코디언 (초기 전부 펼침) ─────────────────────
+  const [openGroups, setOpenGroups] = useState<Set<string>>(() => new Set(GROUPS.map(g => g.tag)))
+  function toggleGroup(tag: string) {
+    setOpenGroups(prev => { const n = new Set(prev); if (n.has(tag)) n.delete(tag); else n.add(tag); return n })
+  }
+
   // ── DB 조회: 활성 계약원 수 ────────────────────────────────────────
   const fetchStats = useCallback(async () => {
     const supabase = createClient()
@@ -139,24 +165,30 @@ function DietAutomationContent() {
       supabase
         .from('branch_profiles')
         // id(PK)로 join: weekly_menus.branch_id = branch_profiles.id
-        .select('id, branch_id, short_code, display_name, distribution_email, file_format')
+        .select('id, branch_id, short_code, display_name, distribution_email, file_format, sort_order, group_tag, branch_full_name')
         .eq('contract_status', 'active'),
     ])
 
     // profileMap 키를 branch_profiles.id(PK)로 사용 (FK branch_id 아님)
-    const profileMap = new Map<string, { branches_id: string | null; short_code: string | null; display_name: string | null; distribution_email: string | null; file_format: string | null }>(
-      ((profileRes.data ?? []) as { id: string; branch_id: string; short_code: string | null; display_name: string | null; distribution_email: string | null; file_format: string | null }[])
-        .map(p => [p.id, { branches_id: p.branch_id, short_code: p.short_code, display_name: p.display_name, distribution_email: p.distribution_email, file_format: p.file_format }])
+    const profileMap = new Map<string, { branches_id: string | null; short_code: string | null; display_name: string | null; distribution_email: string | null; file_format: string | null; sort_order: number | null; group_tag: string | null; branch_full_name: string | null }>(
+      ((profileRes.data ?? []) as { id: string; branch_id: string; short_code: string | null; display_name: string | null; distribution_email: string | null; file_format: string | null; sort_order: number | null; group_tag: string | null; branch_full_name: string | null }[])
+        .map(p => [p.id, { branches_id: p.branch_id, short_code: p.short_code, display_name: p.display_name, distribution_email: p.distribution_email, file_format: p.file_format, sort_order: p.sort_order, group_tag: p.group_tag, branch_full_name: p.branch_full_name }])
     )
 
     const rows: BranchMenuRow[] = ((menuRes.data ?? []) as { id: string; branch_id: string; pptx_url: string | null; pdf_url: string | null; status: string }[]).map(row => ({
       ...row,
-      branches_id:  profileMap.get(row.branch_id)?.branches_id        ?? null,
-      short_code:   profileMap.get(row.branch_id)?.short_code          ?? null,
-      display_name: profileMap.get(row.branch_id)?.display_name        ?? null,
-      deploy_email: profileMap.get(row.branch_id)?.distribution_email  ?? null,
-      file_format:  profileMap.get(row.branch_id)?.file_format         ?? null,
+      branches_id:      profileMap.get(row.branch_id)?.branches_id        ?? null,
+      short_code:       profileMap.get(row.branch_id)?.short_code          ?? null,
+      display_name:     profileMap.get(row.branch_id)?.display_name        ?? null,
+      deploy_email:     profileMap.get(row.branch_id)?.distribution_email  ?? null,
+      file_format:      profileMap.get(row.branch_id)?.file_format         ?? null,
+      sort_order:       profileMap.get(row.branch_id)?.sort_order          ?? null,
+      group_tag:        profileMap.get(row.branch_id)?.group_tag           ?? null,
+      branch_full_name: profileMap.get(row.branch_id)?.branch_full_name    ?? null,
     }))
+
+    // sort_order 전역 번호 기준 정렬 (값 없으면 맨 뒤)
+    rows.sort((a, b) => (a.sort_order ?? 9999) - (b.sort_order ?? 9999))
 
     setBranchMenuRows(rows)
   }, [pptxYear, pptxMonth])
@@ -457,10 +489,14 @@ function DietAutomationContent() {
   const totalBranchCount = actionsProgress?.total ?? totalActiveBranches ?? 49
 
   // 통합 결과 rows (genResults 우선, 없으면 branchMenuRows)
-  const displayRows: { branchName: string; pptxUrl: string|null; pdfUrl: string|null; status: string; errorMsg?: string; branchId?: string|null; branchesId?: string|null; deployEmail?: string|null; shortCode?: string|null; fileFormat?: string|null }[] =
+  // ⚠️ branchName은 배지/코드 판단용(변경 금지). displayName은 화면 표시 전용.
+  const displayRows: { branchName: string; displayName: string; sortOrder: number|null; groupTag: string|null; pptxUrl: string|null; pdfUrl: string|null; status: string; errorMsg?: string; branchId?: string|null; branchesId?: string|null; deployEmail?: string|null; shortCode?: string|null; fileFormat?: string|null }[] =
     genResults
       ? genResults.results.map(r => ({
           branchName:  r.branch_name,
+          displayName: r.branch_name,
+          sortOrder:   null,
+          groupTag:    null,
           pptxUrl:     r.pptx_url || null,
           pdfUrl:      r.pdf_url  || null,
           status:      r.status,
@@ -473,6 +509,9 @@ function DietAutomationContent() {
         }))
       : branchMenuRows.map(r => ({
           branchName:  r.short_code || r.branch_id.slice(0, 8),
+          displayName: r.branch_full_name || r.short_code || r.branch_id.slice(0, 8),
+          sortOrder:   r.sort_order,
+          groupTag:    r.group_tag,
           pptxUrl:     r.pptx_url,
           pdfUrl:      r.pdf_url,
           status:      r.status === 'generated' ? 'success' : r.status,
@@ -944,7 +983,31 @@ function DietAutomationContent() {
                       </tr>
                     </thead>
                     <tbody>
-                      {displayRows.map((row, idx) => {
+                      {GROUPS.map(g => {
+                        const groupRows = displayRows.filter(r => normalizeGroup(r.groupTag) === g.tag)
+                        if (groupRows.length === 0) return null
+                        const isOpen = openGroups.has(g.tag)
+                        return (
+                          <Fragment key={g.tag}>
+                            {/* 그룹 헤더 행 (branches/page.tsx와 동일 디자인) */}
+                            <tr>
+                              <td colSpan={8} className="p-0 border-0">
+                                <div
+                                  className={`${g.headerClass} border rounded-xl px-4 py-3 flex items-center justify-between cursor-pointer mb-1 transition-all hover:brightness-95`}
+                                  onClick={() => toggleGroup(g.tag)}
+                                >
+                                  <div className="flex items-center">
+                                    {isOpen
+                                      ? <ChevronDown size={14} className="text-slate-500" />
+                                      : <ChevronRightIcon size={14} className="text-slate-500" />}
+                                    <div className={`${g.dotClass} w-2 h-2 rounded-full mx-2`} />
+                                    <span className="text-sm font-semibold text-slate-700">{g.label}</span>
+                                  </div>
+                                  <span className="text-sm text-slate-400">{groupRows.length}개원</span>
+                                </div>
+                              </td>
+                            </tr>
+                            {isOpen && groupRows.map((row, idx) => {
                         const badge     = getFileBadge(row.fileFormat, row.branchName)
                         const isManual  = MANUAL_PROCESS_CODES.has(row.branchName)
                         const isSep     = SEPARATE_CONTRACT_CODES.has(row.branchName)
@@ -957,19 +1020,19 @@ function DietAutomationContent() {
 
                         return (
                           <tr
-                            key={`${row.branchName}-${idx}`}
+                            key={`${g.tag}-${row.branchName}-${idx}`}
                             className={`border-b border-gray-50 transition-colors hover:bg-[#DCF0E8] ${
                               isError ? 'bg-[#FEF2F2]'
                               : isProc ? 'bg-[#EFF6FF]'
                               : idx % 2 === 0 ? 'bg-white' : 'bg-[#F0F7F4]'
                             }`}
                           >
-                            {/* 번호 */}
-                            <td className="text-center px-3 py-[14px] text-xs text-gray-400">{idx + 1}</td>
+                            {/* 번호 (sort_order 전역 번호) */}
+                            <td className="text-center px-3 py-[14px] text-xs text-gray-400">{row.sortOrder ?? '—'}</td>
 
                             {/* 원명 + 부가정보 */}
                             <td className="px-3 py-[14px]">
-                              <p className="text-[15px] font-medium text-[#1C2B1E] truncate">{row.branchName}</p>
+                              <p className="text-[15px] font-medium text-[#1C2B1E] truncate">{row.displayName}</p>
                               {row.deployEmail ? (
                                 <p className="text-xs text-gray-400 truncate mt-0.5">{row.deployEmail}</p>
                               ) : row.branchesId ?? row.branchId ? (
@@ -1106,6 +1169,9 @@ function DietAutomationContent() {
                               )}
                             </td>
                           </tr>
+                        )
+                            })}
+                          </Fragment>
                         )
                       })}
                     </tbody>
@@ -1298,16 +1364,18 @@ function DietAutomationContent() {
         </div>
       )}
 
-      {/* ── 테스트 초기화 ────────────────────────────────────────────── */}
-      <div className="flex justify-center pb-6">
-        <button
-          type="button"
-          onClick={handleResetDemo}
-          className="text-xs text-gray-300 hover:text-gray-400 transition-colors"
-        >
-          🔧 테스트 초기화
-        </button>
-      </div>
+      {/* ── 테스트 초기화 (super_admin 전용) ───────────────────────────── */}
+      {userRole === ROLES.SUPER_ADMIN && (
+        <div className="flex justify-center pb-6">
+          <button
+            type="button"
+            onClick={handleResetDemo}
+            className="text-xs text-gray-300 hover:text-gray-400 transition-colors"
+          >
+            🔧 테스트 초기화
+          </button>
+        </div>
+      )}
 
       {/* ── 토스트 ───────────────────────────────────────────────────── */}
       {toast && (

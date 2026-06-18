@@ -35,6 +35,7 @@ type ReviewItemRow = {
   resubmitted_at:  string | null
   sort_order:      number | null
   group_tag:       string | null
+  branch_full_name: string | null
 }
 
 type HistoryEntry = {
@@ -136,9 +137,8 @@ export async function GET(req: NextRequest) {
 
   let itemsQuery = db
     .from('diet_review_items')
-    .select('*, branch_profiles(sort_order, group_tag)')
+    .select('*, branch_profiles(sort_order, group_tag, branch_full_name)')
     .in('weekly_menu_id', ids)
-    .order('branch_name')
 
   if (isNutritionist(adminRow.role)) {
     const branchIds = await getNutritionistBranchIds(db, adminRow)
@@ -151,9 +151,12 @@ export async function GET(req: NextRequest) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const allItems: ReviewItemRow[] = (items ?? []).map((item: any) => ({
     ...item,
-    sort_order: item.branch_profiles?.sort_order ?? null,
-    group_tag:  item.branch_profiles?.group_tag  ?? null,
+    sort_order:       item.branch_profiles?.sort_order       ?? null,
+    group_tag:        item.branch_profiles?.group_tag        ?? null,
+    branch_full_name: item.branch_profiles?.branch_full_name ?? null,
   }))
+  // sort_order 전역 번호 기준 정렬 (값 없으면 맨 뒤)
+  allItems.sort((a, b) => (a.sort_order ?? 9999) - (b.sort_order ?? 9999))
 
   // 4. 통계
   const stats = {

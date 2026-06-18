@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef, Suspense, Fragment } from 'react'
+import { useState, useEffect, useCallback, useRef, Suspense, Fragment, type ReactNode } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { ChevronDown, ChevronRight as ChevronRightIcon } from 'lucide-react'
 import { isNutritionist, DEPLOY_ROLES } from '@/lib/roles'
 
 // ── 타입 ──────────────────────────────────────────────────────────
@@ -36,6 +37,7 @@ type ReviewItem = {
   resubmitted_at:  string | null
   sort_order:      number | null
   group_tag:       string | null
+  branch_full_name: string | null
 }
 
 type Stats = {
@@ -67,6 +69,22 @@ const STATUS_META: Record<string, { label: string; badgeCls: string }> = {
 
 type ManagerTab = 'all' | 'generation_complete' | 'correction_request' | 'resubmitted' | 'approved' | 'deployed'
 type NutritionistTab = 'correction' | 'approved' | 'history'
+
+// ── 그룹(원 프로파일과 동일) ──────────────────────────────────────
+const GROUPS = [
+  { tag: 'E',   label: 'ECC계열',  headerClass: 'bg-blue-50 border-blue-200',    badgeClass: 'bg-blue-100 text-blue-700',   dotClass: 'bg-blue-500' },
+  { tag: 'P',   label: 'POLY계열', headerClass: 'bg-green-50 border-green-200',   badgeClass: 'bg-green-100 text-green-700', dotClass: 'bg-green-500' },
+  { tag: 'R',   label: '라이즈계열', headerClass: 'bg-purple-50 border-purple-200', badgeClass: 'bg-purple-100 text-purple-700', dotClass: 'bg-purple-500' },
+  { tag: 'MB',  label: 'MB계열',   headerClass: 'bg-orange-50 border-orange-200', badgeClass: 'bg-orange-100 text-orange-700', dotClass: 'bg-orange-500' },
+  { tag: 'SLP', label: 'SLP계열',  headerClass: 'bg-pink-50 border-pink-200',     badgeClass: 'bg-pink-100 text-pink-700',   dotClass: 'bg-pink-500' },
+  { tag: 'AO',  label: '알티오라',  headerClass: 'bg-teal-50 border-teal-200',     badgeClass: 'bg-teal-100 text-teal-700',   dotClass: 'bg-teal-500' },
+  { tag: '기타', label: '기타',     headerClass: 'bg-slate-50 border-slate-200',   badgeClass: 'bg-slate-100 text-slate-600', dotClass: 'bg-slate-400' },
+]
+function normalizeGroup(g: string | null): string {
+  if (!g || !g.trim()) return '기타'
+  const t = g.trim()
+  return GROUPS.find(gr => gr.tag === t) ? t : '기타'
+}
 
 // ── 유틸 ──────────────────────────────────────────────────────────
 function formatKST(iso: string) {
@@ -286,6 +304,12 @@ function ManagerView({
   const [emergencyLoading,  setEmergencyLoading]  = useState(false)
   const [deployingIds,      setDeployingIds]      = useState<Set<string>>(new Set())
   const [isDeployingAll,    setIsDeployingAll]    = useState(false)
+
+  // 그룹 아코디언 상태 (Manager 독립)
+  const [managerOpenGroups, setManagerOpenGroups] = useState<Set<string>>(() => new Set(GROUPS.map(g => g.tag)))
+  function toggleGroup(tag: string) {
+    setManagerOpenGroups(prev => { const n = new Set(prev); if (n.has(tag)) n.delete(tag); else n.add(tag); return n })
+  }
 
   const TAB_KEYS: { key: ManagerTab; label: string; icon: string }[] = [
     { key: 'all',                 label: '전체',    icon: '📋' },
@@ -740,7 +764,25 @@ function ManagerView({
               </tr>
             </thead>
             <tbody>
-              {filtered.map((item, idx) => (
+              {GROUPS.map(g => {
+                const groupItems = filtered.filter(it => normalizeGroup(it.group_tag) === g.tag)
+                if (groupItems.length === 0) return null
+                const isOpen = managerOpenGroups.has(g.tag)
+                return (
+                  <Fragment key={g.tag}>
+                    <tr>
+                      <td colSpan={7} className="p-0 border-0">
+                        <div className={`${g.headerClass} border rounded-xl px-4 py-3 flex items-center justify-between cursor-pointer mb-1 transition-all hover:brightness-95`} onClick={() => toggleGroup(g.tag)}>
+                          <div className="flex items-center">
+                            {isOpen ? <ChevronDown size={14} className="text-slate-500" /> : <ChevronRightIcon size={14} className="text-slate-500" />}
+                            <div className={`${g.dotClass} w-2 h-2 rounded-full mx-2`} />
+                            <span className="text-sm font-semibold text-slate-700">{g.label}</span>
+                          </div>
+                          <span className="text-sm text-slate-400">{groupItems.length}개원</span>
+                        </div>
+                      </td>
+                    </tr>
+                    {isOpen && groupItems.map((item, idx) => (
                 <Fragment key={item.id}>
                   <tr className={`border-b border-gray-50 transition-colors ${rowBg(item.review_status) || (idx % 2 === 1 ? 'bg-gray-50/40' : '')}`}>
                     <td className="px-3 py-3 text-center">
@@ -753,10 +795,10 @@ function ManagerView({
                         className="rounded cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
                       />
                     </td>
-                    <td className="text-center px-3 py-3 text-gray-400 text-xs">{idx + 1}</td>
+                    <td className="text-center px-3 py-3 text-gray-400 text-xs">{item.sort_order ?? '—'}</td>
                     <td className="px-3 py-3 font-medium text-[#1C2B1E]">
                       <div>
-                        {item.branch_name}
+                        {item.branch_full_name ?? item.branch_name}
                         {item.review_status === 'resubmitted' && (
                           <span className="ml-2 text-xs text-blue-600 font-semibold">재검토 필요</span>
                         )}
@@ -891,7 +933,10 @@ function ManagerView({
                     </tr>
                   )}
                 </Fragment>
-              ))}
+                    ))}
+                  </Fragment>
+                )
+              })}
             </tbody>
           </table>
         </div>
@@ -913,7 +958,21 @@ function ManagerView({
               <span className="text-sm text-gray-500">전체선택 ({checkableIds.length}개)</span>
             </div>
           )}
-          {filtered.map(item => (
+          {GROUPS.map(g => {
+            const groupItems = filtered.filter(it => normalizeGroup(it.group_tag) === g.tag)
+            if (groupItems.length === 0) return null
+            const isOpen = managerOpenGroups.has(g.tag)
+            return (
+              <div key={g.tag} className="space-y-2">
+                <div className={`${g.headerClass} border rounded-xl px-4 py-3 flex items-center justify-between cursor-pointer transition-all hover:brightness-95`} onClick={() => toggleGroup(g.tag)}>
+                  <div className="flex items-center">
+                    {isOpen ? <ChevronDown size={14} className="text-slate-500" /> : <ChevronRightIcon size={14} className="text-slate-500" />}
+                    <div className={`${g.dotClass} w-2 h-2 rounded-full mx-2`} />
+                    <span className="text-sm font-semibold text-slate-700">{g.label}</span>
+                  </div>
+                  <span className="text-sm text-slate-400">{groupItems.length}개원</span>
+                </div>
+                {isOpen && groupItems.map(item => (
             <div key={item.id} className={`rounded-2xl border p-4 ${
               item.review_status === 'correction_request' ? 'bg-orange-50 border-orange-200' :
               item.review_status === 'approved'           ? 'bg-green-50 border-green-200' :
@@ -930,7 +989,10 @@ function ManagerView({
                   disabled={item.review_status !== 'generation_complete'}
                   className="rounded cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed flex-shrink-0"
                 />
-                <span className="font-bold text-[#1C2B1E] flex-1 min-w-0 truncate">{item.branch_name}</span>
+                <span className="font-bold text-[#1C2B1E] flex-1 min-w-0 truncate">
+                  <span className="text-gray-400 text-xs mr-1.5 font-normal">{item.sort_order ?? '—'}</span>
+                  {item.branch_full_name ?? item.branch_name}
+                </span>
                 <StatusBadge status={item.review_status} />
               </div>
               {item.review_status === 'correction_request' && item.memo && (
@@ -1028,7 +1090,10 @@ function ManagerView({
                 </div>
               )}
             </div>
-          ))}
+                ))}
+              </div>
+            )
+          })}
         </div>
       )}
     </div>
@@ -1052,6 +1117,44 @@ function NutritionistView({
   const [resubmitOpen,  setResubmitOpen]  = useState<Record<string, boolean>>({})
   const [fileMap,       setFileMap]       = useState<Record<string, File>>({})
   const fileRefs = useRef<Record<string, HTMLInputElement | null>>({})
+
+  // 그룹 아코디언 상태 (탭별 독립)
+  const [correctionOpenGroups, setCorrectionOpenGroups] = useState<Set<string>>(() => new Set(GROUPS.map(g => g.tag)))
+  const [deployOpenGroups,     setDeployOpenGroups]     = useState<Set<string>>(() => new Set(GROUPS.map(g => g.tag)))
+  const [historyOpenGroups,    setHistoryOpenGroups]    = useState<Set<string>>(() => new Set(GROUPS.map(g => g.tag)))
+  function makeToggle(setter: (updater: (prev: Set<string>) => Set<string>) => void) {
+    return (tag: string) => setter(prev => { const n = new Set(prev); if (n.has(tag)) n.delete(tag); else n.add(tag); return n })
+  }
+  const toggleCorrection = makeToggle(setCorrectionOpenGroups)
+  const toggleDeploy     = makeToggle(setDeployOpenGroups)
+  const toggleHistory    = makeToggle(setHistoryOpenGroups)
+
+  // 그룹 단위 카드 렌더 (원 프로파일과 동일한 아코디언)
+  function renderGrouped(
+    list: ReviewItem[],
+    openGroups: Set<string>,
+    toggle: (tag: string) => void,
+    renderCard: (item: ReviewItem) => ReactNode,
+  ) {
+    return GROUPS.map(g => {
+      const groupItems = list.filter(it => normalizeGroup(it.group_tag) === g.tag)
+      if (groupItems.length === 0) return null
+      const isOpen = openGroups.has(g.tag)
+      return (
+        <div key={g.tag} className="space-y-2">
+          <div className={`${g.headerClass} border rounded-xl px-4 py-3 flex items-center justify-between cursor-pointer transition-all hover:brightness-95`} onClick={() => toggle(g.tag)}>
+            <div className="flex items-center">
+              {isOpen ? <ChevronDown size={14} className="text-slate-500" /> : <ChevronRightIcon size={14} className="text-slate-500" />}
+              <div className={`${g.dotClass} w-2 h-2 rounded-full mx-2`} />
+              <span className="text-sm font-semibold text-slate-700">{g.label}</span>
+            </div>
+            <span className="text-sm text-slate-400">{groupItems.length}개원</span>
+          </div>
+          {isOpen && groupItems.map(renderCard)}
+        </div>
+      )
+    })
+  }
 
   const correctionItems = items.filter(i => i.review_status === 'correction_request')
   const approvedItems   = items.filter(i => i.review_status === 'approved')
@@ -1149,12 +1252,15 @@ function NutritionistView({
               <p className="text-gray-400 text-sm">수정요청된 식단표가 없습니다. 🎉</p>
             </div>
           )}
-          {correctionItems.map(item => {
+          {renderGrouped(correctionItems, correctionOpenGroups, toggleCorrection, item => {
             const latestCorrection = [...(item.memo_history ?? [])].reverse().find(h => h.action === 'correction_request')
             return (
               <div key={item.id} className="bg-white rounded-2xl border border-orange-200 p-4 space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="font-bold text-[#1C2B1E]">{item.branch_name}</span>
+                  <span className="font-bold text-[#1C2B1E]">
+                    <span className="text-gray-400 text-xs mr-1.5 font-normal">{item.sort_order ?? '—'}</span>
+                    {item.branch_full_name ?? item.branch_name}
+                  </span>
                   <StatusBadge status={item.review_status} />
                 </div>
                 {latestCorrection && (
@@ -1238,10 +1344,13 @@ function NutritionistView({
                 )}
               </div>
               <div className="space-y-2">
-                {approvedItems.map(item => (
+                {renderGrouped(approvedItems, deployOpenGroups, toggleDeploy, item => (
                   <div key={item.id} className="bg-white rounded-2xl border border-green-100 p-4 flex items-center gap-3">
                     <input type="checkbox" checked={selectedIds.has(item.id)} onChange={() => toggleSelect(item.id)} className="rounded flex-shrink-0" />
-                    <span className="font-medium text-[#1C2B1E] flex-1">{item.branch_name}</span>
+                    <span className="font-medium text-[#1C2B1E] flex-1">
+                      <span className="text-gray-400 text-xs mr-1.5 font-normal">{item.sort_order ?? '—'}</span>
+                      {item.branch_full_name ?? item.branch_name}
+                    </span>
                     <StatusBadge status={item.review_status} />
                     {item.reviewed_at && <span className="text-xs text-gray-400 hidden sm:block">{formatKST(item.reviewed_at)}</span>}
                     <button type="button"
@@ -1265,13 +1374,16 @@ function NutritionistView({
               <p className="text-gray-400 text-sm">배포 완료된 이력이 없습니다.</p>
             </div>
           )}
-          {[...historyItems].sort((a, b) =>
-            (b.deployed_at ?? '').localeCompare(a.deployed_at ?? '')
-          ).map(item => (
+          {renderGrouped(
+            [...historyItems].sort((a, b) => (b.deployed_at ?? '').localeCompare(a.deployed_at ?? '')),
+            historyOpenGroups, toggleHistory, item => (
             <div key={item.id} className="bg-white rounded-2xl border border-teal-100 p-4 flex items-center gap-3">
               <span className="text-teal-500 text-lg">✅</span>
               <div className="flex-1">
-                <p className="font-medium text-[#1C2B1E]">{item.branch_name}</p>
+                <p className="font-medium text-[#1C2B1E]">
+                  <span className="text-gray-400 text-xs mr-1.5 font-normal">{item.sort_order ?? '—'}</span>
+                  {item.branch_full_name ?? item.branch_name}
+                </p>
                 {item.deployed_at && <p className="text-xs text-gray-400">{formatKST(item.deployed_at)}</p>}
               </div>
               {item.pptx_url && (
@@ -1348,6 +1460,12 @@ function DirectorView({
   const deployed   = stats.deployed
   const deployPct  = total > 0 ? Math.round((deployed / total) * 100) : 0
 
+  // 그룹 아코디언 상태 (Director 독립)
+  const [directorOpenGroups, setDirectorOpenGroups] = useState<Set<string>>(() => new Set(GROUPS.map(g => g.tag)))
+  function toggleGroup(tag: string) {
+    setDirectorOpenGroups(prev => { const n = new Set(prev); if (n.has(tag)) n.delete(tag); else n.add(tag); return n })
+  }
+
   return (
     <div className="space-y-4">
       {/* 통계 카드 4개 */}
@@ -1386,7 +1504,25 @@ function DirectorView({
               </tr>
             </thead>
             <tbody>
-              {sorted.map((item, idx) => {
+              {GROUPS.map(g => {
+                const groupItems = sorted.filter(it => normalizeGroup(it.group_tag) === g.tag)
+                if (groupItems.length === 0) return null
+                const isOpen = directorOpenGroups.has(g.tag)
+                return (
+                  <Fragment key={g.tag}>
+                    <tr>
+                      <td colSpan={4} className="p-0 border-0">
+                        <div className={`${g.headerClass} border rounded-xl px-4 py-3 flex items-center justify-between cursor-pointer mb-1 transition-all hover:brightness-95`} onClick={() => toggleGroup(g.tag)}>
+                          <div className="flex items-center">
+                            {isOpen ? <ChevronDown size={14} className="text-slate-500" /> : <ChevronRightIcon size={14} className="text-slate-500" />}
+                            <div className={`${g.dotClass} w-2 h-2 rounded-full mx-2`} />
+                            <span className="text-sm font-semibold text-slate-700">{g.label}</span>
+                          </div>
+                          <span className="text-sm text-slate-400">{groupItems.length}개원</span>
+                        </div>
+                      </td>
+                    </tr>
+                    {isOpen && groupItems.map((item, idx) => {
                 const lastUpdate = item.deployed_at ?? item.approved_at ?? item.reviewed_at ?? null
                 const pptxMatch = item.pptx_url?.match(/_(\d{4})(\d{2})\.pptx/)
                 const yyyymm = pptxMatch ? `${pptxMatch[1]}년 ${pptxMatch[2]}월` : ''
@@ -1394,7 +1530,7 @@ function DirectorView({
                   <tr key={item.id} className={`border-b border-gray-50 hover:bg-emerald-50/30 cursor-pointer transition-colors ${idx % 2 === 1 ? 'bg-gray-50/40' : ''}`}>
                     <td className="px-4 py-3 font-medium text-[#1C2B1E]">
                       <span className="text-gray-400 text-xs mr-1.5">{item.sort_order ?? '—'}</span>
-                      {item.branch_name}
+                      {item.branch_full_name ?? item.branch_name}
                     </td>
                     <td className="text-center px-3 py-3"><StatusBadge status={item.review_status} /></td>
                     <td className="text-center px-3 py-3 text-xs text-gray-400">
@@ -1415,6 +1551,9 @@ function DirectorView({
                       )}
                     </td>
                   </tr>
+                )
+              })}
+                  </Fragment>
                 )
               })}
             </tbody>

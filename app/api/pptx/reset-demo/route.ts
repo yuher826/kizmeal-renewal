@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase-server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
+import { ROLES } from '@/lib/roles'
 
 export async function POST() {
   const supabase = createClient()
@@ -9,7 +10,7 @@ export async function POST() {
 
   const { data: admin } = await supabase
     .from('admins').select('role').eq('auth_id', user.id).maybeSingle()
-  if (admin?.role !== 'super_admin') {
+  if (admin?.role !== ROLES.SUPER_ADMIN) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

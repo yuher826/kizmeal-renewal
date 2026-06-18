@@ -1,5 +1,14 @@
 /** 역할(role) 관련 상수 및 유틸 함수 중앙 관리 */
 
+/** 역할 문자열 상수 (리터럴 중앙 관리) */
+export const ROLES = {
+  SUPER_ADMIN:              'super_admin',
+  MANAGER:                  'manager',
+  DIRECTOR:                 'director',
+  NUTRITIONIST_CK:          'nutritionist_ck',
+  NUTRITIONIST_CONSIGNMENT: 'nutritionist_consignment',
+} as const
+
 /** 영양사 역할 목록 (CK 직계약 + 위탁) */
 export const NUTRITIONIST_ROLES: string[] = [
   'nutritionist_ck',
