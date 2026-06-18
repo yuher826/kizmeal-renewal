@@ -135,8 +135,8 @@ function DietAutomationContent() {
   // ── 현재 사용자 역할 ───────────────────────────────────────────────
   const [userRole, setUserRole] = useState<string | null>(null)
 
-  // ── 결과 테이블 그룹 아코디언 (초기 전부 펼침) ─────────────────────
-  const [openGroups, setOpenGroups] = useState<Set<string>>(() => new Set(GROUPS.map(g => g.tag)))
+  // ── 결과 테이블 그룹 아코디언 (초기 접힘) ─────────────────────────
+  const [openGroups, setOpenGroups] = useState<Set<string>>(new Set())
   function toggleGroup(tag: string) {
     setOpenGroups(prev => { const n = new Set(prev); if (n.has(tag)) n.delete(tag); else n.add(tag); return n })
   }
@@ -492,21 +492,24 @@ function DietAutomationContent() {
   // ⚠️ branchName은 배지/코드 판단용(변경 금지). displayName은 화면 표시 전용.
   const displayRows: { branchName: string; displayName: string; sortOrder: number|null; groupTag: string|null; pptxUrl: string|null; pdfUrl: string|null; status: string; errorMsg?: string; branchId?: string|null; branchesId?: string|null; deployEmail?: string|null; shortCode?: string|null; fileFormat?: string|null }[] =
     genResults
-      ? genResults.results.map(r => ({
-          branchName:  r.branch_name,
-          displayName: r.branch_name,
-          sortOrder:   null,
-          groupTag:    null,
-          pptxUrl:     r.pptx_url || null,
-          pdfUrl:      r.pdf_url  || null,
-          status:      r.status,
-          errorMsg:    r.error_msg,
-          branchId:    r.branch_id,
-          branchesId:  null,
-          deployEmail: null,
-          shortCode:   null,
-          fileFormat:  null,
-        }))
+      ? genResults.results.map(r => {
+          const profileRow = branchMenuRows.find(b => b.branch_id === r.branch_id)
+          return {
+            branchName:  r.branch_name,
+            displayName: profileRow?.branch_full_name ?? profileRow?.short_code ?? r.branch_name,
+            sortOrder:   profileRow?.sort_order ?? null,
+            groupTag:    profileRow?.group_tag  ?? null,
+            pptxUrl:     r.pptx_url || null,
+            pdfUrl:      r.pdf_url  || null,
+            status:      r.status,
+            errorMsg:    r.error_msg,
+            branchId:    r.branch_id,
+            branchesId:  null,
+            deployEmail: null,
+            shortCode:   r.branch_name,
+            fileFormat:  null,
+          }
+        }).sort((a, b) => (a.sortOrder ?? 9999) - (b.sortOrder ?? 9999))
       : branchMenuRows.map(r => ({
           branchName:  r.short_code || r.branch_id.slice(0, 8),
           displayName: r.branch_full_name || r.short_code || r.branch_id.slice(0, 8),
@@ -949,14 +952,21 @@ function DietAutomationContent() {
                     <span className="text-base font-medium text-[#1C2B1E]">생성 결과</span>
                     <span className="text-xs text-gray-400 bg-gray-100 rounded-full px-2 py-0.5">{displayRows.length}개원</span>
                   </div>
-                  <button
-                    type="button"
-                    onClick={handleDownloadZip}
-                    disabled={downloadingZip}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-medium text-gray-600 hover:border-[#2D6A4F] hover:text-[#2D6A4F] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    {downloadingZip ? '⏳' : '📦'} 전체 ZIP
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {GROUPS.map(g => g.tag).every(t => openGroups.has(t)) ? (
+                      <button onClick={() => setOpenGroups(new Set())} className="border border-slate-200 text-slate-600 rounded-lg px-3 py-1.5 text-sm hover:bg-slate-50 transition-colors">전체 접기</button>
+                    ) : (
+                      <button onClick={() => setOpenGroups(new Set(GROUPS.map(g => g.tag)))} className="border border-slate-200 text-slate-600 rounded-lg px-3 py-1.5 text-sm hover:bg-slate-50 transition-colors">전체 펼치기</button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={handleDownloadZip}
+                      disabled={downloadingZip}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-medium text-gray-600 hover:border-[#2D6A4F] hover:text-[#2D6A4F] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {downloadingZip ? '⏳' : '📦'} 전체 ZIP
+                    </button>
+                  </div>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm" style={{ tableLayout: 'fixed' }}>

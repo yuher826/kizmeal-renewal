@@ -308,7 +308,7 @@ function ManagerView({
   const isDeploying = deployingIds.size > 0 || isDeployingAll
 
   // 그룹 아코디언 상태 (Manager 독립)
-  const [managerOpenGroups, setManagerOpenGroups] = useState<Set<string>>(() => new Set(GROUPS.map(g => g.tag)))
+  const [managerOpenGroups, setManagerOpenGroups] = useState<Set<string>>(new Set())
   function toggleGroup(tag: string) {
     setManagerOpenGroups(prev => { const n = new Set(prev); if (n.has(tag)) n.delete(tag); else n.add(tag); return n })
   }
@@ -788,6 +788,17 @@ function ManagerView({
         </div>
       )}
 
+      {/* 전체 펼치기/접기 버튼 */}
+      {filtered.length > 0 && (
+        <div className="flex justify-end">
+          {GROUPS.map(g => g.tag).every(t => managerOpenGroups.has(t)) ? (
+            <button onClick={() => setManagerOpenGroups(new Set())} className="border border-slate-200 text-slate-600 rounded-lg px-3 py-1.5 text-sm hover:bg-slate-50 transition-colors">전체 접기</button>
+          ) : (
+            <button onClick={() => setManagerOpenGroups(new Set(GROUPS.map(g => g.tag)))} className="border border-slate-200 text-slate-600 rounded-lg px-3 py-1.5 text-sm hover:bg-slate-50 transition-colors">전체 펼치기</button>
+          )}
+        </div>
+      )}
+
       {/* 빈 상태 */}
       {filtered.length === 0 && (
         <div className="bg-white rounded-2xl border border-gray-100 p-10 text-center">
@@ -1176,9 +1187,9 @@ function NutritionistView({
   const [deployFailedNames, setDeployFailedNames] = useState<string[]>([])
 
   // 그룹 아코디언 상태 (탭별 독립)
-  const [correctionOpenGroups, setCorrectionOpenGroups] = useState<Set<string>>(() => new Set(GROUPS.map(g => g.tag)))
-  const [deployOpenGroups,     setDeployOpenGroups]     = useState<Set<string>>(() => new Set(GROUPS.map(g => g.tag)))
-  const [historyOpenGroups,    setHistoryOpenGroups]    = useState<Set<string>>(() => new Set(GROUPS.map(g => g.tag)))
+  const [correctionOpenGroups, setCorrectionOpenGroups] = useState<Set<string>>(new Set())
+  const [deployOpenGroups,     setDeployOpenGroups]     = useState<Set<string>>(new Set())
+  const [historyOpenGroups,    setHistoryOpenGroups]    = useState<Set<string>>(new Set())
   function makeToggle(setter: (updater: (prev: Set<string>) => Set<string>) => void) {
     return (tag: string) => setter(prev => { const n = new Set(prev); if (n.has(tag)) n.delete(tag); else n.add(tag); return n })
   }
@@ -1324,6 +1335,15 @@ function NutritionistView({
       {/* 탭1: 수정요청 */}
       {tab === 'correction' && (
         <div className="space-y-3">
+          {correctionItems.length > 0 && (
+            <div className="flex justify-end">
+              {GROUPS.map(g => g.tag).every(t => correctionOpenGroups.has(t)) ? (
+                <button onClick={() => setCorrectionOpenGroups(new Set())} className="border border-slate-200 text-slate-600 rounded-lg px-3 py-1.5 text-sm hover:bg-slate-50 transition-colors">전체 접기</button>
+              ) : (
+                <button onClick={() => setCorrectionOpenGroups(new Set(GROUPS.map(g => g.tag)))} className="border border-slate-200 text-slate-600 rounded-lg px-3 py-1.5 text-sm hover:bg-slate-50 transition-colors">전체 펼치기</button>
+              )}
+            </div>
+          )}
           {correctionItems.length === 0 && (
             <div className="bg-white rounded-2xl border border-gray-100 p-10 text-center">
               <p className="text-gray-400 text-sm">수정요청된 식단표가 없습니다. 🎉</p>
@@ -1420,6 +1440,11 @@ function NutritionistView({
                     {isDeploying ? <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin inline-block" /><span>배포 중...</span></> : `📧 선택 일괄배포 (${selectedIds.size}개)`}
                   </button>
                 )}
+                {GROUPS.map(g => g.tag).every(t => deployOpenGroups.has(t)) ? (
+                  <button onClick={() => setDeployOpenGroups(new Set())} className="border border-slate-200 text-slate-600 rounded-lg px-3 py-1.5 text-sm hover:bg-slate-50 transition-colors ml-auto">전체 접기</button>
+                ) : (
+                  <button onClick={() => setDeployOpenGroups(new Set(GROUPS.map(g => g.tag)))} className="border border-slate-200 text-slate-600 rounded-lg px-3 py-1.5 text-sm hover:bg-slate-50 transition-colors ml-auto">전체 펼치기</button>
+                )}
               </div>
               <div className="space-y-2">
                 {renderGrouped(approvedItems, deployOpenGroups, toggleDeploy, item => (
@@ -1448,6 +1473,15 @@ function NutritionistView({
       {/* 탭3: 배포완료 이력 */}
       {tab === 'history' && (
         <div className="space-y-2">
+          {historyItems.length > 0 && (
+            <div className="flex justify-end">
+              {GROUPS.map(g => g.tag).every(t => historyOpenGroups.has(t)) ? (
+                <button onClick={() => setHistoryOpenGroups(new Set())} className="border border-slate-200 text-slate-600 rounded-lg px-3 py-1.5 text-sm hover:bg-slate-50 transition-colors">전체 접기</button>
+              ) : (
+                <button onClick={() => setHistoryOpenGroups(new Set(GROUPS.map(g => g.tag)))} className="border border-slate-200 text-slate-600 rounded-lg px-3 py-1.5 text-sm hover:bg-slate-50 transition-colors">전체 펼치기</button>
+              )}
+            </div>
+          )}
           {historyItems.length === 0 && (
             <div className="bg-white rounded-2xl border border-gray-100 p-10 text-center">
               <p className="text-gray-400 text-sm">배포 완료된 이력이 없습니다.</p>
@@ -1563,7 +1597,7 @@ function DirectorView({
   const deployPct  = total > 0 ? Math.round((deployed / total) * 100) : 0
 
   // 그룹 아코디언 상태 (Director 독립)
-  const [directorOpenGroups, setDirectorOpenGroups] = useState<Set<string>>(() => new Set(GROUPS.map(g => g.tag)))
+  const [directorOpenGroups, setDirectorOpenGroups] = useState<Set<string>>(new Set())
   function toggleGroup(tag: string) {
     setDirectorOpenGroups(prev => { const n = new Set(prev); if (n.has(tag)) n.delete(tag); else n.add(tag); return n })
   }
@@ -1590,6 +1624,17 @@ function DirectorView({
           <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
             <div className="h-full bg-teal-500 transition-all duration-500" style={{ width: `${deployPct}%` }} />
           </div>
+        </div>
+      )}
+
+      {/* 전체 펼치기/접기 버튼 */}
+      {sorted.length > 0 && (
+        <div className="flex justify-end">
+          {GROUPS.map(g => g.tag).every(t => directorOpenGroups.has(t)) ? (
+            <button onClick={() => setDirectorOpenGroups(new Set())} className="border border-slate-200 text-slate-600 rounded-lg px-3 py-1.5 text-sm hover:bg-slate-50 transition-colors">전체 접기</button>
+          ) : (
+            <button onClick={() => setDirectorOpenGroups(new Set(GROUPS.map(g => g.tag)))} className="border border-slate-200 text-slate-600 rounded-lg px-3 py-1.5 text-sm hover:bg-slate-50 transition-colors">전체 펼치기</button>
+          )}
         </div>
       )}
 
