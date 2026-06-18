@@ -6,7 +6,7 @@ import { DEPLOY_ROLES } from '@/lib/roles'
 
 export const maxDuration = 60
 
-const FROM               = 'noreply@kizmeal.com'
+const FROM               = '키즈밀 급식 <meal@kizmeal.com>'
 const DEPLOY_CHUNK_SIZE     = 5
 const DEPLOY_CHUNK_DELAY_MS = 1000
 const EMAIL_REGEX           = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
