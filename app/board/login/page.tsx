@@ -107,7 +107,7 @@ export default function BoardLoginPage() {
           <h1 className="text-[28px] font-bold text-white leading-tight mb-2">
             키즈밀 포털
           </h1>
-          <p className="text-white/70 text-base mt-2">홈페이지 공지와 서비스 문의를 한 곳에서</p>
+          <p className="text-white/70 text-base mt-2">식단표 확인 및 공지 서비스</p>
 
           <div className="mt-12 pt-10 border-t border-white/20 space-y-4">
             <p className="text-white text-2xl font-bold leading-snug">&ldquo;새벽 3시의 약속&rdquo;</p>
