@@ -129,18 +129,18 @@ export async function POST(
     }
 
     if (bp?.branch_id) {
-      await supabase
+      await supabaseAdmin
         .from('branches')
         .update({ email: email.trim(), kos_id: kos_id?.trim() ?? null, auth_id: inviteData.user.id })
         .eq('id', bp.branch_id)
     } else {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: newBranch } = await (supabase.from('branches') as any)
+      const { data: newBranch } = await supabaseAdmin
+        .from('branches')
         .insert({ email: email.trim(), kos_id: kos_id?.trim() ?? null, auth_id: inviteData.user.id })
         .select('id')
         .single()
       if (newBranch?.id) {
-        await supabase
+        await supabaseAdmin
           .from('branch_profiles')
           .update({ branch_id: newBranch.id })
           .eq('id', params.id)
