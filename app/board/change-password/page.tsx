@@ -44,11 +44,9 @@ export default function ChangePasswordPage() {
       return
     }
 
-    // must_change_password = false
-    await supabase
-      .from('branches')
-      .update({ must_change_password: false })
-      .eq('auth_id', user.id)
+    try {
+      await fetch('/api/branches/complete-password-change', { method: 'POST' })
+    } catch {}
 
     // 역할에 따라 리다이렉트
     const { data: adminData } = await supabase
