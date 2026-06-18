@@ -120,7 +120,7 @@ export async function POST(
     const supabaseAdmin = getSupabaseAdmin()
     const { data: inviteData, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(
       email.trim(),
-      { redirectTo: `${siteUrl}/board/login` }
+      { redirectTo: `${siteUrl}/board/auth/callback` }
     )
 
     if (inviteError || !inviteData.user) {

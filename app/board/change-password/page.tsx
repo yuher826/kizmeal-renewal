@@ -57,7 +57,7 @@ export default function ChangePasswordPage() {
       .eq('auth_id', user.id)
       .maybeSingle()
 
-    window.location.href = adminData ? '/board/admin' : '/board/dashboard'
+    window.location.href = adminData ? '/board/admin' : '/board/customer'
   }
 
   return (
