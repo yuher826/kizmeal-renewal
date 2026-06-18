@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef, Suspense, Fragment } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { isNutritionist } from '@/lib/roles'
+import { isNutritionist, DEPLOY_ROLES } from '@/lib/roles'
 
 // ── 타입 ──────────────────────────────────────────────────────────
 type HistoryEntry = {
@@ -612,7 +612,7 @@ function ManagerView({
       </div>
 
       {/* 승인완료 탭 일괄 배포 버튼 */}
-      {tab === 'approved' && filtered.length > 0 && role === 'super_admin' && (
+      {tab === 'approved' && filtered.length > 0 && DEPLOY_ROLES.includes(role) && (
         <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-2xl px-4 py-3">
           <span className="text-sm font-semibold text-green-700">
             승인완료 {filtered.length}개 원이 배포 대기 중입니다.
@@ -866,7 +866,7 @@ function ManagerView({
                       {item.review_status === 'approved' && (
                         <div className="flex flex-col items-center gap-1">
                           <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-bold">✅ 승인완료</span>
-                          {role === 'super_admin' && (
+                          {DEPLOY_ROLES.includes(role) && (
                             <button type="button"
                               onClick={() => handleDeploy(item)}
                               disabled={isDeploying}
@@ -1016,7 +1016,7 @@ function ManagerView({
                     onClick={() => { setActiveInlineId(activeInlineId === item.id ? null : item.id); setInlineMemo(''); setInlineCategory('') }}
                     className="px-3 py-1.5 rounded-xl bg-orange-50 text-orange-700 text-xs font-semibold border border-orange-200">✏️ 재요청</button>
                 )}
-                {item.review_status === 'approved' && role === 'super_admin' && (
+                {item.review_status === 'approved' && DEPLOY_ROLES.includes(role) && (
                   <button type="button"
                     onClick={() => handleDeploy(item)}
                     disabled={isDeploying}
