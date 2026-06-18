@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import DietNotificationPanel, { type DietNotification } from '@/components/board/DietNotificationPanel'
 import BranchProfileAlert from '@/components/erp/BranchProfileAlert'
+import { UPLOAD_ROLES } from '@/lib/roles'
 
 // ── 상수 ──────────────────────────────────────────────────────────────
 const SEPARATE_CONTRACT_CODES = new Set(['로티스', '잉글리쉬파크', '잉파', 'KIS', 'KPI', '송파MB'])
@@ -110,6 +111,9 @@ function DietAutomationContent() {
   const [notifications,        setNotifications]        = useState<DietNotification[]>([])
   const [notificationsLoading, setNotificationsLoading] = useState(false)
 
+  // ── 현재 사용자 역할 ───────────────────────────────────────────────
+  const [userRole, setUserRole] = useState<string | null>(null)
+
   // ── DB 조회: 활성 계약원 수 ────────────────────────────────────────
   const fetchStats = useCallback(async () => {
     const supabase = createClient()
@@ -196,6 +200,16 @@ function DietAutomationContent() {
   useEffect(() => {
     if (genStatus === 'done') fetchBranchMenuRows()
   }, [genStatus, fetchBranchMenuRows])
+
+  useEffect(() => {
+    const supabase = createClient()
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return
+      supabase.from('admins').select('role')
+        .eq('auth_id', user.id).maybeSingle()
+        .then(({ data }) => setUserRole(data?.role ?? ''))
+    })
+  }, [])
 
   // ── PPTX 생성 (GitHub Actions 트리거) ─────────────────────────────
   async function handleGenerate() {
@@ -655,12 +669,14 @@ function DietAutomationContent() {
               <p className="text-sm font-bold text-[#1C2B1E] mb-0.5">📤 이번 달 CK 식단 업로드</p>
               <p className="text-xs text-gray-500">기준폼 엑셀 파일을 업로드하여 식단을 등록합니다</p>
             </div>
-            <Link
-              href="/board/admin/diet-automation/upload"
-              className="shrink-0 px-5 py-2.5 rounded-xl bg-[#2D6A4F] text-white text-sm font-semibold hover:bg-[#1B4332] transition-colors whitespace-nowrap"
-            >
-              ↑ 엑셀 업로드
-            </Link>
+            {userRole && UPLOAD_ROLES.includes(userRole) && (
+              <Link
+                href="/board/admin/diet-automation/upload"
+                className="shrink-0 px-5 py-2.5 rounded-xl bg-[#2D6A4F] text-white text-sm font-semibold hover:bg-[#1B4332] transition-colors whitespace-nowrap"
+              >
+                ↑ 엑셀 업로드
+              </Link>
+            )}
           </div>
 
           {/* ── 빠른 이동 링크 ──────────────────────────────────────── */}
@@ -738,14 +754,16 @@ function DietAutomationContent() {
                 </div>
 
                 {/* 생성 버튼 */}
-                <button
-                  type="button"
-                  onClick={handleGenerate}
-                  disabled={!hasMenuData || isGenerating}
-                  className="px-8 py-2.5 rounded-xl bg-[#2E7D32] text-white text-sm font-bold hover:bg-[#1B5E20] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {isGenerating ? '생성 중...' : '▶ PPTX 생성 시작'}
-                </button>
+                {userRole && UPLOAD_ROLES.includes(userRole) && (
+                  <button
+                    type="button"
+                    onClick={handleGenerate}
+                    disabled={!hasMenuData || isGenerating}
+                    className="px-8 py-2.5 rounded-xl bg-[#2E7D32] text-white text-sm font-bold hover:bg-[#1B5E20] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {isGenerating ? '생성 중...' : '▶ PPTX 생성 시작'}
+                  </button>
+                )}
               </div>
 
               {/* menu_data 없음 경고 */}
