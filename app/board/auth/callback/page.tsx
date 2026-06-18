@@ -1,79 +1,70 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 
 export default function AuthCallbackPage() {
-  const [urlInfo, setUrlInfo] = useState({ href: '', search: '', hash: '' })
-  const [logs, setLogs] = useState<string[]>([])
-
-  function addLog(msg: string) {
-    setLogs(prev => [...prev, msg])
-  }
+  const router = useRouter()
 
   useEffect(() => {
-    setUrlInfo({
-      href:   window.location.href,
-      search: window.location.search,
-      hash:   window.location.hash,
-    })
-
     const supabase = createClient()
 
-    // STEP 1
-    addLog('STEP1: code 파라미터 확인 중...')
+    // STEP 0. hash에 access_token 있을 때 (초대 이메일 implicit 방식)
+    if (window.location.hash.includes('access_token')) {
+      const hashParams = new URLSearchParams(window.location.hash.substring(1))
+      const access_token = hashParams.get('access_token')
+      const refresh_token = hashParams.get('refresh_token') || ''
+      if (access_token) {
+        supabase.auth.setSession({ access_token, refresh_token }).then(({ error }) => {
+          if (!error) router.push('/board/change-password')
+          else router.push('/board/login?error=invite_failed')
+        })
+        return
+      }
+    }
+
+    // STEP 1. PKCE code 파라미터 처리
     const code = new URLSearchParams(window.location.search).get('code')
     if (code) {
-      addLog('STEP1: code 있음 → exchangeCodeForSession 실행')
       supabase.auth.exchangeCodeForSession(code).then(({ error }) => {
-        if (error) addLog(`에러: ${error.message}`)
-        else addLog('STEP1: exchangeCodeForSession 성공')
+        if (!error) router.push('/board/change-password')
+        else router.push('/board/login?error=invite_failed')
       })
       return
     }
-    addLog('STEP1: code 없음')
 
-    // STEP 2
-    addLog('STEP2: 기존 세션 확인 중...')
+    // STEP 2. 기존 세션 체크
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        addLog('STEP2: 세션 있음 → 이동')
-      } else {
-        addLog('STEP2: 세션 없음')
-      }
+      if (session) router.push('/board/change-password')
     })
 
-    // STEP 3
-    addLog('STEP3: onAuthStateChange 대기 중...')
+    // STEP 3. hash 방식 이벤트 감지
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
-        addLog(`STEP3: 이벤트=${event}, session=${session ? '있음' : '없음'}`)
+        if ((event === 'SIGNED_IN' || event === 'PASSWORD_RECOVERY') && session) {
+          router.push('/board/change-password')
+        }
       }
     )
 
+    // STEP 4. 10초 타임아웃 fallback
+    const timeout = setTimeout(() => {
+      router.push('/board/login?error=invite_timeout')
+    }, 10000)
+
     return () => {
       subscription.unsubscribe()
+      clearTimeout(timeout)
     }
-  }, [])
+  }, [router])
 
   return (
-    <div className="min-h-screen bg-[#F6FAF6] p-6">
-      <div className="max-w-2xl mx-auto space-y-4">
-        <div className="bg-yellow-50 border border-yellow-300 rounded-xl p-4">
-          <p className="font-bold text-yellow-800 text-sm mb-2">🛠 디버그 모드</p>
-          <p className="text-xs text-yellow-700 font-mono break-all"><b>href:</b> {urlInfo.href}</p>
-          <p className="text-xs text-yellow-700 font-mono break-all"><b>search:</b> {urlInfo.search || '(없음)'}</p>
-          <p className="text-xs text-yellow-700 font-mono break-all"><b>hash:</b> {urlInfo.hash || '(없음)'}</p>
-        </div>
-
-        <div className="bg-white border border-gray-200 rounded-xl p-4">
-          <p className="font-bold text-gray-700 text-sm mb-2">진행 로그</p>
-          <div className="space-y-1">
-            {logs.map((log, i) => (
-              <p key={i} className="text-xs font-mono text-gray-600">{log}</p>
-            ))}
-          </div>
-        </div>
+    <div className="min-h-screen bg-[#F6FAF6] flex items-center justify-center px-4">
+      <div className="text-center space-y-4">
+        <div className="w-14 h-14 bg-gradient-to-br from-[#2D6A4F] to-[#52B788] rounded-2xl flex items-center justify-center text-white font-bold text-xl mx-auto">K</div>
+        <p className="text-[#1C2B1E] font-medium">계정을 확인하는 중입니다...</p>
+        <p className="text-gray-400 text-sm">잠시만 기다려주세요.</p>
       </div>
     </div>
   )
