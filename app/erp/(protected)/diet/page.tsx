@@ -227,6 +227,8 @@ function DietAutomationContent() {
 
   useEffect(() => { fetchMenuRow() }, [fetchMenuRow])
   useEffect(() => { fetchStats()   }, [fetchStats])
+  // 마운트 및 연/월 변경 시 DB에서 브랜치 결과 로드 (페이지 재방문 복원)
+  useEffect(() => { fetchBranchMenuRows() }, [fetchBranchMenuRows])
 
   // done 상태가 되면 브랜치 결과 rows 로드
   useEffect(() => {
