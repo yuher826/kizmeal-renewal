@@ -1397,7 +1397,7 @@ function DirectorView({
                     <td className="text-center px-3 py-3">
                       {item.review_status === 'deployed' && item.pptx_url ? (
                         <a
-                          href={`/api/pptx/download-proxy?url=${encodeURIComponent(item.pptx_url)}`}
+                          href={`/api/download?url=${encodeURIComponent(item.pptx_url)}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="px-2.5 py-1.5 rounded-lg bg-[#E3F2FD] text-[#1565C0] text-xs font-bold hover:bg-[#BBDEFB] transition-colors"
