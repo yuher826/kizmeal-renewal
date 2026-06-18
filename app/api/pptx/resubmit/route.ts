@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
   // Supabase Storage 업로드 (덮어쓰기)
   const arrayBuffer = await file.arrayBuffer()
   const { error: uploadError } = await db.storage
-    .from('pptx-files')
+    .from('diet-files')
     .upload(storagePath, arrayBuffer, {
       contentType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
       upsert: true,
@@ -83,7 +83,7 @@ export async function POST(req: NextRequest) {
   }
 
   // 공개 URL 생성
-  const { data: urlData } = db.storage.from('pptx-files').getPublicUrl(storagePath)
+  const { data: urlData } = db.storage.from('diet-files').getPublicUrl(storagePath)
   const newPptxUrl = urlData.publicUrl
 
   const now = new Date().toISOString()
