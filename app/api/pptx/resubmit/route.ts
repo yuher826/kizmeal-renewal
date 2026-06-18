@@ -44,9 +44,8 @@ export async function POST(req: NextRequest) {
   // 기존 diet_review_item 조회 (파일명 및 현재 상태 확인)
   const { data: reviewItem } = await db
     .from('diet_review_items')
-    .select('id, review_status, pptx_url, memo_history, weekly_menu_id')
-    .eq('weekly_menu_id', weeklyMenuId)
-    .eq('branch_id', branchId)
+    .select('id, review_status, pptx_url, memo_history, weekly_menu_id, branch_id')
+    .eq('id', weeklyMenuId)
     .maybeSingle()
 
   if (!reviewItem) {
