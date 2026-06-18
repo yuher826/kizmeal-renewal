@@ -34,6 +34,8 @@ type ReviewItem = {
   deployed_by:     string | null
   deployed_at:     string | null
   resubmitted_at:  string | null
+  sort_order:      number | null
+  group_tag:       string | null
 }
 
 type Stats = {
@@ -1330,10 +1332,9 @@ function DirectorView({
   month:  number
 }) {
   const sorted = [...items].sort((a, b) => {
-    const priority: Record<string, number> = {
-      generation_complete: 0, correction_request: 1, resubmitted: 2, approved: 3, deployed: 4,
-    }
-    return (priority[a.review_status] ?? 5) - (priority[b.review_status] ?? 5)
+    const ao = a.sort_order ?? 9999
+    const bo = b.sort_order ?? 9999
+    return ao - bo
   })
 
   const STAT_CARDS = [
@@ -1387,9 +1388,14 @@ function DirectorView({
             <tbody>
               {sorted.map((item, idx) => {
                 const lastUpdate = item.deployed_at ?? item.approved_at ?? item.reviewed_at ?? null
+                const pptxMatch = item.pptx_url?.match(/_(\d{4})(\d{2})\.pptx/)
+                const yyyymm = pptxMatch ? `${pptxMatch[1]}년 ${pptxMatch[2]}월` : ''
                 return (
-                  <tr key={item.id} className={`border-b border-gray-50 ${idx % 2 === 1 ? 'bg-gray-50/40' : ''}`}>
-                    <td className="px-4 py-3 font-medium text-[#1C2B1E]">{item.branch_name}</td>
+                  <tr key={item.id} className={`border-b border-gray-50 hover:bg-emerald-50/30 cursor-pointer transition-colors ${idx % 2 === 1 ? 'bg-gray-50/40' : ''}`}>
+                    <td className="px-4 py-3 font-medium text-[#1C2B1E]">
+                      <span className="text-gray-400 text-xs mr-1.5">{item.sort_order ?? '—'}</span>
+                      {item.branch_name}
+                    </td>
                     <td className="text-center px-3 py-3"><StatusBadge status={item.review_status} /></td>
                     <td className="text-center px-3 py-3 text-xs text-gray-400">
                       {lastUpdate ? formatKST(lastUpdate) : '-'}
@@ -1397,7 +1403,7 @@ function DirectorView({
                     <td className="text-center px-3 py-3">
                       {item.review_status === 'deployed' && item.pptx_url ? (
                         <a
-                          href={`/api/download?url=${encodeURIComponent(item.pptx_url)}`}
+                          href={`/api/download?url=${encodeURIComponent(item.pptx_url)}&filename=${encodeURIComponent(`${item.branch_name}_${yyyymm}.pptx`)}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="px-2.5 py-1.5 rounded-lg bg-[#E3F2FD] text-[#1565C0] text-xs font-bold hover:bg-[#BBDEFB] transition-colors"

@@ -33,6 +33,8 @@ type ReviewItemRow = {
   deployed_by:     string | null
   deployed_at:     string | null
   resubmitted_at:  string | null
+  sort_order:      number | null
+  group_tag:       string | null
 }
 
 type HistoryEntry = {
@@ -134,7 +136,7 @@ export async function GET(req: NextRequest) {
 
   let itemsQuery = db
     .from('diet_review_items')
-    .select('*')
+    .select('*, branch_profiles(sort_order, group_tag)')
     .in('weekly_menu_id', ids)
     .order('branch_name')
 
@@ -146,7 +148,12 @@ export async function GET(req: NextRequest) {
   }
 
   const { data: items } = await itemsQuery
-  const allItems = (items ?? []) as ReviewItemRow[]
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const allItems: ReviewItemRow[] = (items ?? []).map((item: any) => ({
+    ...item,
+    sort_order: item.branch_profiles?.sort_order ?? null,
+    group_tag:  item.branch_profiles?.group_tag  ?? null,
+  }))
 
   // 4. 통계
   const stats = {
