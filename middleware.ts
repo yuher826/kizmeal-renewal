@@ -98,7 +98,7 @@ export async function middleware(request: NextRequest) {
       .maybeSingle()
 
     const url = request.nextUrl.clone()
-    url.pathname = adminData ? '/board/admin' : '/board/dashboard'
+    url.pathname = adminData ? '/board/admin' : '/board/customer'
     return NextResponse.redirect(url)
   }
 
@@ -111,7 +111,7 @@ export async function middleware(request: NextRequest) {
 
     if (!adminData) {
       const url = request.nextUrl.clone()
-      url.pathname = '/board/dashboard'
+      url.pathname = '/board/customer'
       return NextResponse.redirect(url)
     }
   }

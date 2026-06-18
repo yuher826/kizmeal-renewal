@@ -26,6 +26,8 @@ export default function BoardLoginPage() {
       const uid = data.session.user.id
       const { data: adminRow } = await supabase.from('admins').select('id').eq('auth_id', uid).maybeSingle()
       if (adminRow) { router.replace('/board/admin'); return }
+      const { data: branchRow } = await supabase.from('branches').select('id').eq('auth_id', uid).maybeSingle()
+      if (branchRow) { router.replace('/board/customer'); return }
       await supabase.auth.signOut()
     })
   }, [router])
@@ -73,12 +75,12 @@ export default function BoardLoginPage() {
       const { data: branchData } = await supabase.from('branches').select('id').eq('auth_id', data.user.id).maybeSingle()
       if (branchData) {
         await supabase.from('branches').update({ last_login_at: new Date().toISOString() }).eq('id', branchData.id)
-        router.push('/board/dashboard'); router.refresh(); return
+        router.push('/board/customer'); router.refresh(); return
       }
 
       const { data: memberData } = await supabase.from('branch_members').select('id, role').eq('auth_id', data.user.id).maybeSingle()
       if (memberData) {
-        router.push(memberData.role === 'nutritionist' ? '/nutritionist/dashboard' : '/board/dashboard')
+        router.push(memberData.role === 'nutritionist' ? '/nutritionist/dashboard' : '/board/customer')
         router.refresh()
         return
       }
@@ -103,11 +105,8 @@ export default function BoardLoginPage() {
             K
           </div>
           <h1 className="text-[28px] font-bold text-white leading-tight mb-2">
-            키즈밀 소통 관리시스템
+            키즈밀 포털
           </h1>
-          <span className="inline-block bg-emerald-100 text-emerald-700 text-xs font-medium px-2.5 py-1 rounded-full mt-1">
-            홈페이지 관리자 모드
-          </span>
           <p className="text-white/70 text-base mt-2">홈페이지 공지와 서비스 문의를 한 곳에서</p>
 
           <div className="mt-12 pt-10 border-t border-white/20 space-y-4">
