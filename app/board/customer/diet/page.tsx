@@ -70,19 +70,25 @@ export default function CustomerDietPage() {
       if (!branchId) { setLoading(false); return }
 
       // branch_profiles에서 file_format 조회
-      const { data: profile } = await supabase
+      const { data: profileData } = await supabase
         .from('branch_profiles')
-        .select('file_format')
+        .select('id, file_format, distribution_email')
         .eq('branch_id', branchId)
         .maybeSingle()
-      if (profile?.file_format) setFileFormat(profile.file_format as FileFormat)
+      if (profileData?.file_format) setFileFormat(profileData.file_format as FileFormat)
+      const profileBranchId: string | null = profileData?.id ?? null
 
       // weekly_menus 조회 (최신 6개월, 배포된 것만)
+      if (!profileBranchId) {
+        setMenus([])
+        setLoading(false)
+        return
+      }
       const { data: rows } = await supabase
         .from('weekly_menus')
         .select('id, year, month, pptx_url, pdf_url, jpg_url, status, week_num')
-        .eq('branch_id', branchId)
-        .in('status', ['generated', 'review_requested', 'approved', 'deployed'])
+        .eq('branch_id', profileBranchId)
+        .in('status', ['generation_complete', 'correction_request', 'resubmitted', 'approved', 'deployed'])
         .order('year', { ascending: false })
         .order('month', { ascending: false })
         .order('week_num', { ascending: true, nullsFirst: true })
