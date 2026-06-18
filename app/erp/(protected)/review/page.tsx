@@ -824,7 +824,7 @@ function ManagerView({
                     </td>
                     <td className="text-center px-3 py-3">
                       {item.pptx_url
-                        ? <a href={item.pptx_url} target="_blank" rel="noopener noreferrer" className="px-2.5 py-1.5 rounded-lg bg-[#E3F2FD] text-[#1565C0] text-xs font-bold hover:bg-[#BBDEFB]">PPTX</a>
+                        ? <a href={`/api/download?url=${encodeURIComponent(item.pptx_url ?? '')}&filename=${encodeURIComponent(`${item.branch_name}_${year}${String(month).padStart(2, '0')}.pptx`)}`} className="px-2.5 py-1.5 rounded-lg bg-[#E3F2FD] text-[#1565C0] text-xs font-bold hover:bg-[#BBDEFB]">PPTX</a>
                         : <span className="text-gray-300 text-xs">-</span>}
                     </td>
                     <td className="text-center px-3 py-3"><StatusBadge status={item.review_status} /></td>
@@ -995,7 +995,7 @@ function ManagerView({
               )}
               <div className="flex gap-2 flex-wrap">
                 {item.pptx_url && (
-                  <a href={item.pptx_url} target="_blank" rel="noopener noreferrer"
+                  <a href={`/api/download?url=${encodeURIComponent(item.pptx_url ?? '')}&filename=${encodeURIComponent(`${item.branch_name}_${year}${String(month).padStart(2, '0')}.pptx`)}`}
                     className="px-3 py-1.5 rounded-xl bg-[#E3F2FD] text-[#1565C0] text-xs font-bold">PPTX</a>
                 )}
                 {['generation_complete', 'resubmitted'].includes(item.review_status) && (
@@ -1245,7 +1245,7 @@ function NutritionistView({
                 )}
                 <div className="flex gap-2 flex-wrap">
                   {item.pptx_url && (
-                    <a href={item.pptx_url} target="_blank" rel="noopener noreferrer"
+                    <a href={`/api/download?url=${encodeURIComponent(item.pptx_url ?? '')}&filename=${encodeURIComponent(`${item.branch_name}_${year}${String(month).padStart(2, '0')}.pptx`)}`}
                       className="px-3 py-1.5 rounded-xl bg-[#E3F2FD] text-[#1565C0] text-xs font-bold">
                       📊 PPTX 다운로드
                     </a>
@@ -1352,7 +1352,7 @@ function NutritionistView({
                 {item.deployed_at && <p className="text-xs text-gray-400">{formatKST(item.deployed_at)}</p>}
               </div>
               {item.pptx_url && (
-                <a href={item.pptx_url} target="_blank" rel="noopener noreferrer"
+                <a href={`/api/download?url=${encodeURIComponent(item.pptx_url ?? '')}&filename=${encodeURIComponent(`${item.branch_name}_${year}${String(month).padStart(2, '0')}.pptx`)}`}
                   className="px-3 py-1.5 rounded-xl bg-[#E3F2FD] text-[#1565C0] text-xs font-bold flex-shrink-0">
                   PPTX
                 </a>
