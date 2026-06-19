@@ -12,18 +12,26 @@ export interface DietNotification {
 }
 
 const TYPE_META: Record<string, { icon: string; color: string }> = {
-  input_complete:        { icon: '✅', color: '#2196F3' },
-  review_request:        { icon: '👀', color: '#FF9800' },
-  correction_request:    { icon: '✏️',  color: '#F44336' },
-  approve_complete:      { icon: '✔️',  color: '#4CAF50' },
-  deploy_complete:       { icon: '🚀', color: '#2D6A4F' },
-  email_bounce:          { icon: '⚠️', color: '#F44336' },
-  email_resent:          { icon: '📧', color: '#607D8B' },
-  pptx_failed:           { icon: '❌', color: '#F44336' },
-  pptx_retry_success:    { icon: '🔄', color: '#9C27B0' },
-  receipt_confirmed:     { icon: '📬', color: '#00BCD4' },
-  urgent_change_request: { icon: '🔴', color: '#F44336' },
-  content_error_report:  { icon: '🐛', color: '#FF5722' },
+  // ── 현재 코드에서 실제 INSERT하는 신규 타입 ──────────────────────
+  review_request:              { icon: '👀', color: '#FF9800' },
+  generation_complete:         { icon: '⚙️', color: '#9C27B0' },
+  correction_to_nutritionist:  { icon: '✏️', color: '#F44336' },
+  approved_to_nutritionist:    { icon: '✔️', color: '#4CAF50' },
+  resubmitted_to_manager:      { icon: '📤', color: '#2196F3' },
+  deployed_complete:           { icon: '🚀', color: '#2D6A4F' },
+  emergency_deploy:            { icon: '🚨', color: '#D32F2F' },
+  // ── 하위 호환 (구버전 타입 — DB에 기존 데이터 존재 가능) ──────────
+  input_complete:              { icon: '✅', color: '#2196F3' },
+  correction_request:          { icon: '✏️', color: '#F44336' },
+  approve_complete:            { icon: '✔️', color: '#4CAF50' },
+  deploy_complete:             { icon: '🚀', color: '#2D6A4F' },
+  email_bounce:                { icon: '⚠️', color: '#F44336' },
+  email_resent:                { icon: '📧', color: '#607D8B' },
+  pptx_failed:                 { icon: '❌', color: '#F44336' },
+  pptx_retry_success:          { icon: '🔄', color: '#9C27B0' },
+  receipt_confirmed:           { icon: '📬', color: '#00BCD4' },
+  urgent_change_request:       { icon: '🔴', color: '#F44336' },
+  content_error_report:        { icon: '🐛', color: '#FF5722' },
 }
 
 function timeAgo(iso: string): string {
