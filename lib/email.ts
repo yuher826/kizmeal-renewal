@@ -164,6 +164,69 @@ export async function sendNewApplicationAlert(adminEmail: string, parentName: st
   })
 }
 
+// ── 식단 검토 영양사 알림 ─────────────────────────────────────────
+const NUTRITIONIST_EMAIL = 'sy226@kizmeal.com'
+
+export async function sendDietApprovalNotification({
+  approvedCount,
+  resubmittedCount,
+  month,
+  tabType,
+  approvedBranchNames,
+}: {
+  approvedCount:       number
+  resubmittedCount:    number
+  month:               string
+  tabType:             'standard' | 'special'
+  approvedBranchNames: string[]
+}) {
+  const tabLabel       = tabType === 'standard' ? '표준' : '특이'
+  const to             = resolveRecipient(NUTRITIONIST_EMAIL)
+  const subject        = `[키즈밀] ${month} 식단 검토 완료 — ${tabLabel} 업장 ${approvedCount}건 배포 요청`
+  const branchListHtml = approvedBranchNames
+    .map(n => `<li style="margin:0 0 4px;color:#1C2B1E;font-size:14px;">• ${n}</li>`)
+    .join('')
+  const resubmittedNote = resubmittedCount > 0
+    ? `<span style="color:#1565C0;font-size:12px;margin-left:4px;">(재제출 포함 ${resubmittedCount}건)</span>`
+    : ''
+  const specialNote = tabType === 'special'
+    ? `<p style="color:#92400E;font-size:13px;margin:12px 0 0;font-weight:600;">각 업장 파일 형식 확인 후 배포 진행 요망</p>`
+    : ''
+
+  return getResend().emails.send({
+    from: FROM_EMAIL,
+    to,
+    subject,
+    html: `
+<div style="font-family:'Apple SD Gothic Neo',sans-serif;max-width:480px;margin:0 auto;background:#F6FAF6;padding:24px 16px;">
+  <div style="background:white;border-radius:24px;padding:40px 32px;">
+    <div style="text-align:center;margin-bottom:20px;">
+      <div style="width:64px;height:64px;background:linear-gradient(135deg,#2D6A4F,#52B788);border-radius:18px;display:inline-flex;align-items:center;justify-content:center;">
+        <span style="color:white;font-size:28px;font-weight:bold;">K</span>
+      </div>
+    </div>
+    <h1 style="color:#1C2B1E;font-size:20px;font-weight:bold;margin:0 0 8px;text-align:center;">
+      ${month} 식단 검토 완료 ✅
+    </h1>
+    <p style="color:#6B7280;font-size:14px;text-align:center;margin:0 0 16px;">
+      ${tabLabel} 업장 <strong>${approvedCount}건</strong> 배포 요청${resubmittedNote}
+    </p>
+    <div style="background:#F0F7F4;border-radius:12px;padding:16px;margin-bottom:24px;">
+      <p style="font-size:13px;font-weight:600;color:#2D6A4F;margin:0 0 8px;">승인된 업장 목록</p>
+      <ul style="margin:0;padding:0;list-style:none;">${branchListHtml}</ul>
+      ${specialNote}
+    </div>
+    <div style="text-align:center;">
+      <a href="${BASE_URL}/erp/review" style="display:inline-block;background:#2D6A4F;color:white;text-decoration:none;font-size:15px;font-weight:bold;padding:14px 40px;border-radius:14px;">
+        ERP 배포 페이지 바로가기
+      </a>
+    </div>
+  </div>
+  <p style="text-align:center;color:#9CA3AF;font-size:11px;margin-top:16px;">키즈밀 · 건강한 급식 솔루션</p>
+</div>`,
+  })
+}
+
 // ── CS 알림 함수 ─────────────────────────────────────────────────
 
 /** 새 문의 접수 알림 — 지점이 메시지 보냈을 때 관리자(권팀장)에게 발송 */

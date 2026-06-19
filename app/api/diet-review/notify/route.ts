@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase-server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
+import { sendDietApprovalNotification } from '@/lib/email'
 
 export async function POST(req: NextRequest) {
   const supabase = createClient()
@@ -16,12 +17,16 @@ export async function POST(req: NextRequest) {
   if (!adminRow) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   let body: {
-    type:            string
-    year?:           number
-    month?:          number
-    weekly_menu_id?: string
-    branch_names?:   string[]
-    count?:          number
+    type:                 string
+    year?:                number
+    month?:               number
+    weekly_menu_id?:      string
+    branch_names?:        string[]
+    count?:               number
+    approvedCount?:       number
+    resubmittedCount?:    number
+    tabType?:             'standard' | 'special'
+    approvedBranchNames?: string[]
   }
   try { body = await req.json() } catch {
     return NextResponse.json({ error: '요청 형식 오류' }, { status: 400 })
@@ -31,7 +36,8 @@ export async function POST(req: NextRequest) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
   const db = serviceKey ? createAdminClient(supabaseUrl, serviceKey) : supabase
 
-  const { type, year, month, weekly_menu_id, branch_names, count } = body
+  const { type, year, month, weekly_menu_id, branch_names, count,
+          approvedCount, resubmittedCount, tabType, approvedBranchNames } = body
   const period = (year && month) ? `${year}년 ${month}월 ` : ''
 
   switch (type) {
@@ -128,6 +134,23 @@ export async function POST(req: NextRequest) {
       }))
       if (notifications.length > 0) {
         await db.from('diet_notifications').insert(notifications)
+      }
+      break
+    }
+
+    case 'diet_approval_email': {
+      // 이메일 발송 실패가 승인을 차단하면 안 됨 — try/catch 분리
+      try {
+        const monthLabel = (year && month) ? `${year}년 ${month}월` : '해당 월'
+        await sendDietApprovalNotification({
+          approvedCount:       approvedCount ?? 0,
+          resubmittedCount:    resubmittedCount ?? 0,
+          month:               monthLabel,
+          tabType:             tabType ?? 'standard',
+          approvedBranchNames: approvedBranchNames ?? [],
+        })
+      } catch {
+        // 발송 실패 무시 — 승인 결과에 영향 없음
       }
       break
     }

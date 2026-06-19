@@ -96,6 +96,14 @@ function getSpecialBadge(item: ReviewItem): string | null {
   return null
 }
 
+function getSpecialNote(item: ReviewItem): string | null {
+  if (item.fileFormat === 'PDF+JPG') return '알레르기 표기본 + 무표기본 2개 파일 모두 확인 필요'
+  if (item.branch_full_name === '목동poly') return '슬라이드 수가 많습니다. 전체 페이지 꼼꼼히 확인 필요'
+  if (item.fileFormat === 'JPG') return 'JPG 형식으로 출력됩니다'
+  if (item.fileFormat === 'PDF') return 'PDF 형식으로 출력됩니다'
+  return null
+}
+
 // ── 유틸 ──────────────────────────────────────────────────────────
 function formatKST(iso: string) {
   try {
@@ -308,6 +316,9 @@ function ManagerView({
   const [expandedHistory, setExpandedHistory] = useState<Set<string>>(new Set())
   const [submitting,      setSubmitting]     = useState(false)
   const [showBatchConfirm,  setShowBatchConfirm]  = useState(false)
+  const [showTabBatchConfirm, setShowTabBatchConfirm] = useState(false)
+  type TabBatchData = { ids: string[]; gcCount: number; rsCount: number; branchNames: string[] }
+  const [tabBatchData, setTabBatchData] = useState<TabBatchData | null>(null)
   const [emergencyItem,     setEmergencyItem]     = useState<ReviewItem | null>(null)
   const [emergencyInput,    setEmergencyInput]    = useState('')
   const [emergencyLoading,  setEmergencyLoading]  = useState(false)
@@ -321,6 +332,20 @@ function ManagerView({
   // 이원화 검토 탭 (표준/특이 업장)
   const [activeReviewTab, setActiveReviewTab] = useState<'standard' | 'special'>('standard')
   useEffect(() => { setSelectedIds(new Set()) }, [activeReviewTab])
+  // 탭 전환 또는 데이터 첫 로드 시 검토대기/재제출 그룹만 자동 펼침
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (items.length === 0) return
+    const tabItems = items.filter(i => (i.branchReviewType ?? 'standard') === activeReviewTab)
+    const autoOpen = new Set<string>()
+    GROUPS.forEach(g => {
+      if (tabItems.some(
+        i => normalizeGroup(i.group_tag) === g.tag &&
+             (i.review_status === 'generation_complete' || i.review_status === 'resubmitted')
+      )) autoOpen.add(g.tag)
+    })
+    setManagerOpenGroups(autoOpen)
+  }, [activeReviewTab, items.length]) // items.length: 최초 로드 시에만 재실행
   function toggleGroup(tag: string) {
     setManagerOpenGroups(prev => { const n = new Set(prev); if (n.has(tag)) n.delete(tag); else n.add(tag); return n })
   }
@@ -336,9 +361,21 @@ function ManagerView({
   // 이원화 검토 탭 기준 필터링
   const standardCount      = items.filter(i => (i.branchReviewType ?? 'standard') === 'standard').length
   const specialCount       = items.filter(i => (i.branchReviewType ?? 'standard') === 'special').length
+  // 탭별 검토대기(gen_complete + resubmitted) 카운트 — 탭 버튼에 표시
+  const standardPendingCount = items.filter(i =>
+    (i.branchReviewType ?? 'standard') === 'standard' &&
+    (i.review_status === 'generation_complete' || i.review_status === 'resubmitted')
+  ).length
+  const specialPendingCount = items.filter(i =>
+    (i.branchReviewType ?? 'standard') === 'special' &&
+    (i.review_status === 'generation_complete' || i.review_status === 'resubmitted')
+  ).length
   const reviewTabItems     = items.filter(i => (i.branchReviewType ?? 'standard') === activeReviewTab)
+  // 재제출 항목 (상단 강조 섹션용)
+  const resubmittedTabItems = reviewTabItems.filter(i => i.review_status === 'resubmitted')
+  // pptx_url null 업장 제외한 실제 승인 가능 카운트
   const tabApprovableCount = reviewTabItems.filter(
-    i => i.review_status === 'generation_complete' || i.review_status === 'resubmitted'
+    i => (i.review_status === 'generation_complete' || i.review_status === 'resubmitted') && i.pptx_url !== null
   ).length
   const tabCount: Record<ManagerTab, number> = {
     all:                 reviewTabItems.length,
@@ -411,7 +448,9 @@ function ManagerView({
   async function handleBatchApprove() {
     setShowBatchConfirm(false)
     setSubmitting(true)
-    const ids = Array.from(selectedIds)
+    // pptx_url null 업장 제외
+    const ids = Array.from(selectedIds).filter(id => items.find(i => i.id === id)?.pptx_url !== null)
+    const branchNames = ids.map(id => items.find(i => i.id === id)?.branch_full_name ?? items.find(i => i.id === id)?.branch_name ?? '')
     const prevMap = new Map(ids.map(id => [id, items.find(i => i.id === id)?.review_status]))
     ids.forEach(id => patchItem(id, { review_status: 'approved' }))
     setSelectedIds(new Set())
@@ -422,11 +461,19 @@ function ManagerView({
       })
       const data = await res.json()
       if (data.success) {
+        const finalCount = data.updated?.length ?? ids.length
         fetch('/api/diet-review/notify', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ type: 'approved_to_nutritionist' }),
+          body: JSON.stringify({
+            type:                'diet_approval_email',
+            year, month,
+            approvedCount:       finalCount,
+            resubmittedCount:    0,
+            tabType:             activeReviewTab,
+            approvedBranchNames: branchNames,
+          }),
         }).catch(() => {})
-        showToast(`${data.updated?.length ?? ids.length}개 원 승인 완료`, 'success')
+        showToast(`✅ ${finalCount}개 업장 승인 완료 · 배서영 영양사에게 배포 알림이 발송됐습니다.`, 'success')
       } else {
         ids.forEach(id => { const p = prevMap.get(id); if (p) patchItem(id, { review_status: p as ReviewItem['review_status'] }) })
         setSelectedIds(new Set(ids))
@@ -633,45 +680,59 @@ function ManagerView({
     }
   }
 
-  // 현재 이원화 탭의 승인 가능 항목 전체 일괄 승인
-  async function handleTabBatchApprove() {
-    const approvableIds = reviewTabItems
-      .filter(i => i.review_status === 'generation_complete' || i.review_status === 'resubmitted')
-      .map(i => i.id)
-    if (!approvableIds.length) return
-    if (!confirm(`${approvableIds.length}개 업장을 일괄 승인합니다.`)) return
-    setSubmitting(true)
-    const prevMap = new Map(
-      approvableIds.map(id => [id, reviewTabItems.find(i => i.id === id)?.review_status])
+  // 현재 이원화 탭의 승인 가능 항목 전체 일괄 승인 — 확인 모달 표시
+  function handleTabBatchApprove() {
+    const approvable = reviewTabItems.filter(
+      i => (i.review_status === 'generation_complete' || i.review_status === 'resubmitted') && i.pptx_url !== null
     )
-    approvableIds.forEach(id => patchItem(id, { review_status: 'approved' }))
+    if (!approvable.length) return
+    setTabBatchData({
+      ids:         approvable.map(i => i.id),
+      gcCount:     approvable.filter(i => i.review_status === 'generation_complete').length,
+      rsCount:     approvable.filter(i => i.review_status === 'resubmitted').length,
+      branchNames: approvable.map(i => i.branch_full_name ?? i.branch_name),
+    })
+    setShowTabBatchConfirm(true)
+  }
+
+  // 확인 모달 승인 후 실제 실행
+  async function executeTabBatchApprove() {
+    if (!tabBatchData) return
+    setShowTabBatchConfirm(false)
+    setSubmitting(true)
+    const { ids, rsCount, branchNames } = tabBatchData
+    const prevMap = new Map(ids.map(id => [id, reviewTabItems.find(i => i.id === id)?.review_status]))
+    ids.forEach(id => patchItem(id, { review_status: 'approved' }))
     try {
       const res  = await fetch('/api/diet-review', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'approved', ids: approvableIds }),
+        body: JSON.stringify({ action: 'approved', ids }),
       })
       const data = await res.json()
       if (data.success) {
+        const finalCount = data.updated?.length ?? ids.length
         fetch('/api/diet-review/notify', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ type: 'approved_to_nutritionist' }),
+          body: JSON.stringify({
+            type:                'diet_approval_email',
+            year, month,
+            approvedCount:       finalCount,
+            resubmittedCount:    rsCount,
+            tabType:             activeReviewTab,
+            approvedBranchNames: branchNames,
+          }),
         }).catch(() => {})
-        showToast(`${data.updated?.length ?? approvableIds.length}개 원 승인 완료`, 'success')
+        showToast(`✅ ${finalCount}개 업장 승인 완료 · 배서영 영양사에게 배포 알림이 발송됐습니다.`, 'success')
       } else {
-        approvableIds.forEach(id => {
-          const p = prevMap.get(id)
-          if (p) patchItem(id, { review_status: p as ReviewItem['review_status'] })
-        })
+        ids.forEach(id => { const p = prevMap.get(id); if (p) patchItem(id, { review_status: p as ReviewItem['review_status'] }) })
         showToast(`오류: ${data.error}`, 'error')
       }
     } catch {
-      approvableIds.forEach(id => {
-        const p = prevMap.get(id)
-        if (p) patchItem(id, { review_status: p as ReviewItem['review_status'] })
-      })
+      ids.forEach(id => { const p = prevMap.get(id); if (p) patchItem(id, { review_status: p as ReviewItem['review_status'] }) })
       showToast('네트워크 오류', 'error')
     } finally {
       setSubmitting(false)
+      setTabBatchData(null)
     }
   }
 
@@ -696,7 +757,12 @@ function ManagerView({
               : 'bg-white text-gray-600 border border-gray-200 hover:border-[#2D6A4F] hover:text-[#2D6A4F]'
           }`}
         >
-          표준 업장 {standardCount}건
+          표준 업장 {standardCount}
+          {standardPendingCount > 0 && (
+            <span className={`ml-1.5 text-xs ${activeReviewTab === 'standard' ? 'text-white/80' : 'text-gray-400'}`}>
+              · 검토대기 {standardPendingCount}건
+            </span>
+          )}
         </button>
         <button
           type="button"
@@ -707,7 +773,12 @@ function ManagerView({
               : 'bg-white text-amber-700 border border-amber-200 hover:border-amber-400 hover:bg-amber-50'
           }`}
         >
-          특이 업장 {specialCount}건
+          특이 업장 {specialCount}
+          {specialPendingCount > 0 && (
+            <span className={`ml-1.5 text-xs ${activeReviewTab === 'special' ? 'text-white/80' : 'text-amber-500'}`}>
+              · 검토대기 {specialPendingCount}건
+            </span>
+          )}
         </button>
         {tabApprovableCount > 0 && (
           <button
@@ -738,6 +809,13 @@ function ManagerView({
           </button>
         ))}
       </div>
+
+      {/* 특이 업장 탭 amber 주의 배너 */}
+      {activeReviewTab === 'special' && (
+        <div className="flex items-center gap-2 px-4 py-3 bg-amber-50 border border-amber-300 rounded-xl text-amber-800 text-sm font-semibold">
+          ⚠️ 아래 업장은 파일 형식 또는 검토 방식이 달라 각별한 확인이 필요합니다.
+        </div>
+      )}
 
       {/* 승인완료 탭 일괄 배포 버튼 */}
       {tab === 'approved' && filtered.length > 0 && DEPLOY_ROLES.includes(role) && (
@@ -782,9 +860,13 @@ function ManagerView({
       {showBatchConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
           <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full space-y-4">
-            <p className="text-base font-bold text-[#1C2B1E] text-center leading-relaxed">
-              선택한 {selectedIds.size}개 원을<br />승인하시겠습니까?
-            </p>
+            <div className="space-y-2 text-center">
+              <p className="text-base font-bold text-[#1C2B1E] leading-relaxed">
+                선택한 {selectedIds.size}개 원을 승인합니다.
+              </p>
+              <p className="text-sm text-gray-600">PPTX를 모두 확인하셨나요?</p>
+              <p className="text-xs text-gray-400">승인 후 배서영 영양사에게 배포 알림이 자동 발송됩니다.</p>
+            </div>
             <div className="flex gap-3">
               <button type="button" onClick={() => setShowBatchConfirm(false)}
                 className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold text-gray-600 hover:bg-gray-50 transition-colors">
@@ -793,6 +875,51 @@ function ManagerView({
               <button type="button" onClick={handleBatchApprove}
                 className="flex-1 py-2.5 rounded-xl bg-[#2E7D32] text-white text-sm font-semibold hover:bg-[#1B5E20] transition-colors">
                 승인하기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 현재 탭 전체 승인 확인 모달 */}
+      {showTabBatchConfirm && tabBatchData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full space-y-4">
+            {activeReviewTab === 'standard' ? (
+              <div className="space-y-2 text-center">
+                <p className="text-base font-bold text-[#1C2B1E] leading-relaxed">
+                  표준 업장 {tabBatchData.ids.length}개를 일괄 승인합니다.
+                </p>
+                <p className="text-sm text-gray-500">
+                  (검토대기 {tabBatchData.gcCount}건 + 재제출 {tabBatchData.rsCount}건)
+                </p>
+                <p className="text-sm text-gray-600">PPTX를 모두 확인하셨나요?</p>
+                <p className="text-xs text-gray-400">승인 후 배서영 영양사에게 배포 알림이 자동 발송됩니다.</p>
+              </div>
+            ) : (
+              <div className="space-y-2 text-center">
+                <p className="text-base font-bold text-amber-700 leading-relaxed">
+                  ⚠️ 특이 업장 {tabBatchData.ids.length}개를 일괄 승인합니다.
+                </p>
+                <p className="text-sm text-gray-600 leading-relaxed">
+                  엘란(2버전), 목동poly(슬라이드 다수) 등 추가 확인이 필요한 업장입니다.
+                </p>
+                <p className="text-sm text-gray-600">각 업장 PPTX를 모두 확인하셨나요?</p>
+                <p className="text-xs text-gray-400">승인 후 배서영 영양사에게 배포 알림이 발송됩니다.</p>
+              </div>
+            )}
+            <div className="flex gap-3">
+              <button type="button" onClick={() => setShowTabBatchConfirm(false)}
+                className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold text-gray-600 hover:bg-gray-50 transition-colors">
+                취소
+              </button>
+              <button type="button" onClick={executeTabBatchApprove}
+                className={`flex-1 py-2.5 rounded-xl text-white text-sm font-semibold transition-colors ${
+                  activeReviewTab === 'special'
+                    ? 'bg-amber-600 hover:bg-amber-700'
+                    : 'bg-[#2E7D32] hover:bg-[#1B5E20]'
+                }`}>
+                {activeReviewTab === 'special' ? '⚠️ 승인하기' : '승인하기'}
               </button>
             </div>
           </div>
@@ -890,6 +1017,44 @@ function ManagerView({
         </div>
       )}
 
+      {/* 재제출 강조 섹션 — 권팀장이 수정요청한 업장이 재제출했을 때 최우선 표시 */}
+      {resubmittedTabItems.length > 0 && (
+        <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 space-y-3">
+          <p className="text-sm font-bold text-blue-700">
+            🔵 재제출 완료 — {resubmittedTabItems.length}건 먼저 확인하세요
+          </p>
+          <div className="space-y-2">
+            {resubmittedTabItems.map(item => (
+              <div key={item.id} className="bg-white rounded-xl border border-blue-100 p-3 flex flex-wrap items-center gap-3">
+                <span className="font-medium text-[#1C2B1E] flex-1 min-w-0 truncate">
+                  {item.branch_full_name ?? item.branch_name}
+                </span>
+                {item.pptx_url && (
+                  <a href={`/api/download?url=${encodeURIComponent(item.pptx_url)}&filename=${encodeURIComponent(`${item.branch_name}_${year}${String(month).padStart(2, '0')}.pptx`)}`}
+                    className="px-2.5 py-1 rounded-lg bg-[#E3F2FD] text-[#1565C0] text-xs font-bold flex-shrink-0">
+                    PPTX
+                  </a>
+                )}
+                {item.resubmitted_at && (
+                  <span className="text-xs text-gray-400 flex-shrink-0">{formatKST(item.resubmitted_at)}</span>
+                )}
+                {item.correction_count > 0 && (
+                  <span className="text-xs text-orange-600 font-semibold flex-shrink-0">
+                    수정이력 {item.correction_count}회
+                  </span>
+                )}
+                <button type="button" onClick={() => handleApprove(item)} disabled={loadingItemIds.has(item.id)}
+                  className="px-3 py-1.5 rounded-lg bg-[#2E7D32] text-white text-xs font-semibold hover:bg-[#1B5E20] disabled:opacity-50 flex items-center gap-1 flex-shrink-0">
+                  {loadingItemIds.has(item.id)
+                    ? <><span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" /><span>처리중</span></>
+                    : '✅ 승인'}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* 전체 펼치기/접기 버튼 */}
       {filtered.length > 0 && (
         <div className="flex justify-end">
@@ -980,6 +1145,9 @@ function ManagerView({
                           <span className="ml-2 text-xs text-blue-600 font-semibold">재검토 필요</span>
                         )}
                       </div>
+                      {activeReviewTab === 'special' && getSpecialNote(item) && (
+                        <div className="mt-0.5 text-xs text-amber-700 font-medium">{getSpecialNote(item)}</div>
+                      )}
                       {item.review_status === 'correction_request' && item.memo && (
                         <div className="mt-0.5 flex items-start gap-1 text-xs text-orange-700">
                           <span>🔴</span>
@@ -1173,9 +1341,12 @@ function ManagerView({
                 <StatusBadge status={item.review_status} />
               </div>
               {activeReviewTab === 'special' && getSpecialBadge(item) && (
-                <span className="mb-2 text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 inline-block">
+                <span className="mb-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 inline-block">
                   {getSpecialBadge(item)}
                 </span>
+              )}
+              {activeReviewTab === 'special' && getSpecialNote(item) && (
+                <p className="mb-2 text-xs text-amber-700 font-medium">{getSpecialNote(item)}</p>
               )}
               {item.review_status === 'correction_request' && item.memo && (
                 <div className="mb-2 flex items-start gap-1 text-xs text-orange-700">
