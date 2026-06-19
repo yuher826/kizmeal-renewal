@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback, useMemo, Suspense } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import type { InquiryStatus, InquiryCategory, SlaRule, Inquiry } from '@/lib/types'
 import {
@@ -9,6 +9,8 @@ import {
 } from '@/lib/types'
 import { getSlaStatus } from '@/lib/sla'
 import InquiryDetailPanel from './components/InquiryDetailPanel'
+import Link from 'next/link'
+import { getGroupStyle } from '@/lib/cs-group-styles'
 
 const PAGE_SIZE = 20
 const UNGROUPED = '미분류'
@@ -93,33 +95,11 @@ const STATUS_FILTER_TABS: { key: InquiryStatus | ''; label: string }[] = [
   { key: 'closed',      label: '종료' },
 ]
 
-// 원 프로파일 페이지(branches/page.tsx)와 동일한 그룹별 색상 정의
-const GROUP_STYLES: Record<string, {
-  headerBg: string      // 아코디언 헤더 배경
-  dot: string           // 그룹 구분 dot 색상
-  itemHoverBg: string   // 문의 아이템 hover 배경
-}> = {
-  E:   { headerBg: 'bg-blue-50',   dot: 'bg-blue-500',   itemHoverBg: 'hover:bg-blue-50' },
-  P:   { headerBg: 'bg-green-50',  dot: 'bg-green-500',  itemHoverBg: 'hover:bg-green-50' },
-  R:   { headerBg: 'bg-purple-50', dot: 'bg-purple-500', itemHoverBg: 'hover:bg-purple-50' },
-  MB:  { headerBg: 'bg-orange-50', dot: 'bg-orange-500', itemHoverBg: 'hover:bg-orange-50' },
-  SLP: { headerBg: 'bg-pink-50',   dot: 'bg-pink-500',   itemHoverBg: 'hover:bg-pink-50' },
-  AO:  { headerBg: 'bg-teal-50',   dot: 'bg-teal-500',   itemHoverBg: 'hover:bg-teal-50' },
-}
-// 매핑되지 않는 그룹(미분류 등) 폴백 색상
-const FALLBACK_GROUP_STYLE = {
-  headerBg: 'bg-slate-50',
-  dot: 'bg-slate-400',
-  itemHoverBg: 'hover:bg-slate-50',
-}
-
-function getGroupStyle(tag: string) {
-  return GROUP_STYLES[tag] ?? FALLBACK_GROUP_STYLE
-}
 
 function CsManagementInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const pathname = usePathname()
   const urlId = searchParams.get('id')
 
   const [inquiries, setInquiries] = useState<ListInquiry[]>([])
@@ -370,7 +350,33 @@ function CsManagementInner() {
 
   // ── 렌더 ─────────────────────────────────────────────────────
   return (
-    <div className="h-full flex bg-white rounded-2xl border border-slate-200 overflow-hidden">
+    <div className="h-full flex flex-col bg-white rounded-2xl border border-slate-200 overflow-hidden">
+      {/* CS 서브 탭 네비게이션 */}
+      <div className="flex-shrink-0 flex border-b border-slate-200">
+        <Link
+          href="/erp/inquiries"
+          className={`px-5 py-3 text-sm font-semibold border-b-2 transition-colors ${
+            !pathname.startsWith('/erp/inquiries/history')
+              ? 'border-[#2D6A4F] text-[#2D6A4F]'
+              : 'border-transparent text-gray-500 hover:text-[#2D6A4F]'
+          }`}
+        >
+          CS 관리
+        </Link>
+        <Link
+          href="/erp/inquiries/history"
+          className={`px-5 py-3 text-sm font-semibold border-b-2 transition-colors ${
+            pathname.startsWith('/erp/inquiries/history')
+              ? 'border-[#2D6A4F] text-[#2D6A4F]'
+              : 'border-transparent text-gray-500 hover:text-[#2D6A4F]'
+          }`}
+        >
+          이력 검색
+        </Link>
+      </div>
+
+      {/* 2패널 영역 */}
+      <div className="flex-1 flex overflow-hidden">
 
       {/* ── 왼쪽 패널 (38%) ──────────────────────────────────── */}
       <div className="w-[38%] min-w-[320px] flex flex-col border-r-[0.5px] border-slate-300 overflow-hidden">
@@ -569,6 +575,7 @@ function CsManagementInner() {
       {/* ── 오른쪽 패널 (62%) ────────────────────────────────── */}
       <div className="flex-1 min-w-0 overflow-hidden">
         <InquiryDetailPanel inquiryId={selectedId} />
+      </div>
       </div>
     </div>
   )
