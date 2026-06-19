@@ -157,7 +157,7 @@ def fetch_menu_data():
 def fetch_branch_cfgs():
     profiles = client.select(
         'branch_profiles',
-        'id,branch_id,short_code,display_name,distribution_email,distribution_emails,'
+        'id,branch_id,short_code,display_name,branch_full_name,distribution_email,distribution_emails,'
         'slide_count,snack_morning,snack_afternoon,snack_childcare,'
         'needs_english,has_yonder,has_dessert_fruit,file_format,'
         'snack_label,morning_snack_fixed,morning_snack_fixed_menu',
@@ -196,9 +196,10 @@ def fetch_branch_cfgs():
             continue
 
         cfgs.append({
-            'name':         short_code,
-            'display_name': (p.get('display_name') or short_code).strip(),
-            'email':        email,
+            'name':             short_code,
+            'display_name':     (p.get('display_name') or short_code).strip(),
+            'branch_full_name': (p.get('branch_full_name') or p.get('display_name') or short_code).strip(),
+            'email':            email,
             'type':         type_code,
             'snack_label':  snack_lbl,
             'add_fruit':    bool(p.get('has_dessert_fruit', False)),
@@ -283,14 +284,19 @@ def update_common_row_status(status):
 
 def upsert_diet_review_item(weekly_menu_id, branch_uuid, branch_name, pptx_url):
     existing = client.select(
-        'diet_review_items', 'id',
+        'diet_review_items', 'id,review_status',
         filters={'weekly_menu_id': weekly_menu_id, 'branch_id': branch_uuid},
     )
     if existing:
+        row = existing[0]
+        update_data = {'pptx_url': pptx_url or None}
+        # deployed 상태가 아닌 경우에만 review_status 를 재생성 완료로 초기화
+        if row.get('review_status') != 'deployed':
+            update_data['review_status'] = 'generation_complete'
         client.update(
             'diet_review_items',
-            {'pptx_url': pptx_url or None},
-            filters={'id': existing[0]['id']},
+            update_data,
+            filters={'id': row['id']},
         )
     else:
         client.insert(
@@ -340,9 +346,14 @@ def main():
                 try:
                     gen_pptx(cfg, adapted_menu, TEMPLATE_PATH, out_pptx, date_map=date_map)
                     pptx_url = upload_pptx(out_pptx, storage_path)
-                    weekly_menu_id = upsert_branch_row(branch_uuid, 'generated', pptx_url)
+                    weekly_menu_id = upsert_branch_row(branch_uuid, 'generation_complete', pptx_url)
                     if weekly_menu_id:
-                        upsert_diet_review_item(weekly_menu_id, branch_uuid, cfg['display_name'], pptx_url)
+                        upsert_diet_review_item(
+                            weekly_menu_id,
+                            branch_uuid,
+                            cfg.get('branch_full_name') or cfg['display_name'],
+                            pptx_url,
+                        )
                     print(f'  ✅ {short_code}')
                     succeeded += 1
                 except Exception as exc:
@@ -356,7 +367,7 @@ def main():
     print(f'\n[완료] 성공 {succeeded}개 / 실패 {failed}개 / 전체 {len(branch_cfgs)}개')
 
     # 공통 row 상태 업데이트
-    final_status = 'generated' if succeeded > 0 else 'error'
+    final_status = 'generation_complete' if succeeded > 0 else 'error'
     update_common_row_status(final_status)
 
     if failed > 0:
