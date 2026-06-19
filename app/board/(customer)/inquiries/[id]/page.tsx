@@ -185,6 +185,22 @@ export default function CustomerInquiryDetailPage({ params }: { params: { id: st
         unread_count_admin: (inquiry?.unread_count_admin ?? 0) + 1,
       }).eq('id', id)
 
+      // 관리자에게 새 메시지 이메일 알림 (실패해도 전송에 영향 없음)
+      try {
+        await fetch('/api/cs/notify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'new_inquiry',
+            branchName: inquiry?.branches?.name ?? '(지점명 없음)',
+            content: msgContent,
+            inquiryId: id,
+          }),
+        })
+      } catch (e) {
+        console.error('[CS] 지점 메시지 이메일 알림 실패:', e)
+      }
+
       setContent('')
       setFiles([])
       setShowAttach(false)

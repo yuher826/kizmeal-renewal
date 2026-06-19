@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { Resend } from 'resend'
+import { FROM_EMAIL } from '@/lib/email'
 
 export async function POST(req: Request) {
   const serviceRole = createClient(
@@ -30,7 +31,7 @@ export async function POST(req: Request) {
   if (inquiry.contact_type === 'email') {
     try {
       await resend.emails.send({
-        from: 'onboarding@resend.dev',
+        from: FROM_EMAIL,
         to: inquiry.contact,
         subject: '[키즈밀] 문의에 답변이 등록되었습니다',
         html: buildEmailHtml(inquiry),

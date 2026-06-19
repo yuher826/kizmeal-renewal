@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient } from '@supabase/supabase-js'
 import { Resend } from 'resend'
+import { FROM_EMAIL } from '@/lib/email'
 
 function getServiceRole() {
   return createClient(
@@ -53,7 +54,7 @@ export async function POST(req: Request) {
   try {
     const resend = new Resend(process.env.RESEND_API_KEY)
     await resend.emails.send({
-      from: 'onboarding@resend.dev',
+      from: FROM_EMAIL,
       to: parent.email,
       subject: '[키즈밀] 1:1 문의에 답변이 등록되었습니다',
       html: buildHtml(parent.name, inquiry.title, reply || ''),

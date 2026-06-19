@@ -206,6 +206,22 @@ export default function NewInquiryPage() {
         }
       }
 
+      // 관리자에게 새 문의 접수 이메일 알림 (실패해도 등록 자체에 영향 없음)
+      try {
+        await fetch('/api/cs/notify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'new_inquiry',
+            branchName: branchName || '(지점명 없음)',
+            content: content.trim(),
+            inquiryId: inquiry.id,
+          }),
+        })
+      } catch (e) {
+        console.error('[CS] 새 문의 이메일 알림 실패:', e)
+      }
+
       setToast('문의가 접수되었습니다! 🎉')
       setTimeout(() => router.push(`/board/inquiries/${inquiry.id}`), 1200)
     } catch (err) {

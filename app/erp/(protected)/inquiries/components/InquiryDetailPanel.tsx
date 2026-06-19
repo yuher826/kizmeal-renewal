@@ -1000,6 +1000,25 @@ export default function InquiryDetailPanel({ inquiryId }: Props) {
       dispatchDraftEvent(id, false)
       setDraftStatus('idle')
 
+      // 관리자 답변이면 지점에 이메일 알림 발송 (실패해도 메시지 전송에 영향 없음)
+      if (!isInternal) {
+        try {
+          await fetch('/api/cs/notify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              type: 'admin_reply',
+              branchName: inquiry?.branches?.name ?? '',
+              branchEmail: inquiry?.branches?.email ?? '',
+              content: msgContent,
+              inquiryId: id,
+            }),
+          })
+        } catch (e) {
+          console.error('[CS] 관리자 답변 이메일 알림 실패:', e)
+        }
+      }
+
       setContent('')
       setFiles([])
       setShowAttach(false)
