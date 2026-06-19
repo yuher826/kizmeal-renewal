@@ -93,6 +93,30 @@ const STATUS_FILTER_TABS: { key: InquiryStatus | ''; label: string }[] = [
   { key: 'closed',      label: '종료' },
 ]
 
+// 원 프로파일 페이지(branches/page.tsx)와 동일한 그룹별 색상 정의
+const GROUP_STYLES: Record<string, {
+  headerBg: string      // 아코디언 헤더 배경
+  dot: string           // 그룹 구분 dot 색상
+  itemHoverBg: string   // 문의 아이템 hover 배경
+}> = {
+  E:   { headerBg: 'bg-blue-50',   dot: 'bg-blue-500',   itemHoverBg: 'hover:bg-blue-50' },
+  P:   { headerBg: 'bg-green-50',  dot: 'bg-green-500',  itemHoverBg: 'hover:bg-green-50' },
+  R:   { headerBg: 'bg-purple-50', dot: 'bg-purple-500', itemHoverBg: 'hover:bg-purple-50' },
+  MB:  { headerBg: 'bg-orange-50', dot: 'bg-orange-500', itemHoverBg: 'hover:bg-orange-50' },
+  SLP: { headerBg: 'bg-pink-50',   dot: 'bg-pink-500',   itemHoverBg: 'hover:bg-pink-50' },
+  AO:  { headerBg: 'bg-teal-50',   dot: 'bg-teal-500',   itemHoverBg: 'hover:bg-teal-50' },
+}
+// 매핑되지 않는 그룹(미분류 등) 폴백 색상
+const FALLBACK_GROUP_STYLE = {
+  headerBg: 'bg-slate-50',
+  dot: 'bg-slate-400',
+  itemHoverBg: 'hover:bg-slate-50',
+}
+
+function getGroupStyle(tag: string) {
+  return GROUP_STYLES[tag] ?? FALLBACK_GROUP_STYLE
+}
+
 function CsManagementInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -431,13 +455,15 @@ function CsManagementInner() {
             <div className="divide-y divide-slate-100">
               {groups.map(group => {
                 const isOpen = openGroups.has(group.tag)
+                // 원 프로파일 페이지와 동일한 그룹 색상 적용
+                const gStyle = getGroupStyle(group.tag)
                 return (
                   <div key={group.tag}>
-                    {/* 그룹 헤더 */}
+                    {/* 그룹 헤더 — 그룹별 배경색 적용 */}
                     <button
                       type="button"
                       onClick={() => toggleGroup(group.tag)}
-                      className="w-full flex items-center gap-2 px-3 py-2.5 bg-slate-50 hover:bg-slate-100 transition-colors text-left sticky top-0 z-[1]"
+                      className={`w-full flex items-center gap-2 px-3 py-2.5 transition-colors text-left sticky top-0 z-[1] hover:brightness-95 ${gStyle.headerBg}`}
                     >
                       <svg
                         width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
@@ -445,6 +471,8 @@ function CsManagementInner() {
                       >
                         <path strokeLinecap="round" strokeLinejoin="round" d="M9 18l6-6-6-6" />
                       </svg>
+                      {/* 그룹 색상 dot */}
+                      <span className={`w-2 h-2 rounded-full flex-shrink-0 ${gStyle.dot}`} />
                       <span className="text-sm font-bold text-[#1C2B1E]">{group.tag}</span>
                       <span className="text-xs text-gray-400">{group.items.length}건</span>
                       {group.hasUrgent && <span className="text-xs" title="긴급 컴플레인">⚡</span>}
@@ -456,7 +484,7 @@ function CsManagementInner() {
                       )}
                     </button>
 
-                    {/* 그룹 내 문의 아이템 */}
+                    {/* 그룹 내 문의 아이템 — 그룹 연한 색상 hover */}
                     {isOpen && group.items.map(({ inq, displayName, isUrgentComplaint }) => {
                       const unread = (inq.unread_count_admin ?? 0) > 0
                       const isSelected = selectedId === inq.id
@@ -469,7 +497,7 @@ function CsManagementInner() {
                           className={`w-full text-left px-3 py-2.5 pl-7 flex flex-col gap-1 border-l-2 transition-colors ${
                             isSelected
                               ? 'bg-blue-50 border-l-[#2D6A4F]'
-                              : 'border-l-transparent hover:bg-slate-50'
+                              : `border-l-transparent ${gStyle.itemHoverBg}`
                           }`}
                         >
                           <div className="flex items-center gap-1.5 min-w-0">
