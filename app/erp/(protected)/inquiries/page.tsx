@@ -79,6 +79,12 @@ function timeAgo(iso: string) {
   return '방금'
 }
 
+// YYYY-MM 키를 "YYYY년 M월" 형식으로 변환
+function formatYearMonth(ym: string): string {
+  const [year, month] = ym.split('-')
+  return `${year}년 ${parseInt(month)}월`
+}
+
 const STATUS_FILTER_TABS: { key: InquiryStatus | ''; label: string }[] = [
   { key: '',            label: '전체' },
   { key: 'pending',     label: '대기' },
@@ -104,8 +110,12 @@ function CsManagementInner() {
 
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState<InquiryStatus | ''>('')
+  const [filterMonth, setFilterMonth] = useState('')
   const [unreadOnly, setUnreadOnly] = useState(false)
   const [page, setPage] = useState(1)
+
+  // 임시저장 초안이 있는 문의 ID 목록 (localStorage 기반)
+  const [draftIds, setDraftIds] = useState<Set<string>>(new Set())
 
   // ── 데이터 로드 ──────────────────────────────────────────────
   const load = useCallback(async () => {
@@ -163,6 +173,33 @@ function CsManagementInner() {
     return () => { supabase.removeChannel(channel) }
   }, [load])
 
+  // 마운트 시 localStorage 스캔하여 초안이 있는 문의 ID 수집
+  useEffect(() => {
+    const ids = new Set<string>()
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i)
+      if (!key) continue
+      const match = key.match(/^cs_draft(?:_internal)?_(.+)$/)
+      if (match && localStorage.getItem(key)) ids.add(match[1])
+    }
+    setDraftIds(ids)
+  }, [])
+
+  // InquiryDetailPanel에서 초안 변경 시 이벤트 수신
+  useEffect(() => {
+    function handler(e: Event) {
+      const { inquiryId, hasDraft } = (e as CustomEvent<{ inquiryId: string; hasDraft: boolean }>).detail
+      setDraftIds(prev => {
+        const next = new Set(prev)
+        if (hasDraft) next.add(inquiryId)
+        else next.delete(inquiryId)
+        return next
+      })
+    }
+    window.addEventListener('cs-draft-change', handler)
+    return () => window.removeEventListener('cs-draft-change', handler)
+  }, [])
+
   // ── 가공: 목록 아이템 ────────────────────────────────────────
   const rows: RowItem[] = useMemo(() => {
     return inquiries.map(inq => {
@@ -180,6 +217,16 @@ function CsManagementInner() {
       }
     })
   }, [inquiries, profiles])
+
+  // ── 월별 필터 목록 (실제 존재하는 월만, 최신 → 과거) ────────
+  const availableMonths = useMemo(() => {
+    const months = new Set<string>()
+    for (const inq of inquiries) {
+      const d = new Date(inq.created_at)
+      months.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
+    }
+    return Array.from(months).sort((a, b) => b.localeCompare(a))
+  }, [inquiries])
 
   // ── 상단 통계 (전체 기준) ────────────────────────────────────
   const stats = useMemo(() => {
@@ -209,6 +256,12 @@ function CsManagementInner() {
     const q = search.trim().toLowerCase()
     return rows
       .filter(r => {
+        // 월별 필터
+        if (filterMonth) {
+          const d = new Date(r.inq.created_at)
+          const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+          if (ym !== filterMonth) return false
+        }
         if (filterStatus && r.inq.status !== filterStatus) return false
         if (unreadOnly && (r.inq.unread_count_admin ?? 0) <= 0) return false
         if (q) {
@@ -223,7 +276,7 @@ function CsManagementInner() {
         if (a.isUrgentComplaint !== b.isUrgentComplaint) return a.isUrgentComplaint ? -1 : 1
         return new Date(b.inq.created_at).getTime() - new Date(a.inq.created_at).getTime()
       })
-  }, [rows, search, filterStatus, unreadOnly])
+  }, [rows, search, filterStatus, unreadOnly, filterMonth])
 
   // ── 페이지네이션 (전체 목록 기준 20건씩) ─────────────────────
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
@@ -233,7 +286,7 @@ function CsManagementInner() {
   )
 
   // 필터 변경 시 1페이지로
-  useEffect(() => { setPage(1) }, [search, filterStatus, unreadOnly])
+  useEffect(() => { setPage(1) }, [search, filterStatus, unreadOnly, filterMonth])
   // 페이지 범위 보정
   useEffect(() => { if (page > totalPages) setPage(totalPages) }, [page, totalPages])
 
@@ -346,6 +399,18 @@ function CsManagementInner() {
                 미처리만
               </button>
             </div>
+
+            {/* 월별 필터 */}
+            <select
+              value={filterMonth}
+              onChange={e => setFilterMonth(e.target.value)}
+              className="w-full px-2.5 py-1.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#2D6A4F]"
+            >
+              <option value="">📅 전체 기간</option>
+              {availableMonths.map(ym => (
+                <option key={ym} value={ym}>{formatYearMonth(ym)}</option>
+              ))}
+            </select>
           </div>
         </div>
 
@@ -359,7 +424,9 @@ function CsManagementInner() {
               ))}
             </div>
           ) : filtered.length === 0 ? (
-            <div className="px-4 py-16 text-center text-gray-400 text-sm">검색 결과가 없습니다</div>
+            <div className="px-4 py-16 text-center text-gray-400 text-sm">
+              {filterMonth ? '📭 해당 월의 문의가 없습니다' : '검색 결과가 없습니다'}
+            </div>
           ) : (
             <div className="divide-y divide-slate-100">
               {groups.map(group => {
@@ -393,6 +460,7 @@ function CsManagementInner() {
                     {isOpen && group.items.map(({ inq, displayName, isUrgentComplaint }) => {
                       const unread = (inq.unread_count_admin ?? 0) > 0
                       const isSelected = selectedId === inq.id
+                      const hasDraft = draftIds.has(inq.id)
                       return (
                         <button
                           key={inq.id}
@@ -407,6 +475,7 @@ function CsManagementInner() {
                           <div className="flex items-center gap-1.5 min-w-0">
                             {unread && <span className="w-1.5 h-1.5 rounded-full bg-blue-500 flex-shrink-0" />}
                             {isUrgentComplaint && <span className="text-xs flex-shrink-0" title="긴급 컴플레인">⚡</span>}
+                            {hasDraft && <span className="text-xs flex-shrink-0" title="임시저장된 초안 있음">✏️</span>}
                             <span className={`text-sm truncate ${unread ? 'font-semibold text-[#1C2B1E]' : 'text-gray-700'}`}>
                               {displayName}
                             </span>
