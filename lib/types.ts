@@ -209,6 +209,7 @@ export interface Message {
   is_internal: boolean
   is_read: boolean
   created_at: string
+  updated_at?: string
   message_attachments?: MessageAttachment[]
 }
 

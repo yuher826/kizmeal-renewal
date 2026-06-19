@@ -63,6 +63,12 @@ function avatarInitial(name?: string): string {
   return t ? t[0] : '?'
 }
 
+// updated_at이 created_at보다 2초 이상 늦으면 수정된 메시지로 간주
+function isEdited(msg: Message): boolean {
+  if (!msg.updated_at) return false
+  return new Date(msg.updated_at).getTime() - new Date(msg.created_at).getTime() > 2000
+}
+
 // ── 첨부파일 블록 ───────────────────────────────────────────────
 function AttachmentBlock({ attachments }: { attachments: MessageAttachment[] }) {
   if (!attachments?.length) return null
@@ -105,15 +111,122 @@ function AttachmentBlock({ attachments }: { attachments: MessageAttachment[] }) 
   )
 }
 
+// ── 인라인 편집 textarea ─────────────────────────────────────────
+function EditTextarea({
+  value,
+  onChange,
+  onSave,
+  onCancel,
+}: {
+  value: string
+  onChange: (v: string) => void
+  onSave: () => void
+  onCancel: () => void
+}) {
+  const ref = useRef<HTMLTextAreaElement>(null)
+
+  useEffect(() => {
+    if (ref.current) {
+      ref.current.style.height = 'auto'
+      ref.current.style.height = `${ref.current.scrollHeight}px`
+      ref.current.focus()
+      // 커서를 끝으로 이동
+      ref.current.setSelectionRange(value.length, value.length)
+    }
+  // value.length 의존 제거 — 초기화 한 번만 실행
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  function handleInput(e: React.FormEvent<HTMLTextAreaElement>) {
+    const el = e.currentTarget
+    el.style.height = 'auto'
+    el.style.height = `${el.scrollHeight}px`
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    // Ctrl+Enter 또는 Cmd+Enter → 저장
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault()
+      if (value.trim()) onSave()
+    }
+    // Esc → 취소
+    if (e.key === 'Escape') {
+      e.preventDefault()
+      onCancel()
+    }
+    // 일반 Enter → 줄바꿈 (기본 동작 유지)
+  }
+
+  return (
+    <div className="mt-2">
+      <textarea
+        ref={ref}
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        onInput={handleInput}
+        onKeyDown={handleKeyDown}
+        className="w-full px-3 py-2 rounded-lg border border-blue-300 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none leading-relaxed"
+        style={{ minHeight: '60px' }}
+      />
+      <div className="flex gap-2 mt-1.5">
+        <button
+          onClick={onSave}
+          disabled={!value.trim()}
+          className="text-xs px-3 py-1.5 rounded-lg bg-[#2D6A4F] text-white font-semibold disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+        >
+          저장
+        </button>
+        <button
+          onClick={onCancel}
+          className="text-xs px-3 py-1.5 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors"
+        >
+          취소
+        </button>
+        <span className="text-[11px] text-gray-400 self-center">Ctrl+Enter 저장 · Esc 취소</span>
+      </div>
+    </div>
+  )
+}
+
 // ── 이메일 스레드 메시지 카드 (4종) ─────────────────────────────
-function ThreadMessage({ message, branchName, adminName }: {
+interface ThreadMessageProps {
   message: Message
   branchName?: string
   adminName?: string
-}) {
+  // 수정/삭제 권한 및 상태
+  canEditDelete?: boolean
+  isEditing?: boolean
+  editContent?: string
+  isDeleting?: boolean
+  onEditStart?: () => void
+  onEditChange?: (v: string) => void
+  onEditSave?: () => void
+  onEditCancel?: () => void
+  onDeleteStart?: () => void
+  onDeleteConfirm?: () => void
+  onDeleteCancel?: () => void
+}
+
+function ThreadMessage({
+  message,
+  branchName,
+  adminName,
+  canEditDelete = false,
+  isEditing = false,
+  editContent = '',
+  isDeleting = false,
+  onEditStart,
+  onEditChange,
+  onEditSave,
+  onEditCancel,
+  onDeleteStart,
+  onDeleteConfirm,
+  onDeleteCancel,
+}: ThreadMessageProps) {
   const { sender_type, content, created_at, is_internal, message_attachments } = message
   const time = formatMsgTime(created_at)
   const attachments = message_attachments || []
+  const edited = isEdited(message)
 
   // [4] 시스템 메시지 — 카드 없이 중앙 텍스트
   if (sender_type === 'system') {
@@ -126,22 +239,79 @@ function ThreadMessage({ message, branchName, adminName }: {
     )
   }
 
+  // 삭제 확인 패널 — admin/internal 메시지에만 표시
+  if (isDeleting) {
+    const bgBase = is_internal ? 'bg-amber-50 border-amber-200' : 'bg-white border-gray-200'
+    return (
+      <div className={`${bgBase} border rounded-lg p-4 mb-3 bg-red-50 border-red-200`}>
+        <p className="text-sm font-semibold text-red-700 mb-3">이 답변을 삭제하시겠습니까?</p>
+        <div className="flex gap-2">
+          <button
+            onClick={onDeleteConfirm}
+            className="text-xs px-4 py-1.5 rounded-lg bg-red-600 text-white font-semibold hover:bg-red-700 transition-colors"
+          >
+            삭제 확인
+          </button>
+          <button
+            onClick={onDeleteCancel}
+            className="text-xs px-4 py-1.5 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors"
+          >
+            취소
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   // [3] 내부 메모 — is_internal = true
   if (is_internal) {
     const name = adminName || '관리자'
     return (
-      <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-3">
+      <div className="relative group bg-amber-50 border border-amber-200 rounded-lg p-4 mb-3">
+        {/* 수정/삭제 버튼 (hover 시 표시) */}
+        {canEditDelete && !isEditing && (
+          <div className="absolute top-2 right-2 hidden group-hover:flex gap-1 z-10">
+            <button
+              onClick={onEditStart}
+              title="수정"
+              className="w-6 h-6 flex items-center justify-center rounded hover:bg-amber-200 text-amber-600 transition-colors text-xs"
+            >
+              ✏️
+            </button>
+            <button
+              onClick={onDeleteStart}
+              title="삭제"
+              className="w-6 h-6 flex items-center justify-center rounded hover:bg-red-100 text-red-500 transition-colors text-xs"
+            >
+              🗑️
+            </button>
+          </div>
+        )}
         <div className="flex items-center gap-2 mb-2">
           <span className="w-7 h-7 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center text-xs font-bold flex-shrink-0">🔒</span>
           <span className="text-sm font-semibold text-amber-900">{name}</span>
           <span className="text-xs text-amber-600">내부메모</span>
-          <span className="ml-auto text-xs text-amber-500 flex-shrink-0">{time}</span>
+          <span className="ml-auto text-xs text-amber-500 flex-shrink-0">
+            {time}
+            {edited && !isEditing && <span className="ml-1 text-gray-400">(수정됨)</span>}
+          </span>
         </div>
         <div className="border-t border-amber-200 pt-2">
-          <p className="text-sm text-amber-900 whitespace-pre-wrap leading-relaxed">{content}</p>
-          <p className="text-[11px] text-amber-500 mt-2">고객사에게 보이지 않습니다.</p>
+          {isEditing ? (
+            <EditTextarea
+              value={editContent}
+              onChange={v => onEditChange?.(v)}
+              onSave={() => onEditSave?.()}
+              onCancel={() => onEditCancel?.()}
+            />
+          ) : (
+            <>
+              <p className="text-sm text-amber-900 whitespace-pre-wrap leading-relaxed">{content}</p>
+              <p className="text-[11px] text-amber-500 mt-2">고객사에게 보이지 않습니다.</p>
+            </>
+          )}
         </div>
-        <AttachmentBlock attachments={attachments} />
+        {!isEditing && <AttachmentBlock attachments={attachments} />}
       </div>
     )
   }
@@ -150,17 +320,48 @@ function ThreadMessage({ message, branchName, adminName }: {
   if (sender_type === 'admin') {
     const name = adminName || '키즈밀'
     return (
-      <div className="bg-white border border-gray-200 border-l-[3px] border-l-green-600 rounded-lg p-4 mb-3">
+      <div className="relative group bg-white border border-gray-200 border-l-[3px] border-l-green-600 rounded-lg p-4 mb-3">
+        {/* 수정/삭제 버튼 (hover 시 표시) */}
+        {canEditDelete && !isEditing && (
+          <div className="absolute top-2 right-2 hidden group-hover:flex gap-1 z-10">
+            <button
+              onClick={onEditStart}
+              title="수정"
+              className="w-6 h-6 flex items-center justify-center rounded hover:bg-gray-100 text-gray-500 transition-colors text-xs"
+            >
+              ✏️
+            </button>
+            <button
+              onClick={onDeleteStart}
+              title="삭제"
+              className="w-6 h-6 flex items-center justify-center rounded hover:bg-red-100 text-red-500 transition-colors text-xs"
+            >
+              🗑️
+            </button>
+          </div>
+        )}
         <div className="flex items-center gap-2 mb-2">
           <span className="w-7 h-7 rounded-full bg-green-100 text-green-700 flex items-center justify-center text-xs font-bold flex-shrink-0">{avatarInitial(name)}</span>
           <span className="text-sm font-semibold text-[#1C2B1E]">{name}</span>
           <span className="text-xs text-gray-400">영양팀</span>
-          <span className="ml-auto text-xs text-gray-400 flex-shrink-0">{time}</span>
+          <span className="ml-auto text-xs text-gray-400 flex-shrink-0">
+            {time}
+            {edited && !isEditing && <span className="ml-1 text-gray-400">(수정됨)</span>}
+          </span>
         </div>
         <div className="border-t border-gray-100 pt-2">
-          <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">{content}</p>
+          {isEditing ? (
+            <EditTextarea
+              value={editContent}
+              onChange={v => onEditChange?.(v)}
+              onSave={() => onEditSave?.()}
+              onCancel={() => onEditCancel?.()}
+            />
+          ) : (
+            <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">{content}</p>
+          )}
         </div>
-        <AttachmentBlock attachments={attachments} />
+        {!isEditing && <AttachmentBlock attachments={attachments} />}
       </div>
     )
   }
@@ -214,6 +415,11 @@ export default function InquiryDetailPanel({ inquiryId }: Props) {
   const [phoneMemo, setPhoneMemo] = useState('')
   const [phoneDuration, setPhoneDuration] = useState('')
 
+  // ── 수정/삭제 상태 ────────────────────────────────────────────
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editContent, setEditContent] = useState('')
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
@@ -221,6 +427,63 @@ export default function InquiryDetailPanel({ inquiryId }: Props) {
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [])
+
+  // 수정/삭제 권한 계산 — super_admin은 전체, 그 외는 본인 메시지만
+  function canEditDeleteMessage(msg: Message): boolean {
+    if (!currentAdmin) return false
+    if (msg.sender_type !== 'admin') return false
+    if (currentAdmin.role === 'super_admin') return true
+    return msg.sender_id === currentAdmin.auth_id
+  }
+
+  // ── 수정 핸들러 ───────────────────────────────────────────────
+  function handleEditStart(msg: Message) {
+    setEditingId(msg.id)
+    setEditContent(msg.content)
+    setDeletingId(null)
+  }
+
+  function handleEditCancel() {
+    setEditingId(null)
+    setEditContent('')
+  }
+
+  async function handleEditSave(msgId: string) {
+    const trimmed = editContent.trim()
+    if (!trimmed) return
+    const supabase = createClient()
+    const { error } = await supabase
+      .from('messages')
+      .update({ content: trimmed })
+      .eq('id', msgId)
+    if (!error) {
+      const now = new Date().toISOString()
+      setMessages(prev => prev.map(m =>
+        m.id === msgId ? { ...m, content: trimmed, updated_at: now } : m
+      ))
+      setEditingId(null)
+      setEditContent('')
+    }
+  }
+
+  // ── 삭제 핸들러 ───────────────────────────────────────────────
+  function handleDeleteStart(msgId: string) {
+    setDeletingId(msgId)
+    setEditingId(null)
+    setEditContent('')
+  }
+
+  function handleDeleteCancel() {
+    setDeletingId(null)
+  }
+
+  async function handleDeleteConfirm(msgId: string) {
+    // 낙관적 UI — 즉시 화면에서 제거
+    setMessages(prev => prev.filter(m => m.id !== msgId))
+    setDeletingId(null)
+    const supabase = createClient()
+    await supabase.from('messages').delete().eq('id', msgId)
+  }
 
   // ── 문의 로드 + Realtime 구독 ──────────────────────────────────
   useEffect(() => {
@@ -243,6 +506,9 @@ export default function InquiryDetailPanel({ inquiryId }: Props) {
     setShowAttach(false)
     setIsInternal(false)
     setShowPhoneLog(false)
+    setEditingId(null)
+    setEditContent('')
+    setDeletingId(null)
     setLoading(true)
 
     // 문의 전환 시 패널 스크롤 최상단으로 이동
@@ -316,6 +582,26 @@ export default function InquiryDetailPanel({ inquiryId }: Props) {
         if (full) {
           setMessages(prev => prev.find(m => m.id === full.id) ? prev : [...prev, full as unknown as Message])
         }
+      })
+      .on('postgres_changes', {
+        event: 'UPDATE', schema: 'public', table: 'messages',
+        filter: `inquiry_id=eq.${id}`,
+      }, (payload) => {
+        const updated = payload.new as Message
+        // content와 updated_at만 갱신 (첨부파일은 수정 불가)
+        setMessages(prev => prev.map(m =>
+          m.id === updated.id
+            ? { ...m, content: updated.content, updated_at: updated.updated_at }
+            : m
+        ))
+      })
+      .on('postgres_changes', {
+        event: 'DELETE', schema: 'public', table: 'messages',
+        filter: `inquiry_id=eq.${id}`,
+      }, (payload) => {
+        const deletedId = (payload.old as { id: string }).id
+        // 낙관적 삭제 후 Realtime 이벤트가 다시 오더라도 중복 제거 방지 (filter는 멱등)
+        setMessages(prev => prev.filter(m => m.id !== deletedId))
       })
       .on('postgres_changes', {
         event: 'UPDATE', schema: 'public', table: 'inquiries',
@@ -541,6 +827,9 @@ export default function InquiryDetailPanel({ inquiryId }: Props) {
   const slaStatus = inquiry && slaRule ? getSlaStatus(inquiry, slaRule) : 'ok'
   const slaRemaining = inquiry && slaRule ? getSlaRemaining(inquiry, slaRule) : '—'
 
+  // 수정 중인 메시지가 있으면 하단 입력창 비활성화
+  const isAnyEditing = editingId !== null
+
   // ── 빈 안내 화면 (선택된 문의 없음) ────────────────────────────
   if (!id) {
     return (
@@ -628,6 +917,17 @@ export default function InquiryDetailPanel({ inquiryId }: Props) {
                       message={msg}
                       branchName={inquiry?.branches?.name}
                       adminName={inquiry?.admins?.name || currentAdmin?.name || '키즈밀'}
+                      canEditDelete={canEditDeleteMessage(msg)}
+                      isEditing={editingId === msg.id}
+                      editContent={editingId === msg.id ? editContent : ''}
+                      isDeleting={deletingId === msg.id}
+                      onEditStart={() => handleEditStart(msg)}
+                      onEditChange={v => setEditContent(v)}
+                      onEditSave={() => handleEditSave(msg.id)}
+                      onEditCancel={handleEditCancel}
+                      onDeleteStart={() => handleDeleteStart(msg.id)}
+                      onDeleteConfirm={() => handleDeleteConfirm(msg.id)}
+                      onDeleteCancel={handleDeleteCancel}
                     />
                   </div>
                 )
@@ -678,8 +978,22 @@ export default function InquiryDetailPanel({ inquiryId }: Props) {
           </div>
         )}
 
+        {/* 수정 중 안내 배너 */}
+        {isAnyEditing && (
+          <div className="bg-blue-50 border-t border-blue-200 px-4 py-2 flex-shrink-0 flex items-center gap-2">
+            <span className="text-xs text-blue-700 font-semibold">✏️ 메시지 수정 중</span>
+            <span className="text-xs text-blue-500">수정을 완료하거나 취소한 후 새 답변을 입력할 수 있습니다.</span>
+            <button
+              onClick={handleEditCancel}
+              className="ml-auto text-xs text-blue-600 hover:text-blue-800 font-medium"
+            >
+              수정 취소
+            </button>
+          </div>
+        )}
+
         {/* 답변 입력창 (고정) */}
-        <div className="bg-white border-t border-gray-100 px-4 py-3 flex-shrink-0">
+        <div className={`bg-white border-t border-gray-100 px-4 py-3 flex-shrink-0 ${isAnyEditing ? 'opacity-50 pointer-events-none' : ''}`}>
           {/* 전송 실패 에러 — 입력창 위 표시 (입력 내용은 유지) */}
           {sendError && (
             <div className="mb-2 flex items-center gap-2 text-xs bg-red-50 text-red-700 px-3 py-2 rounded-lg border border-red-200">
