@@ -7,3 +7,5 @@ ALTER TABLE weekly_menus DROP CONSTRAINT IF EXISTS weekly_menus_week_num_check;
 ALTER TABLE weekly_menus
   ADD CONSTRAINT weekly_menus_week_num_check
   CHECK (week_num IS NULL OR (week_num BETWEEN 1 AND 6));
+
+

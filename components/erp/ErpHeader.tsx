@@ -12,7 +12,7 @@ const BREADCRUMB_MAP: Record<string, { groups: string[]; page: string }> = {
   '/erp/branches':        { groups: ['식단 관리'], page: '원 프로파일' },
   '/erp/notices/new':     { groups: ['소통 관리', '고객사 공지'], page: '공지 작성' },
   '/erp/notices':         { groups: ['소통 관리'], page: '고객사 공지' },
-  '/erp/inquiries':       { groups: ['소통 관리'], page: '운영 문의' },
+  '/erp/inquiries':       { groups: ['소통 관리'], page: 'CS 관리' },
   '/erp/email':           { groups: ['배포 관리'], page: '이메일 배포' },
   '/erp/stats':           { groups: ['분석'],      page: '통계' },
 }
