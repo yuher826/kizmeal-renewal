@@ -35,9 +35,11 @@ type ReviewItem = {
   deployed_by:     string | null
   deployed_at:     string | null
   resubmitted_at:  string | null
-  sort_order:      number | null
-  group_tag:       string | null
+  sort_order:       number | null
+  group_tag:        string | null
   branch_full_name: string | null
+  branchReviewType?: 'standard' | 'special'
+  fileFormat?:       string | null
 }
 
 type Stats = {
@@ -84,6 +86,14 @@ function normalizeGroup(g: string | null): string {
   if (!g || !g.trim()) return '기타'
   const t = g.trim()
   return GROUPS.find(gr => gr.tag === t) ? t : '기타'
+}
+
+function getSpecialBadge(item: ReviewItem): string | null {
+  if (item.branch_full_name === '목동poly') return '슬라이드 다수 주의'
+  if (item.fileFormat === 'PDF+JPG') return 'PDF+JPG 2버전'
+  if (item.fileFormat === 'JPG') return 'JPG 형식'
+  if (item.fileFormat === 'PDF') return 'PDF 형식'
+  return null
 }
 
 // ── 유틸 ──────────────────────────────────────────────────────────
@@ -272,10 +282,9 @@ function CommonHeader({
 
 // ── Manager/SuperAdmin 화면 ────────────────────────────────────────
 function ManagerView({
-  items, stats, showToast, tab, onTabChange, patchItem, year, month, role,
+  items, showToast, tab, onTabChange, patchItem, year, month, role,
 }: {
   items:       ReviewItem[]
-  stats:       Stats
   year:        number
   month:       number
   role:        string
@@ -309,6 +318,9 @@ function ManagerView({
 
   // 그룹 아코디언 상태 (Manager 독립)
   const [managerOpenGroups, setManagerOpenGroups] = useState<Set<string>>(new Set())
+  // 이원화 검토 탭 (표준/특이 업장)
+  const [activeReviewTab, setActiveReviewTab] = useState<'standard' | 'special'>('standard')
+  useEffect(() => { setSelectedIds(new Set()) }, [activeReviewTab])
   function toggleGroup(tag: string) {
     setManagerOpenGroups(prev => { const n = new Set(prev); if (n.has(tag)) n.delete(tag); else n.add(tag); return n })
   }
@@ -321,13 +333,20 @@ function ManagerView({
     { key: 'approved',            label: '승인완료', icon: '✅' },
     { key: 'deployed',            label: '배포완료', icon: '📤' },
   ]
+  // 이원화 검토 탭 기준 필터링
+  const standardCount  = items.filter(i => (i.branchReviewType ?? 'standard') === 'standard').length
+  const specialCount   = items.filter(i => (i.branchReviewType ?? 'standard') === 'special').length
+  const reviewTabItems = items.filter(i => (i.branchReviewType ?? 'standard') === activeReviewTab)
   const tabCount: Record<ManagerTab, number> = {
-    all: stats.total, generation_complete: stats.generation_complete,
-    correction_request: stats.correction_request, resubmitted: stats.resubmitted,
-    approved: stats.approved, deployed: stats.deployed,
+    all:                 reviewTabItems.length,
+    generation_complete: reviewTabItems.filter(i => i.review_status === 'generation_complete').length,
+    correction_request:  reviewTabItems.filter(i => i.review_status === 'correction_request').length,
+    resubmitted:         reviewTabItems.filter(i => i.review_status === 'resubmitted').length,
+    approved:            reviewTabItems.filter(i => i.review_status === 'approved').length,
+    deployed:            reviewTabItems.filter(i => i.review_status === 'deployed').length,
   }
 
-  const filtered = items.filter(it => tab === 'all' || it.review_status === tab)
+  const filtered = reviewTabItems.filter(it => tab === 'all' || it.review_status === tab)
 
   // generation_complete만 체크 가능
   const checkableIds = filtered.filter(i => i.review_status === 'generation_complete').map(i => i.id)
@@ -621,6 +640,32 @@ function ManagerView({
 
   return (
     <div className="space-y-4">
+      {/* 이원화 검토 탭 */}
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={() => setActiveReviewTab('standard')}
+          className={`px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${
+            activeReviewTab === 'standard'
+              ? 'bg-[#2D6A4F] text-white'
+              : 'bg-white text-gray-600 border border-gray-200 hover:border-[#2D6A4F] hover:text-[#2D6A4F]'
+          }`}
+        >
+          표준 업장 {standardCount}건
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveReviewTab('special')}
+          className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${
+            activeReviewTab === 'special'
+              ? 'bg-amber-500 text-white'
+              : 'bg-white text-amber-700 border border-amber-200 hover:border-amber-400 hover:bg-amber-50'
+          }`}
+        >
+          특이 업장 {specialCount}건
+        </button>
+      </div>
+
       {/* 탭 */}
       <div className="flex gap-1.5 overflow-x-auto pb-1">
         {TAB_KEYS.map(t => (
@@ -802,7 +847,11 @@ function ManagerView({
       {/* 빈 상태 */}
       {filtered.length === 0 && (
         <div className="bg-white rounded-2xl border border-gray-100 p-10 text-center">
-          <p className="text-gray-400 text-sm">해당 탭에 식단표가 없습니다.</p>
+          <p className="text-gray-400 text-sm">
+            {activeReviewTab === 'special'
+              ? '현재 검토 대상 특이 업장이 없습니다.'
+              : '해당 탭에 식단표가 없습니다.'}
+          </p>
         </div>
       )}
 
@@ -865,6 +914,11 @@ function ManagerView({
                     <td className="px-3 py-3 font-medium text-[#1C2B1E]">
                       <div>
                         {item.branch_full_name ?? item.branch_name}
+                        {activeReviewTab === 'special' && getSpecialBadge(item) && (
+                          <span className="ml-2 text-xs font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                            {getSpecialBadge(item)}
+                          </span>
+                        )}
                         {item.review_status === 'resubmitted' && (
                           <span className="ml-2 text-xs text-blue-600 font-semibold">재검토 필요</span>
                         )}
@@ -1061,6 +1115,11 @@ function ManagerView({
                 </span>
                 <StatusBadge status={item.review_status} />
               </div>
+              {activeReviewTab === 'special' && getSpecialBadge(item) && (
+                <span className="mb-2 text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 inline-block">
+                  {getSpecialBadge(item)}
+                </span>
+              )}
               {item.review_status === 'correction_request' && item.memo && (
                 <div className="mb-2 flex items-start gap-1 text-xs text-orange-700">
                   <span>🔴</span>
@@ -1838,7 +1897,7 @@ function DietReviewPageInner() {
         {/* 역할별 뷰 */}
         {!loading && items.length > 0 && isManager && (
           <ManagerView
-            items={filteredItems} stats={localStats}
+            items={filteredItems}
             year={year} month={month} role={role}
             adminId={currentAdmin!.id} adminName={currentAdmin!.name}
             showToast={showToast} onRefresh={fetchData}

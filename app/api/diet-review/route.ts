@@ -33,9 +33,11 @@ type ReviewItemRow = {
   deployed_by:     string | null
   deployed_at:     string | null
   resubmitted_at:  string | null
-  sort_order:      number | null
-  group_tag:       string | null
+  sort_order:       number | null
+  group_tag:        string | null
   branch_full_name: string | null
+  branchReviewType?: 'standard' | 'special'
+  fileFormat?:       string | null
 }
 
 type HistoryEntry = {
@@ -137,7 +139,7 @@ export async function GET(req: NextRequest) {
 
   let itemsQuery = db
     .from('diet_review_items')
-    .select('*, branch_profiles(sort_order, group_tag, branch_full_name)')
+    .select('*, branch_profiles(sort_order, group_tag, branch_full_name, review_type, file_format)')
     .in('weekly_menu_id', ids)
 
   if (isNutritionist(adminRow.role)) {
@@ -154,6 +156,8 @@ export async function GET(req: NextRequest) {
     sort_order:       item.branch_profiles?.sort_order       ?? null,
     group_tag:        item.branch_profiles?.group_tag        ?? null,
     branch_full_name: item.branch_profiles?.branch_full_name ?? null,
+    branchReviewType: (item.branch_profiles?.review_type     ?? 'standard') as 'standard' | 'special',
+    fileFormat:       item.branch_profiles?.file_format      ?? null,
   }))
   // sort_order 전역 번호 기준 정렬 (값 없으면 맨 뒤)
   allItems.sort((a, b) => (a.sort_order ?? 9999) - (b.sort_order ?? 9999))
