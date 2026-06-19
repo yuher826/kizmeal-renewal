@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef, Suspense, Fragment, type Reac
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { ChevronDown, ChevronRight as ChevronRightIcon } from 'lucide-react'
-import { isNutritionist, DEPLOY_ROLES } from '@/lib/roles'
+import { isNutritionist, DEPLOY_ROLES, EMERGENCY_DEPLOY_ROLES } from '@/lib/roles'
 
 // ── 타입 ──────────────────────────────────────────────────────────
 type HistoryEntry = {
@@ -494,7 +494,7 @@ function ManagerView({
     try {
       const res  = await fetch('/api/pptx/deploy', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ year, month, branch_ids: [item.branch_id] }),
+        body: JSON.stringify({ year, month, branch_ids: [item.branch_id], is_emergency: true }),
       })
       const data = await res.json()
       if (res.ok) {
@@ -876,7 +876,7 @@ function ManagerView({
                                 : '📧 배포'}
                             </button>
                           )}
-                          {role === 'super_admin' && (
+                          {EMERGENCY_DEPLOY_ROLES.includes(role) && (
                             <button type="button"
                               onClick={() => { setEmergencyItem(item); setEmergencyInput('') }}
                               className="px-2 py-1 rounded-lg border border-red-500 text-red-500 text-xs hover:bg-red-50 transition-colors">
@@ -1046,7 +1046,7 @@ function ManagerView({
                       : '📧 배포'}
                   </button>
                 )}
-                {item.review_status === 'approved' && role === 'super_admin' && (
+                {item.review_status === 'approved' && EMERGENCY_DEPLOY_ROLES.includes(role) && (
                   <button type="button"
                     onClick={() => { setEmergencyItem(item); setEmergencyInput('') }}
                     className="px-3 py-1.5 rounded-xl border border-red-500 text-red-500 text-xs font-semibold hover:bg-red-50">

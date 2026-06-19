@@ -331,9 +331,9 @@ export async function POST(req: NextRequest) {
         .update({
           review_status: 'approved',
           memo_history:  history,
-          reviewed_by:   adminRow.id,
-          reviewed_at: now,
-          updated_at:  now,
+          approved_by:   adminRow.id,
+          approved_at:   now,
+          updated_at:    now,
         })
         .eq('id', item.id)
         .select()
@@ -349,6 +349,20 @@ export async function POST(req: NextRequest) {
 
     if (updated.length === 0) {
       return NextResponse.json({ success: false, error: lastUpdateError2 ?? '업데이트 실패' }, { status: 500 })
+    }
+
+    // 승인된 항목의 weekly_menus.status도 'approved'로 업데이트
+    const approvedMenuIds = eligibleItems
+      .map((i: ReviewItemRow) => i.weekly_menu_id)
+      .filter(Boolean) as string[]
+    if (approvedMenuIds.length > 0) {
+      const { error: menuUpdateError } = await db
+        .from('weekly_menus')
+        .update({ status: 'approved', updated_at: now })
+        .in('id', approvedMenuIds)
+      if (menuUpdateError) {
+        console.error('weekly_menus 상태 업데이트 실패:', menuUpdateError)
+      }
     }
 
     // 영양사에게 승인 알림

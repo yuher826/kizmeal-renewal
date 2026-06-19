@@ -30,11 +30,11 @@ export const REVIEW_ALLOWED_ROLES: string[] = [
   ...NUTRITIONIST_ROLES,
 ]
 
-/** 배포 허용 역할 */
-export const DEPLOY_ROLES: string[] = [
-  'super_admin',
-  ...NUTRITIONIST_ROLES,
-]
+/** 일반 배포 허용 역할 (CK 영양사만) */
+export const DEPLOY_ROLES: string[] = ['nutritionist_ck']
+
+/** 비상 배포 허용 역할 (관리자급) */
+export const EMERGENCY_DEPLOY_ROLES: string[] = ['super_admin', 'manager']
 
 /** 수정 제출(resubmit) 허용 역할 */
 export const RESUBMIT_ROLES: string[] = [

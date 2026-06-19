@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase-server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { Resend } from 'resend'
-import { DEPLOY_ROLES } from '@/lib/roles'
+import { DEPLOY_ROLES, EMERGENCY_DEPLOY_ROLES } from '@/lib/roles'
 
 export const maxDuration = 60
 
@@ -99,7 +99,7 @@ export async function POST(req: NextRequest) {
     .maybeSingle()
 
   const allowedRoles = is_emergency === true
-    ? ['super_admin', 'manager']
+    ? EMERGENCY_DEPLOY_ROLES
     : DEPLOY_ROLES
   if (!allowedRoles.includes(adminRow?.role ?? '')) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
