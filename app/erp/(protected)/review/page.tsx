@@ -334,9 +334,12 @@ function ManagerView({
     { key: 'deployed',            label: '배포완료', icon: '📤' },
   ]
   // 이원화 검토 탭 기준 필터링
-  const standardCount  = items.filter(i => (i.branchReviewType ?? 'standard') === 'standard').length
-  const specialCount   = items.filter(i => (i.branchReviewType ?? 'standard') === 'special').length
-  const reviewTabItems = items.filter(i => (i.branchReviewType ?? 'standard') === activeReviewTab)
+  const standardCount      = items.filter(i => (i.branchReviewType ?? 'standard') === 'standard').length
+  const specialCount       = items.filter(i => (i.branchReviewType ?? 'standard') === 'special').length
+  const reviewTabItems     = items.filter(i => (i.branchReviewType ?? 'standard') === activeReviewTab)
+  const tabApprovableCount = reviewTabItems.filter(
+    i => i.review_status === 'generation_complete' || i.review_status === 'resubmitted'
+  ).length
   const tabCount: Record<ManagerTab, number> = {
     all:                 reviewTabItems.length,
     generation_complete: reviewTabItems.filter(i => i.review_status === 'generation_complete').length,
@@ -630,6 +633,48 @@ function ManagerView({
     }
   }
 
+  // 현재 이원화 탭의 승인 가능 항목 전체 일괄 승인
+  async function handleTabBatchApprove() {
+    const approvableIds = reviewTabItems
+      .filter(i => i.review_status === 'generation_complete' || i.review_status === 'resubmitted')
+      .map(i => i.id)
+    if (!approvableIds.length) return
+    if (!confirm(`${approvableIds.length}개 업장을 일괄 승인합니다.`)) return
+    setSubmitting(true)
+    const prevMap = new Map(
+      approvableIds.map(id => [id, reviewTabItems.find(i => i.id === id)?.review_status])
+    )
+    approvableIds.forEach(id => patchItem(id, { review_status: 'approved' }))
+    try {
+      const res  = await fetch('/api/diet-review', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'approved', ids: approvableIds }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        fetch('/api/diet-review/notify', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'approved_to_nutritionist' }),
+        }).catch(() => {})
+        showToast(`${data.updated?.length ?? approvableIds.length}개 원 승인 완료`, 'success')
+      } else {
+        approvableIds.forEach(id => {
+          const p = prevMap.get(id)
+          if (p) patchItem(id, { review_status: p as ReviewItem['review_status'] })
+        })
+        showToast(`오류: ${data.error}`, 'error')
+      }
+    } catch {
+      approvableIds.forEach(id => {
+        const p = prevMap.get(id)
+        if (p) patchItem(id, { review_status: p as ReviewItem['review_status'] })
+      })
+      showToast('네트워크 오류', 'error')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
   function rowBg(status: string) {
     if (status === 'correction_request') return 'bg-orange-50'
     if (status === 'resubmitted')        return 'bg-blue-50/30'
@@ -640,8 +685,8 @@ function ManagerView({
 
   return (
     <div className="space-y-4">
-      {/* 이원화 검토 탭 */}
-      <div className="flex gap-2">
+      {/* 이원화 검토 탭 + 현재 탭 전체 승인 버튼 */}
+      <div className="flex items-center gap-2 flex-wrap">
         <button
           type="button"
           onClick={() => setActiveReviewTab('standard')}
@@ -664,6 +709,18 @@ function ManagerView({
         >
           특이 업장 {specialCount}건
         </button>
+        {tabApprovableCount > 0 && (
+          <button
+            type="button"
+            onClick={handleTabBatchApprove}
+            disabled={submitting}
+            className="ml-auto flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#2E7D32] text-white text-sm font-semibold hover:bg-[#1B5E20] disabled:opacity-40 transition-colors"
+          >
+            {submitting
+              ? <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin inline-block" /><span>처리중...</span></>
+              : `✅ 현재 탭 전체 승인 (${tabApprovableCount}건)`}
+          </button>
+        )}
       </div>
 
       {/* 탭 */}
