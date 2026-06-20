@@ -44,10 +44,13 @@ export default function ErpSidebar({ user, open, setOpen }: Props) {
   const content = (
     <div className="h-screen flex flex-col w-64 bg-white border-r border-slate-200">
       {/* 로고 */}
-      <div className="bg-emerald-600 px-5 py-4 flex items-center gap-2 flex-shrink-0">
+      <Link
+        href="/erp/diet"
+        className="bg-emerald-600 px-5 py-4 flex items-center gap-2 flex-shrink-0 cursor-pointer hover:bg-emerald-700 transition-colors duration-150"
+      >
         <span className="text-white text-lg font-bold tracking-wide">KIZMEAL</span>
         <span className="bg-white/25 text-white text-xs font-semibold rounded-md px-2 py-0.5">ERP</span>
-      </div>
+      </Link>
 
       {/* 메뉴 */}
       <nav className="flex-1 overflow-y-auto py-4 px-3">
