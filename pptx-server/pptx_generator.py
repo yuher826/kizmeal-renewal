@@ -265,6 +265,28 @@ def _set_run_text(run, text):
         t_elem.text = text
 
 
+def _make_allergy_run(template_run, allergy_text):
+    """알레르기 번호 전용 빨간색(FF0000) run 생성 후 반환"""
+    new_run = copy.deepcopy(template_run)
+    rPr = new_run.find(f'{{{_NS_A}}}rPr')
+    if rPr is not None:
+        # 기존 solidFill 제거 (list()로 복사본 순회해야 안전)
+        for child in list(rPr):
+            if child.tag == f'{{{_NS_A}}}solidFill':
+                rPr.remove(child)
+        # FF0000 solidFill 첫 번째 자식으로 삽입
+        solid = etree.Element(f'{{{_NS_A}}}solidFill')
+        srgb  = etree.SubElement(solid, f'{{{_NS_A}}}srgbClr')
+        srgb.set('val', 'FF0000')
+        rPr.insert(0, solid)
+    # 텍스트 교체
+    t = new_run.find(f'{{{_NS_A}}}t')
+    if t is None:
+        t = etree.SubElement(new_run, f'{{{_NS_A}}}t')
+    t.text = allergy_text
+    return new_run
+
+
 def set_lunch_cell(cell, lines):
     """
     중식 셀: run-br-run-br-... 구조에서 각 run에 라인별 텍스트 주입.
@@ -274,7 +296,14 @@ def set_lunch_cell(cell, lines):
     if not runs:
         return
     for i, run in enumerate(runs):
-        _set_run_text(run, lines[i] if i < len(lines) else '')
+        text = lines[i] if i < len(lines) else ''
+        menu, allergy = split_menu_allergy(text)
+        _set_run_text(run, menu)
+        if allergy:
+            allergy_run = _make_allergy_run(run, allergy)
+            p = run.getparent()           # run 자체에서 부모 <a:p> 직접 획득 (안전)
+            run_idx = list(p).index(run)
+            p.insert(run_idx + 1, allergy_run)
 
 
 def set_snack_cell(cell, menu_line, kcal_line):
