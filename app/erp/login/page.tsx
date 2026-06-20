@@ -5,7 +5,12 @@ export const metadata = { title: '로그인 | 키즈밀 ERP' }
 export default function ErpLoginPage({
   searchParams,
 }: {
-  searchParams: { next?: string }
+  searchParams: { next?: string; message?: string }
 }) {
-  return <ErpLoginForm next={searchParams.next} />
+  return (
+    <ErpLoginForm
+      next={searchParams.next}
+      message={searchParams.message}
+    />
+  )
 }

@@ -3,7 +3,7 @@
 import { useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LogOut } from 'lucide-react'
+import { LogOut, Settings } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
 import { ERP_NAV_GROUPS } from '@/lib/erp-nav'
 import type { ErpUser } from '@/types/erp'
@@ -107,13 +107,26 @@ export default function ErpSidebar({ user, open, setOpen }: Props) {
               </span>
             </div>
           </div>
-          <button
-            onClick={handleLogout}
-            className="mt-2 w-full text-xs text-slate-400 hover:text-red-500 flex items-center gap-1.5 transition-colors"
-          >
-            <LogOut size={12} />
-            로그아웃
-          </button>
+          <div className="mt-2 flex flex-col gap-1">
+            <Link
+              href="/erp/my-page"
+              className={`text-xs flex items-center gap-1.5 transition-colors ${
+                pathname === '/erp/my-page'
+                  ? 'text-emerald-600 font-medium'
+                  : 'text-slate-400 hover:text-slate-700'
+              }`}
+            >
+              <Settings size={12} />
+              마이페이지
+            </Link>
+            <button
+              onClick={handleLogout}
+              className="text-xs text-slate-400 hover:text-red-500 flex items-center gap-1.5 transition-colors"
+            >
+              <LogOut size={12} />
+              로그아웃
+            </button>
+          </div>
         </div>
       </div>
     </div>

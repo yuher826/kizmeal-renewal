@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { ChevronRight, Menu, Bell } from 'lucide-react'
 import type { ErpUser } from '@/types/erp'
@@ -15,6 +16,7 @@ const BREADCRUMB_MAP: Record<string, { groups: string[]; page: string }> = {
   '/erp/inquiries':       { groups: ['소통 관리'], page: 'CS 관리' },
   '/erp/email':           { groups: ['배포 관리'], page: '이메일 배포' },
   '/erp/stats':           { groups: ['분석'],      page: '통계' },
+  '/erp/my-page':         { groups: [],             page: '마이페이지' },
 }
 
 const ROLE_BADGE: Record<string, { bg: string; text: string; label: string }> = {
@@ -82,7 +84,12 @@ export default function ErpHeader({ user, onMenuClick }: Props) {
         </button>
         <div className="w-px h-5 bg-slate-200" aria-hidden="true" />
         <div className="flex items-center gap-2">
-          <span className="text-sm text-slate-600 hidden sm:block">{user.name}</span>
+          <Link
+            href="/erp/my-page"
+            className="text-sm text-slate-600 hidden sm:block hover:underline"
+          >
+            {user.name}
+          </Link>
           <span className={`text-xs font-medium rounded px-1.5 py-0.5 ${badge.bg} ${badge.text}`}>
             {badge.label}
           </span>

@@ -7,9 +7,10 @@ import { createClient } from '@/lib/supabase'
 
 interface Props {
   next?: string
+  message?: string
 }
 
-export default function ErpLoginForm({ next }: Props) {
+export default function ErpLoginForm({ next, message }: Props) {
   const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -115,6 +116,13 @@ export default function ErpLoginForm({ next }: Props) {
 
         <div className="flex-1 flex flex-col justify-center px-8 md:px-16">
           <div className="max-w-sm md:max-w-md mx-auto w-full">
+            {/* 비밀번호 변경 성공 배너 */}
+            {message === 'password_changed' && (
+              <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm rounded-lg px-4 py-3 mb-6">
+                비밀번호가 변경됐습니다. 새 비밀번호로 로그인해주세요.
+              </div>
+            )}
+
             <h2 className="text-2xl font-semibold text-slate-800">관리자 로그인</h2>
             <p className="text-sm text-slate-500 mt-1 mb-8">
               키즈밀 ERP 접근 권한이 필요합니다
