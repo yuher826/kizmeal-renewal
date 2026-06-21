@@ -82,7 +82,7 @@ export default function CustomerDashboardPage() {
         .from('weekly_menus')
         .select('id')
         .eq('branch_id', branchId)
-        .in('status', ['generated', 'review_requested', 'approved', 'deployed'])
+        .in('status', ['generation_complete', 'review_requested', 'approved', 'deployed'])
         .eq('year', nowYear)
         .eq('month', nowMonth)
         .limit(1)

@@ -38,7 +38,7 @@ function formatDate(iso: string | null) {
 }
 
 function getActionLabel(status: string) {
-  if (['generated','review_requested','approved','correction_requested'].includes(status)) return '검토'
+  if (['generation_complete','review_requested','approved','correction_requested'].includes(status)) return '검토'
   if (status === 'deployed') return '결과 보기'
   return '바로가기'
 }
@@ -178,7 +178,7 @@ export default function DietHistoryPage() {
                           className={`inline-block px-3 py-1.5 rounded-lg text-[11px] font-bold transition-colors whitespace-nowrap ${
                             isDeployed
                               ? 'bg-[#E8F5E9] text-[#2E7D32] hover:bg-[#C8E6C9]'
-                              : ['generated','review_requested','approved','correction_requested'].includes(row.status)
+                              : ['generation_complete','review_requested','approved','correction_requested'].includes(row.status)
                                 ? 'bg-orange-100 text-orange-700 hover:bg-orange-200'
                                 : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
                           }`}

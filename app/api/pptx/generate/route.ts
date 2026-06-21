@@ -119,7 +119,7 @@ export async function POST(req: NextRequest) {
     await dbClient
       .from('weekly_menus')
       .update({
-        status: 'generated',
+        status: 'generation_complete',
         generation_results: {
           generated_at: new Date().toISOString(),
           succeeded:    genData.succeeded ?? 0,

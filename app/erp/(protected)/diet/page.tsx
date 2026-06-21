@@ -206,7 +206,7 @@ function DietAutomationContent() {
       setHasMenuData(!!data.menu_data)
       if (data.generation_results) {
         setGenResults(data.generation_results as GenerationResults)
-        if (['generated','review_requested','approved','deployed'].includes(data.status)) {
+        if (['generation_complete','review_requested','approved','deployed'].includes(data.status)) {
           setGenStatus('done')
         }
       } else {
@@ -472,7 +472,7 @@ function DietAutomationContent() {
   const generatedThisMonth =
     actionsProgress?.generated
     ?? genResults?.succeeded
-    ?? branchMenuRows.filter(r => r.status === 'generated').length
+    ?? branchMenuRows.filter(r => r.status === 'generation_complete').length
 
   const totalBranchCount = actionsProgress?.total ?? 49
 
@@ -503,7 +503,7 @@ function DietAutomationContent() {
           groupTag:    r.group_tag,
           pptxUrl:     r.pptx_url,
           pdfUrl:      r.pdf_url,
-          status:      r.status === 'generated' ? 'success' : r.status,
+          status:      r.status === 'generation_complete' ? 'success' : r.status,
           branchId:    r.branch_id,
           deployEmail: r.deploy_email,
           shortCode:   r.short_code,
@@ -1007,7 +1007,7 @@ function DietAutomationContent() {
                         const badge     = getFileBadge(row.branchName)
                         const isManual  = MANUAL_PROCESS_CODES.has(row.branchName)
                         const isSep     = SEPARATE_CONTRACT_CODES.has(row.branchName)
-                        const isSuccess = row.status === 'success' || row.status === 'generated'
+                        const isSuccess = row.status === 'success' || row.status === 'generation_complete'
                         const isError   = row.status === 'error'
                         const isProc    = !isSuccess && !isError
                         const canSendMail = isSuccess && !!row.deployEmail &&
