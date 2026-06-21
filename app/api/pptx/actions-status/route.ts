@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
     .not('branch_id', 'is', null)
 
   const list       = rows ?? []
-  const generated  = list.filter(r => r.status === 'generation_complete').length
+  const generated  = list.filter(r => ['generation_complete','approved','deployed'].includes(r.status)).length
   const error      = list.filter(r => r.status === 'error').length
   const generating = list.filter(r => r.status === 'generating').length
 
