@@ -1104,9 +1104,7 @@ function DietAutomationContent() {
                                 <div className="flex items-center justify-center gap-1 flex-wrap">
                                   {row.pptxUrl ? (
                                     <a
-                                      href={row.pptxUrl}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
+                                      href={`/api/download?url=${encodeURIComponent(row.pptxUrl)}&filename=${encodeURIComponent(`${row.displayName}_${pptxYear}${String(pptxMonth).padStart(2, '0')}.pptx`)}`}
                                       className="px-2 py-1 rounded text-[10px] font-medium transition-colors"
                                       style={{ color: '#0C447C', background: '#E6F1FB' }}
                                     >
