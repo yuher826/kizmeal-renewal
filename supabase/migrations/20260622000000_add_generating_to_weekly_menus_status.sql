@@ -16,5 +16,6 @@ ALTER TABLE weekly_menus
     'generation_complete',
     'approved',
     'deployed',
+    'correction_requested',
     'error'
   ));
