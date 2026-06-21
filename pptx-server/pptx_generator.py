@@ -287,6 +287,55 @@ def _make_allergy_run(template_run, allergy_text):
     return new_run
 
 
+def _apply_inline_allergy(template_run, text, p):
+    """간식 셀용: 텍스트 내 알레르기 번호를 인라인 분리해 빨간색 run 삽입.
+    예) '삶은계란①, 요구르트②'
+        → run(삶은계란) + run_red(①) + run(, 요구르트) + run_red(②)
+    """
+    segments = []
+    current = ''
+    is_allergy = None
+    for char in text:
+        char_is_allergy = _ALLERGY_LO <= ord(char) <= _ALLERGY_HI
+        if is_allergy is None:
+            is_allergy = char_is_allergy
+        if char_is_allergy != is_allergy:
+            if current:
+                segments.append((current, is_allergy))
+            current = char
+            is_allergy = char_is_allergy
+        else:
+            current += char
+    if current:
+        segments.append((current, is_allergy))
+
+    if not segments:
+        _set_run_text(template_run, '')
+        return
+
+    first_text, first_is_allergy = segments[0]
+    if first_is_allergy:
+        _set_run_text(template_run, '')
+        insert_pos = list(p).index(template_run) + 1
+        p.insert(insert_pos, _make_allergy_run(template_run, first_text))
+        insert_pos += 1
+    else:
+        _set_run_text(template_run, first_text)
+        insert_pos = list(p).index(template_run) + 1
+
+    for seg_text, seg_is_allergy in segments[1:]:
+        if seg_is_allergy:
+            new_run = _make_allergy_run(template_run, seg_text)
+        else:
+            new_run = copy.deepcopy(template_run)
+            t_elem = new_run.find(f'{{{_NS_A}}}t')
+            if t_elem is None:
+                t_elem = etree.SubElement(new_run, f'{{{_NS_A}}}t')
+            t_elem.text = seg_text
+        p.insert(insert_pos, new_run)
+        insert_pos += 1
+
+
 def set_lunch_cell(cell, lines):
     """
     중식 셀: run-br-run-br-... 구조에서 각 run에 라인별 텍스트 주입.
@@ -314,7 +363,7 @@ def set_snack_cell(cell, menu_line, kcal_line):
     if p is None or not runs:
         return
 
-    _set_run_text(runs[0], menu_line)
+    _apply_inline_allergy(runs[0], menu_line, runs[0].getparent())
 
     if kcal_line:
         if len(runs) >= 2:
