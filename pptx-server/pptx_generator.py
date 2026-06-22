@@ -740,6 +740,19 @@ def _make_text_paragraph(text, sz=900, bold=False, algn=None):
     return p
 
 
+# p:sp 안의 txBody는 p:(PML) 또는 a:(DrawingML) 네임스페이스 둘 다 가능
+_TXBODY_TAGS = [f'{{{_NS_PML}}}txBody', f'{{{_NS_A}}}txBody']
+
+
+def _find_txbody(sp):
+    """p:txBody → a:txBody 순으로 탐색."""
+    for tag in _TXBODY_TAGS:
+        txBody = sp.find(f'.//{tag}')
+        if txBody is not None:
+            return txBody
+    return None
+
+
 def _replace_textbox_content(slide, search_text, paragraphs):
     """
     슬라이드 내 전체 텍스트에 search_text가 포함된 p:sp를 찾아
@@ -747,25 +760,11 @@ def _replace_textbox_content(slide, search_text, paragraphs):
     paragraphs: [{'text':str, 'sz':int, 'bold':bool, 'algn':str|None}, ...]
     """
     spTree = slide.shapes._spTree
-
-    # ── 디버그2: spTree 직계 자식 태그 목록 (최초 1회만 출력) ──
-    if search_text == '원산지':
-        child_tags = list({c.tag for c in spTree})
-        print(f'[DEBUG2] spTree 자식 태그: {child_tags}')
-
-    sps = spTree.findall(f'.//{_SP_TAG_PML}')
-    print(f'[DEBUG2] sp 개수: {len(sps)}, 검색어: {search_text}')
-
-    for sp in sps:
+    for sp in spTree.findall(f'.//{_SP_TAG_PML}'):
         full_text = ''.join(t.text or '' for t in sp.findall(f'.//{_T_TAG_A}'))
-        # 원산지/원재료 후보 sp 출력
-        if '원산지' in full_text or '원재료' in full_text:
-            print(f'[DEBUG2] 후보 발견: {full_text[:50]}')
-            txBody_check = sp.find(f'.//{{{_NS_A}}}txBody')
-            print(f'[DEBUG2] txBody is None: {txBody_check is None}')
         if search_text not in full_text:
             continue
-        txBody = sp.find(f'.//{{{_NS_A}}}txBody')
+        txBody = _find_txbody(sp)
         if txBody is None:
             continue
         # 기존 a:p만 제거 (bodyPr·lstStyle 등 보존)
@@ -780,9 +779,7 @@ def _replace_textbox_content(slide, search_text, paragraphs):
                 algn=para_cfg.get('algn'),
             )
             txBody.append(new_p)
-        print(f'[DEBUG] 텍스트박스 교체: "{search_text}" 매칭 성공')
         return  # 첫 번째 매칭만 처리
-    print(f'[DEBUG] 텍스트박스 "{search_text}" 못 찾음')
 
 
 def replace_origin_text(slide, origin_text):
