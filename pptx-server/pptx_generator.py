@@ -26,6 +26,7 @@ import zipfile
 from lxml import etree
 from pptx import Presentation
 from pptx.enum.shapes import MSO_SHAPE_TYPE
+from pptx.util import Emu
 
 from bracket_parser import resolve_for_branch
 
@@ -42,6 +43,14 @@ _NS_CT  = 'http://schemas.openxmlformats.org/package/2006/content-types'
 _SLIDE_REL_TYPE = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide'
 
 _S1, _S2, _S3 = 0, 1, 2
+
+# ── 공휴일에도 운영하는 원 ────────────────────────────────────────
+_HOLIDAY_OPERATING = {'덕양P', '광교SLP'}
+
+# ── 행 높이 고정값 (EMU) ─────────────────────────────────────────
+_H_LUNCH = 1368000
+_H_SNACK = 403200
+_H_LAST  = 437413
 
 
 # ════════════════════════════════════════════════════════════════════
@@ -392,9 +401,14 @@ def set_label_cell(cell, label):
 
 
 def clear_cell(cell):
-    _, runs = _get_p_and_runs(cell)
-    for run in runs:
-        _set_run_text(run, '')
+    """셀 내 모든 run·br 제거 → endParaRPr만 남은 완전 빈 셀."""
+    p, _ = _get_p_and_runs(cell)
+    if p is None:
+        return
+    for child in list(p):
+        tag = child.tag
+        if tag == f'{{{_NS_A}}}r' or tag == f'{{{_NS_A}}}br':
+            p.remove(child)
 
 
 # ════════════════════════════════════════════════════════════════════
@@ -581,7 +595,7 @@ def _render_slide(table, plan_entry, week_days, cfg):
                     continue
 
                 if sec == 'lunch':
-                    if day.get('is_holiday'):
+                    if day.get('is_holiday') and branch_name not in _HOLIDAY_OPERATING:
                         clear_cell(cell)
                         continue
                     lines = build_lunch_lines(
@@ -593,6 +607,9 @@ def _render_slide(table, plan_entry, week_days, cfg):
                     set_lunch_cell(cell, lines)
 
                 elif sec == 'am':
+                    if day.get('is_holiday') and branch_name not in _HOLIDAY_OPERATING:
+                        clear_cell(cell)
+                        continue
                     if fixed_am:
                         set_snack_cell(cell, fixed_am['menu'], fixed_am['nutrition'])
                         continue
@@ -610,6 +627,23 @@ def _render_slide(table, plan_entry, week_days, cfg):
                     menu, kcal = build_snack(
                         day.get('care_snack', {}), branch_name, do_strip=do_strip)
                     set_snack_cell(cell, menu, kcal)
+
+
+# ════════════════════════════════════════════════════════════════════
+# 9-1. 행 높이 고정
+# ════════════════════════════════════════════════════════════════════
+def _fix_row_heights(table, sections):
+    """모든 행의 높이를 원본 기준값(EMU)으로 고정."""
+    n_rows = len(table.rows)
+    n_secs = len(sections)
+    for ri in range(n_rows):
+        sec = sections[ri % n_secs]
+        if ri == n_rows - 1:
+            table.rows[ri].height = Emu(_H_LAST)
+        elif sec == 'lunch':
+            table.rows[ri].height = Emu(_H_LUNCH)
+        else:
+            table.rows[ri].height = Emu(_H_SNACK)
 
 
 # ════════════════════════════════════════════════════════════════════
@@ -649,6 +683,7 @@ def generate(cfg, menu_data, template_path, out_path, date_map=None):
             continue
 
         _render_slide(table, plan_entry, week_days, cfg)
+        _fix_row_heights(table, sections)
 
     prs.save(out_path)
     return out_path
