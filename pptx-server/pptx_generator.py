@@ -821,10 +821,13 @@ def _fix_allergy_position(prs):
         print("⚠️ graphicFrame(테이블)을 찾지 못함")
         return
     p_xfrm = gf.find(f'{{{ns_p}}}xfrm')
+    tbl = gf.find(f'.//{{{ns_a}}}tbl')
+    if p_xfrm is None or tbl is None:
+        print("⚠️ 테이블 xfrm 또는 tbl을 찾지 못함")
+        return
     table_top = int(p_xfrm.find(f'{{{ns_a}}}off').get('y'))
 
     # 실제 행 높이(tr h) 합산으로 table_bottom 계산 (ext/cy 신뢰 안 함)
-    tbl = gf.find(f'.//{{{ns_a}}}tbl')
     total_row_h = sum(int(tr.get('h', 0)) for tr in tbl.findall(f'{{{ns_a}}}tr'))
     table_bottom = table_top + total_row_h
 
@@ -840,10 +843,15 @@ def _fix_allergy_position(prs):
         return
 
     # 위치/높이 직접 수정
-    spPr = allergy_sp.find(f'.//{{{ns_a}}}spPr')
-    a_xfrm = spPr.find(f'{{{ns_a}}}xfrm')
+    a_xfrm = allergy_sp.find(f'.//{{{ns_a}}}xfrm')
+    if a_xfrm is None:
+        print("⚠️ 알레르기 박스 xfrm을 찾지 못함")
+        return
     a_off = a_xfrm.find(f'{{{ns_a}}}off')
     a_ext = a_xfrm.find(f'{{{ns_a}}}ext')
+    if a_off is None or a_ext is None:
+        print("⚠️ 알레르기 박스 off/ext를 찾지 못함")
+        return
 
     new_top = table_bottom + GAP
     new_cy = 230000
