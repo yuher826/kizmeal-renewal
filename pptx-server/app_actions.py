@@ -349,6 +349,10 @@ def main():
     else:
         origin_text = None
     material_text = settings.get('material_text')
+    print(f'[DEBUG] diet_settings 조회됨: {len(settings)}개 키')
+    print(f'[DEBUG] origin_body 존재: {bool(settings.get("origin_body"))}')
+    print(f'[DEBUG] origin_text 구성됨: {origin_text is not None}')
+    print(f'[DEBUG] material_text: {bool(material_text)}')
 
     print(f'[4/4] PPTX 생성 시작 (배치: {_BATCH}개씩)...')
     tmp_dir   = tempfile.mkdtemp(prefix='kizmeal_actions_')

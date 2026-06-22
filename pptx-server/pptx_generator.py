@@ -766,7 +766,9 @@ def _replace_textbox_content(slide, search_text, paragraphs):
                 algn=para_cfg.get('algn'),
             )
             txBody.append(new_p)
+        print(f'[DEBUG] 텍스트박스 교체: "{search_text}" 매칭 성공')
         return  # 첫 번째 매칭만 처리
+    print(f'[DEBUG] 텍스트박스 "{search_text}" 못 찾음')
 
 
 def replace_origin_text(slide, origin_text):
