@@ -747,8 +747,22 @@ def _replace_textbox_content(slide, search_text, paragraphs):
     paragraphs: [{'text':str, 'sz':int, 'bold':bool, 'algn':str|None}, ...]
     """
     spTree = slide.shapes._spTree
-    for sp in spTree.findall(f'.//{_SP_TAG_PML}'):
+
+    # ── 디버그2: spTree 직계 자식 태그 목록 (최초 1회만 출력) ──
+    if search_text == '원산지':
+        child_tags = list({c.tag for c in spTree})
+        print(f'[DEBUG2] spTree 자식 태그: {child_tags}')
+
+    sps = spTree.findall(f'.//{_SP_TAG_PML}')
+    print(f'[DEBUG2] sp 개수: {len(sps)}, 검색어: {search_text}')
+
+    for sp in sps:
         full_text = ''.join(t.text or '' for t in sp.findall(f'.//{_T_TAG_A}'))
+        # 원산지/원재료 후보 sp 출력
+        if '원산지' in full_text or '원재료' in full_text:
+            print(f'[DEBUG2] 후보 발견: {full_text[:50]}')
+            txBody_check = sp.find(f'.//{{{_NS_A}}}txBody')
+            print(f'[DEBUG2] txBody is None: {txBody_check is None}')
         if search_text not in full_text:
             continue
         txBody = sp.find(f'.//{{{_NS_A}}}txBody')
