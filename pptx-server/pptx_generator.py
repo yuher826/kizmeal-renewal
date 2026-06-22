@@ -711,9 +711,91 @@ def _fix_row_heights(table, sections):
 
 
 # ════════════════════════════════════════════════════════════════════
+# 9-2. 텍스트박스 교체
+# ════════════════════════════════════════════════════════════════════
+_MATERIAL_FIXED_LINE = '키즈밀은 엄선된 친환경 및 무항생제 식재료를 사용하며, 원재료 정보는 매월 갱신됩니다.'
+
+_SP_TAG_PML = f'{{{_NS_PML}}}sp'
+_P_TAG      = f'{{{_NS_A}}}p'
+_T_TAG_A    = f'{{{_NS_A}}}t'
+_BODY_PR    = f'{{{_NS_A}}}bodyPr'
+
+
+def _make_text_paragraph(text, sz=900, bold=False, algn=None):
+    """단순 텍스트 paragraph XML 생성."""
+    p = etree.Element(_P_TAG)
+    if algn:
+        pPr = etree.SubElement(p, f'{{{_NS_A}}}pPr')
+        pPr.set('algn', algn)
+    rPr = etree.Element(f'{{{_NS_A}}}rPr')
+    rPr.set('lang', 'ko-KR')
+    rPr.set('sz', str(sz))
+    if bold:
+        rPr.set('b', '1')
+    rPr.set('dirty', '0')
+    run = etree.SubElement(p, f'{{{_NS_A}}}r')
+    run.append(rPr)
+    t = etree.SubElement(run, f'{{{_NS_A}}}t')
+    t.text = text or ''
+    return p
+
+
+def _replace_textbox_content(slide, search_text, paragraphs):
+    """
+    슬라이드 내 전체 텍스트에 search_text가 포함된 p:sp를 찾아
+    txBody의 a:p 요소만 교체 (bodyPr 등 다른 요소는 보존).
+    paragraphs: [{'text':str, 'sz':int, 'bold':bool, 'algn':str|None}, ...]
+    """
+    spTree = slide.shapes._spTree
+    for sp in spTree.findall(f'.//{_SP_TAG_PML}'):
+        full_text = ''.join(t.text or '' for t in sp.findall(f'.//{_T_TAG_A}'))
+        if search_text not in full_text:
+            continue
+        txBody = sp.find(f'.//{{{_NS_A}}}txBody')
+        if txBody is None:
+            continue
+        # 기존 a:p만 제거 (bodyPr·lstStyle 등 보존)
+        for p in txBody.findall(_P_TAG):
+            txBody.remove(p)
+        # 새 paragraph 삽입
+        for para_cfg in paragraphs:
+            new_p = _make_text_paragraph(
+                para_cfg.get('text', ''),
+                sz=para_cfg.get('sz', 900),
+                bold=para_cfg.get('bold', False),
+                algn=para_cfg.get('algn'),
+            )
+            txBody.append(new_p)
+        return  # 첫 번째 매칭만 처리
+
+
+def replace_origin_text(slide, origin_text):
+    """원산지 텍스트박스 교체."""
+    if not origin_text:
+        return
+    _replace_textbox_content(slide, '원산지', [
+        {'text': '원산지 표기', 'sz': 1000, 'bold': True, 'algn': 'l'},
+        {'text': origin_text.get('body', ''),       'sz': 800},
+        {'text': origin_text.get('disclaimer', ''), 'sz': 800},
+    ])
+
+
+def replace_material_text(slide, material_text):
+    """원재료 텍스트박스 교체."""
+    if not material_text:
+        return
+    _replace_textbox_content(slide, '원재료', [
+        {'text': '* 원재료 표시안내 *', 'sz': 900, 'bold': True, 'algn': 'l'},
+        {'text': material_text,         'sz': 800},
+        {'text': _MATERIAL_FIXED_LINE,  'sz': 800},
+    ])
+
+
+# ════════════════════════════════════════════════════════════════════
 # 10. 메인 생성 함수
 # ════════════════════════════════════════════════════════════════════
-def generate(cfg, menu_data, template_path, out_path, date_map=None):
+def generate(cfg, menu_data, template_path, out_path, date_map=None,
+             origin_text=None, material_text=None):
     type_code = cfg['type']
     plan = TYPE_PLANS.get(type_code)
     if plan is None:
@@ -736,6 +818,8 @@ def generate(cfg, menu_data, template_path, out_path, date_map=None):
 
         replace_slide_metadata(slide, display_name, email)
         replace_date_group(slide)  # 날짜 그룹 텍스트 비우기 (날짜는 테이블 셀 안에 삽입)
+        replace_origin_text(slide, origin_text)
+        replace_material_text(slide, material_text)
 
         _, sections, opts = plan_entry
         if opts.get('skip') or not sections:

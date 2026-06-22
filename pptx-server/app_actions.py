@@ -344,7 +344,12 @@ def main():
                 storage_path = f'{YEAR}/{MONTH:02d}/{fname}'
 
                 try:
-                    gen_pptx(cfg, adapted_menu, TEMPLATE_PATH, out_pptx, date_map=date_map)
+                    gen_pptx(
+                        cfg, adapted_menu, TEMPLATE_PATH, out_pptx,
+                        date_map=date_map,
+                        origin_text=adapted_menu.get('origin_text'),
+                        material_text=adapted_menu.get('material_text'),
+                    )
                     pptx_url = upload_pptx(out_pptx, storage_path)
                     weekly_menu_id = upsert_branch_row(branch_uuid, 'generation_complete', pptx_url)
                     if weekly_menu_id:

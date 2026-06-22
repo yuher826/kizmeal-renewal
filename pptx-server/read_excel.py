@@ -71,6 +71,13 @@ _COL_BIRTHDAY   = 14
 _COL_FRUIT      = 15  # O → add_fruit=True
 _COL_ALLERGY    = 16
 
+# ── 원별 참조표 설정 행 (원산지/원재료, B=라벨 C=값) ──────────────
+_ROW_ORIGIN_BODY  = 64   # C64: 원산지 본문
+_ROW_ORIGIN_DISC  = 65   # C65: 원산지 면책문구
+_ROW_MATERIAL     = 66   # C66: 원재료 표시안내
+_COL_SETTING_LABEL = 2   # B열 (라벨)
+_COL_SETTING_VALUE = 3   # C열 (값)
+
 # ── 동탄P 고정 오전간식 ────────────────────────────────────────────
 _DONGTAN_FIXED_AM = {'menu': '유기농우유②', 'nutrition': ''}
 
@@ -350,9 +357,29 @@ def load_excel(path):
         '17': _day_date('3', 2),   # 3주 수
     }
 
-    # 원별 설정 파싱
+    # 원별 참조표 파싱
     ws_branches = wb['📋 원별 참조표']
     branches = parse_branches(ws_branches)
+
+    # 원산지·원재료 텍스트 읽기 (C64~C66, 없거나 비어있으면 None)
+    try:
+        def _setting(row):
+            val = ws_branches.cell(row, _COL_SETTING_VALUE).value
+            return str(val).strip() if val else None
+
+        origin_body = _setting(_ROW_ORIGIN_BODY)
+        if origin_body:
+            menu_data['origin_text'] = {
+                'body':       origin_body,
+                'disclaimer': _setting(_ROW_ORIGIN_DISC),
+            }
+        else:
+            menu_data['origin_text'] = None
+
+        menu_data['material_text'] = _setting(_ROW_MATERIAL)
+    except Exception:
+        menu_data['origin_text']   = None
+        menu_data['material_text'] = None
 
     return menu_data, branches, date_map
 
