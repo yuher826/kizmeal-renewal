@@ -546,41 +546,24 @@ _DATE_NUM_RE = re.compile(r'^(0[1-9]|[12][0-9]|3[01])$')
 
 def replace_date_group(slide, date_map=None):
     """
-    날짜 관련 shape 텍스트를 모두 비움 (날짜는 테이블 셀 안에 삽입).
-    1) 그룹 shape(그룹 25/1/201) 안 모든 run 비우기
-    2) 전체 텍스트가 '01'~'31'인 개별 sp run 비우기
+    lxml으로 spTree를 직접 순회해 전체 텍스트가 '01'~'31'인
+    p:sp를 완전 삭제 (그룹 중첩 깊이 무관).
     """
-    _DATE_GROUP_NAMES = {'그룹 25', '그룹 1', '그룹 201'}
-    for shape in slide.shapes:
-        if shape.name in _DATE_GROUP_NAMES:
-            _clear_date_group(shape)
-        elif shape.has_text_frame:
-            txt = shape.text_frame.text.strip()
-            if _DATE_NUM_RE.match(txt):
-                for para in shape.text_frame.paragraphs:
-                    for run in para.runs:
-                        run.text = ''
+    spTree = slide.shapes._spTree
+    _SP_TAG = f'{{{_NS_PML}}}sp'
+    _T_TAG  = f'{{{_NS_A}}}t'
 
+    # 먼저 삭제 대상 수집 후 제거 (순회 중 remove 방지)
+    to_remove = []
+    for sp in spTree.findall(f'.//{_SP_TAG}'):
+        txt = ''.join(t.text or '' for t in sp.findall(f'.//{_T_TAG}')).strip()
+        if _DATE_NUM_RE.match(txt):
+            to_remove.append(sp)
 
-def _clear_date_group(group_shape):
-    """그룹 shape(중첩 포함) 안의 모든 run 텍스트를 ''로 비움."""
-    try:
-        for shape in group_shape.shapes:
-            if shape.shape_type == MSO_SHAPE_TYPE.GROUP:
-                try:
-                    for inner in shape.shapes:
-                        if inner.has_text_frame:
-                            for para in inner.text_frame.paragraphs:
-                                for run in para.runs:
-                                    run.text = ''
-                except Exception:
-                    pass
-            elif shape.has_text_frame:
-                for para in shape.text_frame.paragraphs:
-                    for run in para.runs:
-                        run.text = ''
-    except Exception:
-        pass
+    for sp in to_remove:
+        parent = sp.getparent()
+        if parent is not None:
+            parent.remove(sp)
 
 
 # ════════════════════════════════════════════════════════════════════
