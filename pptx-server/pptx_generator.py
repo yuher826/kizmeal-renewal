@@ -21,6 +21,7 @@
 
 import copy
 import io
+import re
 import zipfile
 
 from lxml import etree
@@ -345,34 +346,52 @@ def _apply_inline_allergy(template_run, text, p):
         insert_pos += 1
 
 
+def _make_date_paragraph(date_num):
+    """날짜 전용 paragraph 생성: 왼쪽 정렬, #84B29C, 9pt, 볼드, Pretendard."""
+    date_p = etree.Element(f'{{{_NS_A}}}p')
+
+    pPr = etree.SubElement(date_p, f'{{{_NS_A}}}pPr')
+    pPr.set('algn', 'l')
+
+    rPr = etree.Element(f'{{{_NS_A}}}rPr')
+    rPr.set('lang', 'ko-KR')
+    rPr.set('sz', '900')
+    rPr.set('b', '1')
+    rPr.set('dirty', '0')
+
+    solidFill = etree.SubElement(rPr, f'{{{_NS_A}}}solidFill')
+    srgbClr   = etree.SubElement(solidFill, f'{{{_NS_A}}}srgbClr')
+    srgbClr.set('val', '84B29C')
+
+    latin = etree.SubElement(rPr, f'{{{_NS_A}}}latin')
+    latin.set('typeface', 'Pretendard')
+    ea = etree.SubElement(rPr, f'{{{_NS_A}}}ea')
+    ea.set('typeface', 'Pretendard')
+
+    run = etree.SubElement(date_p, f'{{{_NS_A}}}r')
+    run.append(rPr)
+    t = etree.SubElement(run, f'{{{_NS_A}}}t')
+    t.text = date_num
+
+    return date_p
+
+
 def set_lunch_cell(cell, lines, date_num=None):
     """
     중식 셀: run-br-run-br-... 구조에서 각 run에 라인별 텍스트 주입.
     lines: [밥, 국, 반찬1, ..., 영양구성] (최대 7개)
-    date_num: 일자 문자열 (예: '01') — 있으면 맨 앞 run+br로 삽입
+    date_num: 일자 문자열 (예: '01') — 있으면 별도 paragraph를 셀 맨 앞에 삽입
     """
     p, runs = _get_p_and_runs(cell)
     if not runs:
         return
 
     if date_num:
-        # 첫 run의 서식을 복사해 날짜 run+br을 p 맨 앞에 삽입
-        first_run = runs[0]
-        rPr = first_run.find(f'{{{_NS_A}}}rPr')
-
-        date_run = etree.Element(f'{{{_NS_A}}}r')
-        if rPr is not None:
-            date_run.append(copy.deepcopy(rPr))
-        t = etree.SubElement(date_run, f'{{{_NS_A}}}t')
-        t.text = date_num
-
-        date_br = etree.Element(f'{{{_NS_A}}}br')
-        if rPr is not None:
-            date_br.append(copy.deepcopy(rPr))
-
-        first_idx = list(p).index(first_run)
-        p.insert(first_idx, date_br)
-        p.insert(first_idx, date_run)
+        # 날짜 전용 paragraph를 기존 메뉴 p 앞에 삽입
+        txBody = p.getparent()
+        date_p = _make_date_paragraph(date_num)
+        p_idx  = list(txBody).index(p)
+        txBody.insert(p_idx, date_p)
 
     for i, run in enumerate(runs):
         text = lines[i] if i < len(lines) else ''
@@ -386,20 +405,19 @@ def set_lunch_cell(cell, lines, date_num=None):
 
 
 def _set_date_only_cell(cell, date_num):
-    """빈 셀(공휴일 clear 후)에 날짜 run 1개만 삽입."""
-    p, runs = _get_p_and_runs(cell)
-    if p is None or not date_num:
+    """빈 셀(공휴일 clear 후)에 날짜 paragraph 1개만 삽입."""
+    tc     = cell._tc
+    txBody = tc.find(f'{{{_NS_A}}}txBody')
+    if txBody is None or not date_num:
         return
-    # 템플릿 run이 남아있으면 서식 참조용으로 사용, 없으면 bare run
-    rPr = None
-    if runs:
-        rPr = runs[0].find(f'{{{_NS_A}}}rPr')
-    date_run = etree.Element(f'{{{_NS_A}}}r')
-    if rPr is not None:
-        date_run.append(copy.deepcopy(rPr))
-    t = etree.SubElement(date_run, f'{{{_NS_A}}}t')
-    t.text = date_num
-    p.append(date_run)
+    # 기존 p 앞에 날짜 paragraph 삽입 (빈 p는 그대로 두어 셀 구조 유지)
+    existing_p = txBody.find(f'{{{_NS_A}}}p')
+    date_p     = _make_date_paragraph(date_num)
+    if existing_p is not None:
+        p_idx = list(txBody).index(existing_p)
+        txBody.insert(p_idx, date_p)
+    else:
+        txBody.append(date_p)
 
 
 def set_snack_cell(cell, menu_line, kcal_line):
@@ -523,13 +541,25 @@ def replace_slide_metadata(slide, display_name, email):
         _replace_in_tf(tf, 'OOOOOOO@kizmeal.com', email)
 
 
+_DATE_NUM_RE = re.compile(r'^(0[1-9]|[12][0-9]|3[01])$')
+
+
 def replace_date_group(slide, date_map=None):
-    """날짜 그룹 shape 안의 모든 텍스트를 비움 (날짜는 테이블 셀 안에 삽입)."""
+    """
+    날짜 관련 shape 텍스트를 모두 비움 (날짜는 테이블 셀 안에 삽입).
+    1) 그룹 shape(그룹 25/1/201) 안 모든 run 비우기
+    2) 전체 텍스트가 '01'~'31'인 개별 sp run 비우기
+    """
     _DATE_GROUP_NAMES = {'그룹 25', '그룹 1', '그룹 201'}
     for shape in slide.shapes:
         if shape.name in _DATE_GROUP_NAMES:
             _clear_date_group(shape)
-            break
+        elif shape.has_text_frame:
+            txt = shape.text_frame.text.strip()
+            if _DATE_NUM_RE.match(txt):
+                for para in shape.text_frame.paragraphs:
+                    for run in para.runs:
+                        run.text = ''
 
 
 def _clear_date_group(group_shape):
