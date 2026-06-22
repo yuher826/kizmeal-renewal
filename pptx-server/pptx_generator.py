@@ -808,45 +808,59 @@ def replace_material_text(slide, material_text):
 # 9-3. 알레르기 박스 위치/폰트 보정
 # ════════════════════════════════════════════════════════════════════
 def _fix_allergy_position(prs):
+    ns_p = 'http://schemas.openxmlformats.org/presentationml/2006/main'
     ns_a = 'http://schemas.openxmlformats.org/drawingml/2006/main'
-    SLIDE_HEIGHT = Emu(10680700)
-    GAP = Emu(50000)
+    SLIDE_HEIGHT = 10680700
+    GAP = 50000
 
-    slide = prs.slides[0]
-    table_shape = None
-    allergy_shape = None
+    slide_el = prs.slides[0]._element
 
-    for shape in slide.shapes:
-        if shape.has_table:
-            table_shape = shape
-        elif shape.has_text_frame:
-            try:
-                if '알레르기' in shape.text_frame.text:
-                    allergy_shape = shape
-            except Exception:
-                pass
+    # 테이블(graphicFrame) 찾기
+    gf = slide_el.find(f'.//{{{ns_p}}}graphicFrame')
+    if gf is None:
+        print("⚠️ graphicFrame(테이블)을 찾지 못함")
+        return
+    p_xfrm = gf.find(f'{{{ns_p}}}xfrm')
+    table_top = int(p_xfrm.find(f'{{{ns_a}}}off').get('y'))
 
-    if not table_shape or not allergy_shape:
-        print("⚠️ 테이블 또는 알레르기 박스를 찾지 못함")
+    # 실제 행 높이(tr h) 합산으로 table_bottom 계산 (ext/cy 신뢰 안 함)
+    tbl = gf.find(f'.//{{{ns_a}}}tbl')
+    total_row_h = sum(int(tr.get('h', 0)) for tr in tbl.findall(f'{{{ns_a}}}tr'))
+    table_bottom = table_top + total_row_h
+
+    # 알레르기 박스(독립 sp 중 '알레르기 표시' 포함) 찾기
+    allergy_sp = None
+    for sp in slide_el.findall(f'.//{{{ns_p}}}sp'):
+        texts = ''.join(t.text or '' for t in sp.findall(f'.//{{{ns_a}}}t'))
+        if '알레르기 표시' in texts:
+            allergy_sp = sp
+            break
+    if allergy_sp is None:
+        print("⚠️ 알레르기 박스(sp)를 찾지 못함")
         return
 
-    table_bottom = table_shape.top + table_shape.height
+    # 위치/높이 직접 수정
+    spPr = allergy_sp.find(f'.//{{{ns_a}}}spPr')
+    a_xfrm = spPr.find(f'{{{ns_a}}}xfrm')
+    a_off = a_xfrm.find(f'{{{ns_a}}}off')
+    a_ext = a_xfrm.find(f'{{{ns_a}}}ext')
 
     new_top = table_bottom + GAP
-    new_cy = Emu(230000)  # 5pt 폰트 기준 높이
-
+    new_cy = 230000
     if new_top + new_cy > SLIDE_HEIGHT:
-        new_top = SLIDE_HEIGHT - new_cy - Emu(20000)
+        new_top = SLIDE_HEIGHT - new_cy - 20000
 
-    allergy_shape.top = new_top
-    allergy_shape.height = new_cy
+    old_y = a_off.get('y')
+    a_off.set('y', str(new_top))
+    a_ext.set('cy', str(new_cy))
 
-    for rPr in allergy_shape._element.findall(f'.//{{{ns_a}}}rPr'):
-        current_sz = rPr.get('sz')
-        if current_sz is None or int(current_sz) >= 700:
+    # 폰트 7pt → 5pt
+    for rPr in allergy_sp.findall(f'.//{{{ns_a}}}rPr'):
+        sz = rPr.get('sz')
+        if sz is None or int(sz) >= 700:
             rPr.set('sz', '500')
 
-    print(f"✅ 알레르기 박스: table_bottom={table_bottom:,} → new_top={new_top:,}")
+    print(f"✅ 알레르기 박스: y={old_y} → {new_top} (table_bottom={table_bottom:,}, 행높이합={total_row_h:,})")
     print(f"✅ 알레르기 폰트: 7pt → 5pt 완료")
 
 
