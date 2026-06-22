@@ -345,14 +345,35 @@ def _apply_inline_allergy(template_run, text, p):
         insert_pos += 1
 
 
-def set_lunch_cell(cell, lines):
+def set_lunch_cell(cell, lines, date_num=None):
     """
     중식 셀: run-br-run-br-... 구조에서 각 run에 라인별 텍스트 주입.
     lines: [밥, 국, 반찬1, ..., 영양구성] (최대 7개)
+    date_num: 일자 문자열 (예: '01') — 있으면 맨 앞 run+br로 삽입
     """
-    _, runs = _get_p_and_runs(cell)
+    p, runs = _get_p_and_runs(cell)
     if not runs:
         return
+
+    if date_num:
+        # 첫 run의 서식을 복사해 날짜 run+br을 p 맨 앞에 삽입
+        first_run = runs[0]
+        rPr = first_run.find(f'{{{_NS_A}}}rPr')
+
+        date_run = etree.Element(f'{{{_NS_A}}}r')
+        if rPr is not None:
+            date_run.append(copy.deepcopy(rPr))
+        t = etree.SubElement(date_run, f'{{{_NS_A}}}t')
+        t.text = date_num
+
+        date_br = etree.Element(f'{{{_NS_A}}}br')
+        if rPr is not None:
+            date_br.append(copy.deepcopy(rPr))
+
+        first_idx = list(p).index(first_run)
+        p.insert(first_idx, date_br)
+        p.insert(first_idx, date_run)
+
     for i, run in enumerate(runs):
         text = lines[i] if i < len(lines) else ''
         menu, allergy = split_menu_allergy(text)
@@ -362,6 +383,23 @@ def set_lunch_cell(cell, lines):
             p = run.getparent()           # run 자체에서 부모 <a:p> 직접 획득 (안전)
             run_idx = list(p).index(run)
             p.insert(run_idx + 1, allergy_run)
+
+
+def _set_date_only_cell(cell, date_num):
+    """빈 셀(공휴일 clear 후)에 날짜 run 1개만 삽입."""
+    p, runs = _get_p_and_runs(cell)
+    if p is None or not date_num:
+        return
+    # 템플릿 run이 남아있으면 서식 참조용으로 사용, 없으면 bare run
+    rPr = None
+    if runs:
+        rPr = runs[0].find(f'{{{_NS_A}}}rPr')
+    date_run = etree.Element(f'{{{_NS_A}}}r')
+    if rPr is not None:
+        date_run.append(copy.deepcopy(rPr))
+    t = etree.SubElement(date_run, f'{{{_NS_A}}}t')
+    t.text = date_num
+    p.append(date_run)
 
 
 def set_snack_cell(cell, menu_line, kcal_line):
@@ -485,38 +523,32 @@ def replace_slide_metadata(slide, display_name, email):
         _replace_in_tf(tf, 'OOOOOOO@kizmeal.com', email)
 
 
-def replace_date_group(slide, date_map):
+def replace_date_group(slide, date_map=None):
+    """날짜 그룹 shape 안의 모든 텍스트를 비움 (날짜는 테이블 셀 안에 삽입)."""
     _DATE_GROUP_NAMES = {'그룹 25', '그룹 1', '그룹 201'}
     for shape in slide.shapes:
         if shape.name in _DATE_GROUP_NAMES:
-            _replace_date_in_group(shape, date_map)
+            _clear_date_group(shape)
             break
 
 
-def _replace_date_in_group(group_shape, date_map):
+def _clear_date_group(group_shape):
+    """그룹 shape(중첩 포함) 안의 모든 run 텍스트를 ''로 비움."""
     try:
         for shape in group_shape.shapes:
             if shape.shape_type == MSO_SHAPE_TYPE.GROUP:
                 try:
                     for inner in shape.shapes:
                         if inner.has_text_frame:
-                            txt = inner.text_frame.text.strip()
-                            if txt in date_map:
-                                for para in inner.text_frame.paragraphs:
-                                    for run in para.runs:
-                                        if run.text.strip() in date_map:
-                                            run.text = run.text.replace(
-                                                run.text.strip(), date_map[txt])
+                            for para in inner.text_frame.paragraphs:
+                                for run in para.runs:
+                                    run.text = ''
                 except Exception:
                     pass
             elif shape.has_text_frame:
-                txt = shape.text_frame.text.strip()
-                if txt in date_map:
-                    for para in shape.text_frame.paragraphs:
-                        for run in para.runs:
-                            if run.text.strip() in date_map:
-                                run.text = run.text.replace(
-                                    run.text.strip(), date_map[txt])
+                for para in shape.text_frame.paragraphs:
+                    for run in para.runs:
+                        run.text = ''
     except Exception:
         pass
 
@@ -595,8 +627,11 @@ def _render_slide(table, plan_entry, week_days, cfg):
                     continue
 
                 if sec == 'lunch':
+                    date_str = day.get('date', '')
+                    day_num  = date_str.split('-')[2] if len(date_str) == 10 else ''
                     if day.get('is_holiday') and branch_name not in _HOLIDAY_OPERATING:
                         clear_cell(cell)
+                        _set_date_only_cell(cell, day_num)
                         continue
                     lines = build_lunch_lines(
                         day.get('lunch', {}), branch_name,
@@ -604,7 +639,7 @@ def _render_slide(table, plan_entry, week_days, cfg):
                         add_fruit=add_fruit,
                         fruit_text=fruit_text,
                     )
-                    set_lunch_cell(cell, lines)
+                    set_lunch_cell(cell, lines, date_num=day_num)
 
                 elif sec == 'am':
                     if day.get('is_holiday') and branch_name not in _HOLIDAY_OPERATING:
@@ -671,8 +706,7 @@ def generate(cfg, menu_data, template_path, out_path, date_map=None):
         slide = slides[sidx]
 
         replace_slide_metadata(slide, display_name, email)
-        if date_map:
-            replace_date_group(slide, date_map)
+        replace_date_group(slide)  # 날짜 그룹 텍스트 비우기 (날짜는 테이블 셀 안에 삽입)
 
         _, sections, opts = plan_entry
         if opts.get('skip') or not sections:
