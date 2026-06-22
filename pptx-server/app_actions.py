@@ -114,9 +114,11 @@ def _adapt_ts_menu_data(raw_menu_data):
         if adapted is not None:
             adapted_weeks[str(key)] = adapted
     return {
-        'year':  raw_menu_data.get('year'),
-        'month': raw_menu_data.get('month'),
-        'weeks': adapted_weeks,
+        'year':          raw_menu_data.get('year'),
+        'month':         raw_menu_data.get('month'),
+        'weeks':         adapted_weeks,
+        'origin_text':   raw_menu_data.get('origin_text'),   # 원산지 텍스트 (DB 저장값 pass-through)
+        'material_text': raw_menu_data.get('material_text'), # 원재료 텍스트 (DB 저장값 pass-through)
     }
 
 
