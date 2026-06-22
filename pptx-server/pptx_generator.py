@@ -652,6 +652,11 @@ def _render_slide(table, plan_entry, week_days, cfg):
                         add_fruit=add_fruit,
                         fruit_text=fruit_text,
                     )
+                    if not lines:
+                        # 운영원 공휴일이지만 데이터 없는 경우 — 날짜만 표시
+                        clear_cell(cell)
+                        _set_date_only_cell(cell, day_num)
+                        continue
                     set_lunch_cell(cell, lines, date_num=day_num)
 
                 elif sec == 'am':
@@ -664,11 +669,17 @@ def _render_slide(table, plan_entry, week_days, cfg):
                     snack_key = 'afternoon_snack' if use_pm_as_am else 'morning_snack'
                     menu, kcal = build_snack(
                         day.get(snack_key, {}), branch_name, do_strip=do_strip)
+                    if not menu:
+                        clear_cell(cell)
+                        continue
                     set_snack_cell(cell, menu, kcal)
 
                 elif sec == 'pm':
                     menu, kcal = build_snack(
                         day.get('afternoon_snack', {}), branch_name, do_strip=do_strip)
+                    if not menu:
+                        clear_cell(cell)
+                        continue
                     set_snack_cell(cell, menu, kcal)
 
                 elif sec == 'care':
@@ -681,17 +692,22 @@ def _render_slide(table, plan_entry, week_days, cfg):
 # 9-1. 행 높이 고정
 # ════════════════════════════════════════════════════════════════════
 def _fix_row_heights(table, sections):
-    """모든 행의 높이를 원본 기준값(EMU)으로 고정."""
+    """
+    모든 행의 높이를 원본 기준값(EMU)으로 고정.
+    5주 × len(sections)행 구조에서 마지막 행만 _H_LAST, 나머지는 섹션별 적용.
+    """
     n_rows = len(table.rows)
     n_secs = len(sections)
     for ri in range(n_rows):
         sec = sections[ri % n_secs]
         if ri == n_rows - 1:
-            table.rows[ri].height = Emu(_H_LAST)
+            # 전체 테이블의 마지막 행 (5주 마지막 간식 행)
+            h = _H_LAST
         elif sec == 'lunch':
-            table.rows[ri].height = Emu(_H_LUNCH)
+            h = _H_LUNCH
         else:
-            table.rows[ri].height = Emu(_H_SNACK)
+            h = _H_SNACK
+        table.rows[ri].height = Emu(h)
 
 
 # ════════════════════════════════════════════════════════════════════
