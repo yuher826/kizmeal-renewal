@@ -805,6 +805,52 @@ def replace_material_text(slide, material_text):
 
 
 # ════════════════════════════════════════════════════════════════════
+# 9-3. 알레르기 박스 위치/폰트 보정
+# ════════════════════════════════════════════════════════════════════
+def _fix_allergy_position(prs):
+    ns_a = 'http://schemas.openxmlformats.org/drawingml/2006/main'
+    SLIDE_HEIGHT = Emu(10680700)
+    GAP = Emu(50000)
+
+    slide = prs.slides[0]
+    table_shape = None
+    allergy_shape = None
+
+    for shape in slide.shapes:
+        if shape.has_table:
+            table_shape = shape
+        elif shape.has_text_frame:
+            try:
+                if '알레르기' in shape.text_frame.text:
+                    allergy_shape = shape
+            except Exception:
+                pass
+
+    if not table_shape or not allergy_shape:
+        print("⚠️ 테이블 또는 알레르기 박스를 찾지 못함")
+        return
+
+    table_bottom = table_shape.top + table_shape.height
+
+    new_top = table_bottom + GAP
+    new_cy = Emu(230000)  # 5pt 폰트 기준 높이
+
+    if new_top + new_cy > SLIDE_HEIGHT:
+        new_top = SLIDE_HEIGHT - new_cy - Emu(20000)
+
+    allergy_shape.top = new_top
+    allergy_shape.height = new_cy
+
+    for rPr in allergy_shape._element.findall(f'.//{{{ns_a}}}rPr'):
+        current_sz = rPr.get('sz')
+        if current_sz is None or int(current_sz) >= 700:
+            rPr.set('sz', '500')
+
+    print(f"✅ 알레르기 박스: table_bottom={table_bottom:,} → new_top={new_top:,}")
+    print(f"✅ 알레르기 폰트: 7pt → 5pt 완료")
+
+
+# ════════════════════════════════════════════════════════════════════
 # 10. 메인 생성 함수
 # ════════════════════════════════════════════════════════════════════
 def generate(cfg, menu_data, template_path, out_path, date_map=None,
@@ -845,5 +891,6 @@ def generate(cfg, menu_data, template_path, out_path, date_map=None,
         _render_slide(table, plan_entry, week_days, cfg)
         _fix_row_heights(table, sections)
 
+    _fix_allergy_position(prs)
     prs.save(out_path)
     return out_path
