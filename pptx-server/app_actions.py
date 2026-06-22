@@ -156,6 +156,16 @@ def fetch_menu_data():
     return rows[0]['menu_data']
 
 
+def fetch_diet_settings():
+    """diet_settings 테이블에서 key/value 전체 조회 → {key: value} 딕셔너리 반환."""
+    try:
+        rows = client.select('diet_settings', 'key,value')
+        return {row['key']: row['value'] for row in rows if row.get('key')}
+    except Exception as exc:
+        print(f'  [diet_settings 조회 실패] {exc}')
+        return {}
+
+
 def fetch_branch_cfgs():
     profiles = client.select(
         'branch_profiles',
@@ -330,6 +340,16 @@ def main():
     adapted_menu = _adapt_ts_menu_data(raw_menu_data)
     date_map     = _build_date_map(adapted_menu)
 
+    settings = fetch_diet_settings()
+    if settings.get('origin_body'):
+        origin_text = {
+            'body':       settings['origin_body'],
+            'disclaimer': settings.get('origin_disclaimer', ''),
+        }
+    else:
+        origin_text = None
+    material_text = settings.get('material_text')
+
     print(f'[4/4] PPTX 생성 시작 (배치: {_BATCH}개씩)...')
     tmp_dir   = tempfile.mkdtemp(prefix='kizmeal_actions_')
     succeeded = 0
@@ -349,8 +369,8 @@ def main():
                     gen_pptx(
                         cfg, adapted_menu, TEMPLATE_PATH, out_pptx,
                         date_map=date_map,
-                        origin_text=adapted_menu.get('origin_text'),
-                        material_text=adapted_menu.get('material_text'),
+                        origin_text=origin_text,
+                        material_text=material_text,
                     )
                     pptx_url = upload_pptx(out_pptx, storage_path)
                     weekly_menu_id = upsert_branch_row(branch_uuid, 'generation_complete', pptx_url)
