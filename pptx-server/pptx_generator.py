@@ -594,6 +594,48 @@ def _days_by_week(menu_data):
 
 
 # ════════════════════════════════════════════════════════════════════
+# 8-1. 이름표(cNvPr name) 기반 도형 탐색
+# ════════════════════════════════════════════════════════════════════
+def find_shape_by_name(slide_el, target_name):
+    """
+    이름표(cNvPr name)로 도형 찾기.
+    sp(텍스트박스), graphicFrame(표), grpSp(그룹) 모두 탐색.
+    ALLERGY_BOX는 그룹이라 grpSp까지 봐야 함.
+    찾으면 element 반환, 없으면 None.
+    """
+    ns_p = 'http://schemas.openxmlformats.org/presentationml/2006/main'
+    for tag in ('sp', 'graphicFrame', 'grpSp'):
+        for el in slide_el.iter(f'{{{ns_p}}}{tag}'):
+            cNvPr = el.find(f'.//{{{ns_p}}}cNvPr')
+            if cNvPr is not None and cNvPr.get('name') == target_name:
+                return el
+    return None
+
+
+def find_shape_smart(slide_el, target_name, fallback_keyword=None):
+    """
+    이름표 우선 탐색, 없으면 텍스트 키워드로 폴백.
+    기존 템플릿(이름표 없음)과 새 템플릿(이름표 있음) 모두 지원.
+    """
+    ns_p = 'http://schemas.openxmlformats.org/presentationml/2006/main'
+    ns_a = 'http://schemas.openxmlformats.org/drawingml/2006/main'
+
+    # 1순위: 이름표로 찾기
+    el = find_shape_by_name(slide_el, target_name)
+    if el is not None:
+        return el, 'name'
+
+    # 2순위: 텍스트 키워드로 폴백
+    if fallback_keyword:
+        for sp in slide_el.iter(f'{{{ns_p}}}sp'):
+            texts = ''.join(t.text or '' for t in sp.findall(f'.//{{{ns_a}}}t'))
+            if fallback_keyword in texts:
+                return sp, 'keyword'
+
+    return None, None
+
+
+# ════════════════════════════════════════════════════════════════════
 # 9. 슬라이드 렌더링
 # ════════════════════════════════════════════════════════════════════
 def _render_slide(table, plan_entry, week_days, cfg):
@@ -831,13 +873,12 @@ def _fix_allergy_position(prs):
     total_row_h = sum(int(tr.get('h', 0)) for tr in tbl.findall(f'{{{ns_a}}}tr'))
     table_bottom = table_top + total_row_h
 
-    # 알레르기 박스(독립 sp 중 '알레르기 표시' 포함) 찾기
-    allergy_sp = None
-    for sp in slide_el.findall(f'.//{{{ns_p}}}sp'):
-        texts = ''.join(t.text or '' for t in sp.findall(f'.//{{{ns_a}}}t'))
-        if '알레르기 표시' in texts:
-            allergy_sp = sp
-            break
+    # 알레르기 박스 탐색: 이름표(ALLERGY_BOX) 우선, 없으면 텍스트 키워드 폴백
+    allergy_sp, found_by = find_shape_smart(
+        slide_el, 'ALLERGY_BOX', fallback_keyword='알레르기 표시'
+    )
+    if allergy_sp is not None:
+        print(f"  알레르기 박스 탐색: {found_by} 방식")
     if allergy_sp is None:
         print("⚠️ 알레르기 박스(sp)를 찾지 못함")
         return
