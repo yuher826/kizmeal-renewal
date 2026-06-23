@@ -29,6 +29,7 @@ from bracket_parser import wants_fruit
 from pptx_generator import generate as gen_pptx
 from read_excel import _embed_brackets, _inject_exception_to_banchan, determine_type
 from supabase_uploader import SupabaseREST
+from validate_template import validate_template
 
 # ── 환경변수 ───────────────────────────────────────────────────────
 SUPABASE_URL = os.environ['SUPABASE_URL']
@@ -328,6 +329,20 @@ def upsert_diet_review_item(weekly_menu_id, branch_uuid, branch_name, pptx_url):
 # ════════════════════════════════════════════════════════════════════
 def main():
     print(f'[Actions] PPTX 생성 시작 — {YEAR}년 {MONTH}월')
+
+    # ── 템플릿 검증 (생성 전 문지기) ──
+    print('[검증] 템플릿 이름표/구조 확인...')
+    with open(TEMPLATE_PATH, 'rb') as _tf:
+        _tpl_bytes = _tf.read()
+    _vr = validate_template(_tpl_bytes)
+    print(f'  {_vr["summary"]}')
+    for _s in _vr['slides']:
+        _mark = 'O' if _s['valid'] else 'X'
+        print(f'    [{_mark}] {_s["slide"]}: 누락={_s["missing"]} 컬럼={_s["columns"]}')
+    if not _vr['valid']:
+        print('[중단] 템플릿 검증 실패 — 생성을 시작하지 않습니다.')
+        sys.exit(1)
+    print('[검증] 통과 — 생성을 진행합니다.')
 
     print('[1/4] menu_data 조회...')
     raw_menu_data = fetch_menu_data()
