@@ -1,3 +1,4 @@
+import type JSZip from 'jszip'
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { cookies } from 'next/headers'
@@ -86,6 +87,71 @@ function buildStyleJson(colors: Record<string, string>, fonts: string[]): StyleJ
   }
 }
 
+/* ── 이름표 검증 헬퍼 ── */
+const REQUIRED_NAMES = ['MENU_TABLE', 'ALLERGY_BOX', 'ORIGIN_BOX', 'MATERIAL_BOX'] as const
+
+interface SlideValidation {
+  slide: string
+  valid: boolean
+  names_found: Record<string, boolean>
+  missing: string[]
+}
+
+interface TemplateValidation {
+  valid: boolean
+  slide_count: number
+  slides: SlideValidation[]
+  summary: string
+}
+
+// 파이썬 find_shape_by_name과 동일 기준: cNvPr name에서 4개 이름표 확인
+function checkNamesInSlide(slideXml: string): Record<string, boolean> {
+  const foundNames = new Set<string>()
+  const regex = /<[a-z]*:?cNvPr\b[^>]*\bname="([^"]*)"/g
+  let m: RegExpExecArray | null
+  while ((m = regex.exec(slideXml)) !== null) {
+    foundNames.add(m[1])
+  }
+  const result: Record<string, boolean> = {}
+  for (const name of REQUIRED_NAMES) {
+    result[name] = foundNames.has(name)
+  }
+  return result
+}
+
+async function validateTemplateZip(zip: JSZip): Promise<TemplateValidation> {
+  const slideFiles = zip.file(/^ppt\/slides\/slide\d+\.xml$/)
+  const slides: SlideValidation[] = []
+  let overallValid = true
+
+  if (!slideFiles || slideFiles.length === 0) {
+    return { valid: false, slide_count: 0, slides: [], summary: '슬라이드를 찾을 수 없습니다 (빈 PPTX).' }
+  }
+
+  for (const f of slideFiles) {
+    const xml = await f.async('string')
+    const namesFound = checkNamesInSlide(xml)
+    const missing = REQUIRED_NAMES.filter((n) => !namesFound[n])
+    const slideValid = missing.length === 0
+    if (!slideValid) overallValid = false
+    slides.push({
+      slide: f.name.split('/').pop() ?? f.name,
+      valid: slideValid,
+      names_found: namesFound,
+      missing,
+    })
+  }
+
+  return {
+    valid: overallValid,
+    slide_count: slides.length,
+    slides,
+    summary: overallValid
+      ? `검증 통과 — ${slides.length}개 슬라이드 모두 이름표 4개 정상`
+      : '검증 실패 — 일부 슬라이드에 이름표 누락',
+  }
+}
+
 /* ── GET: 템플릿 목록 ── */
 export async function GET() {
   const supabase = makeSupabase()
@@ -133,11 +199,14 @@ export async function POST(req: NextRequest) {
   const nextVersion = (maxRow?.version || 0) + 1
 
   // pptx 파싱 (JSZip)
+  let validationResult: TemplateValidation = {
+    valid: false, slide_count: 0, slides: [], summary: '검증 안 됨',
+  }
   let styleJson: StyleJson = buildStyleJson({}, [])
   try {
-    const JSZip = (await import('jszip')).default
+    const JSZipModule = (await import('jszip')).default
     const buffer = await file.arrayBuffer()
-    const zip = await JSZip.loadAsync(buffer)
+    const zip = await JSZipModule.loadAsync(buffer)
 
     let themeXml = ''
     const themeFile = zip.file('ppt/theme/theme1.xml')
@@ -152,6 +221,9 @@ export async function POST(req: NextRequest) {
       const { colors, fonts } = parseThemeXml(themeXml)
       styleJson = buildStyleJson(colors, fonts)
     }
+
+    // 이름표 검증 (파이썬 문지기와 같은 기준, 업로드 즉시 피드백)
+    validationResult = await validateTemplateZip(zip)
   } catch (parseErr) {
     console.error('pptx parse error:', parseErr)
     // 파싱 실패 시 기본 스타일 사용 - 업로드는 계속 진행
@@ -172,18 +244,19 @@ export async function POST(req: NextRequest) {
   const { data: tmpl, error: dbErr } = await supabase
     .from('diet_templates')
     .insert({
-      version:    nextVersion,
+      version:           nextVersion,
       name,
-      file_path:  storagePath,
-      style_json: styleJson,
-      is_active:  false,
-      created_by: user.id,
-      note:       note || null,
+      file_path:         storagePath,
+      style_json:        styleJson,
+      is_active:         false,
+      created_by:        user.id,
+      note:              note || null,
+      validation_result: validationResult,
     })
     .select()
     .single()
 
   if (dbErr) return NextResponse.json({ error: dbErr.message }, { status: 500 })
 
-  return NextResponse.json({ template: tmpl, style_json: styleJson })
+  return NextResponse.json({ template: tmpl, style_json: styleJson, validation_result: validationResult })
 }
