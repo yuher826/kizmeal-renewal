@@ -2,6 +2,7 @@ import {
   Utensils,
   ClipboardCheck,
   Building2,
+  Palette,
   Megaphone,
   MessageSquare,
   Mail,
@@ -15,7 +16,8 @@ export const ERP_NAV_GROUPS: ErpNavGroup[] = [
     items: [
       { label: '식단 자동화', href: '/erp/diet',     icon: Utensils },
       { label: '식단 검토',   href: '/erp/review',   icon: ClipboardCheck },
-      { label: '원 프로파일', href: '/erp/branches', icon: Building2 },
+      { label: '원 프로파일', href: '/erp/branches',       icon: Building2 },
+      { label: '템플릿 관리', href: '/erp/diet/templates', icon: Palette },
     ],
   },
   {
