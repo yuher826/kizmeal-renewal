@@ -570,9 +570,20 @@ def replace_date_group(slide, date_map=None):
 # 8. 표 헬퍼
 # ════════════════════════════════════════════════════════════════════
 def _get_table(slide):
+    # 1순위: MENU_TABLE 이름표로 찾기
     for shape in slide.shapes:
-        if shape.has_table:
-            return shape.table
+        try:
+            if shape.name == 'MENU_TABLE' and shape.has_table:
+                return shape.table
+        except Exception:
+            continue
+    # 2순위: 첫 번째 has_table 폴백 (이름표 없는 기존 템플릿 대응)
+    for shape in slide.shapes:
+        try:
+            if shape.has_table:
+                return shape.table
+        except Exception:
+            continue
     return None
 
 
@@ -795,55 +806,73 @@ def _find_txbody(sp):
     return None
 
 
-def _replace_textbox_content(slide, search_text, paragraphs):
-    """
-    슬라이드 내 전체 텍스트에 search_text가 포함된 p:sp를 찾아
-    txBody의 a:p 요소만 교체 (bodyPr 등 다른 요소는 보존).
-    paragraphs: [{'text':str, 'sz':int, 'bold':bool, 'algn':str|None}, ...]
-    """
+def _replace_textbox_content(slide, search_text, paragraphs, target_name=None):
     spTree = slide.shapes._spTree
-    for sp in spTree.findall(f'.//{_SP_TAG_PML}'):
-        full_text = ''.join(t.text or '' for t in sp.findall(f'.//{_T_TAG_A}'))
-        if search_text not in full_text:
-            continue
-        txBody = _find_txbody(sp)
-        if txBody is None:
-            continue
-        # 기존 a:p만 제거 (bodyPr·lstStyle 등 보존)
-        for p in txBody.findall(_P_TAG):
-            txBody.remove(p)
-        # 새 paragraph 삽입
-        for para_cfg in paragraphs:
-            new_p = _make_text_paragraph(
-                para_cfg.get('text', ''),
-                sz=para_cfg.get('sz', 900),
-                bold=para_cfg.get('bold', False),
-                algn=para_cfg.get('algn'),
-            )
-            txBody.append(new_p)
-        return  # 첫 번째 매칭만 처리
+    ns_p = 'http://schemas.openxmlformats.org/presentationml/2006/main'
+
+    target_sp = None
+    found_by = None
+
+    # 1순위: 이름표(target_name)로 찾기
+    if target_name:
+        for sp in spTree.findall(f'.//{_SP_TAG_PML}'):
+            cNvPr = sp.find(f'.//{{{ns_p}}}cNvPr')
+            if cNvPr is not None and cNvPr.get('name') == target_name:
+                target_sp = sp
+                found_by = 'name'
+                break
+
+    # 2순위: 텍스트 키워드로 폴백 (이름표 없는 기존 템플릿 대응)
+    if target_sp is None:
+        for sp in spTree.findall(f'.//{_SP_TAG_PML}'):
+            full_text = ''.join(t.text or '' for t in sp.findall(f'.//{_T_TAG_A}'))
+            if search_text in full_text:
+                target_sp = sp
+                found_by = 'keyword'
+                break
+
+    if target_sp is None:
+        return
+
+    if target_name:
+        print(f"  {target_name} 탐색: {found_by} 방식")
+
+    txBody = _find_txbody(target_sp)
+    if txBody is None:
+        return
+    for p in txBody.findall(_P_TAG):
+        txBody.remove(p)
+    for para_cfg in paragraphs:
+        new_p = _make_text_paragraph(
+            para_cfg.get('text', ''),
+            sz=para_cfg.get('sz', 900),
+            bold=para_cfg.get('bold', False),
+            algn=para_cfg.get('algn'),
+        )
+        txBody.append(new_p)
+    return
 
 
 def replace_origin_text(slide, origin_text):
     """원산지 텍스트박스 교체."""
     if not origin_text:
         return
-    _replace_textbox_content(slide, '원산지', [
+    _replace_textbox_content(slide, '원산지 표기', [
         {'text': '원산지 표기', 'sz': 1000, 'bold': True, 'algn': 'l'},
         {'text': origin_text.get('body', ''),       'sz': 800},
         {'text': origin_text.get('disclaimer', ''), 'sz': 800},
-    ])
+    ], target_name='ORIGIN_BOX')
 
 
 def replace_material_text(slide, material_text):
     """원재료 텍스트박스 교체."""
     if not material_text:
         return
-    _replace_textbox_content(slide, '원재료', [
+    _replace_textbox_content(slide, '원재료 표시안내', [
         {'text': '* 원재료 표시안내 *', 'sz': 900, 'bold': True, 'algn': 'l'},
         {'text': material_text,         'sz': 800},
         {'text': _MATERIAL_FIXED_LINE,  'sz': 800},
-    ])
+    ], target_name='MATERIAL_BOX')
 
 
 # ════════════════════════════════════════════════════════════════════
