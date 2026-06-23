@@ -325,14 +325,68 @@ def upsert_diet_review_item(weekly_menu_id, branch_uuid, branch_name, pptx_url):
 
 
 # ════════════════════════════════════════════════════════════════════
+# 템플릿 결정
+# ════════════════════════════════════════════════════════════════════
+def _resolve_template_path():
+    """
+    사용할 템플릿 경로를 결정한다.
+    업로드 템플릿(diet_templates active) 우선 → 검증 통과 시 사용,
+    없거나 검증 실패 시 → 로컬 TEMPLATE_PATH로 폴백.
+    반환: (사용할_경로, 출처설명)
+    """
+    # 1) DB에서 active 템플릿 조회 (boolean은 소문자 문자열로)
+    try:
+        rows = client.select(
+            'diet_templates', 'id,file_path,name',
+            filters={'is_active': 'true'},
+        )
+    except Exception as e:
+        print(f'  [템플릿] DB 조회 실패 → 로컬 사용: {e}')
+        return TEMPLATE_PATH, '로컬(조회실패)'
+
+    if not rows:
+        print('  [템플릿] 업로드된 active 템플릿 없음 → 로컬 사용')
+        return TEMPLATE_PATH, '로컬(업로드없음)'
+
+    tpl = rows[0]
+    file_path = tpl.get('file_path')
+    tpl_name = tpl.get('name', '?')
+
+    # 2) Storage에서 다운로드
+    try:
+        tpl_bytes = client.download_file('diet-templates', file_path)
+    except Exception as e:
+        print(f'  [템플릿] 다운로드 실패 → 로컬 사용: {e}')
+        return TEMPLATE_PATH, '로컬(다운실패)'
+
+    # 3) 검증 (검증=생성 같은 눈)
+    vr = validate_template(tpl_bytes)
+    if not vr['valid']:
+        print(f'  [템플릿] 업로드본 "{tpl_name}" 검증 실패 → 로컬 폴백')
+        print(f'    {vr["summary"]}')
+        return TEMPLATE_PATH, f'로컬(업로드검증실패: {tpl_name})'
+
+    # 4) 검증 통과 → 임시파일로 저장 후 그 경로 사용
+    tmp = tempfile.NamedTemporaryFile(suffix='.pptx', delete=False)
+    tmp.write(tpl_bytes)
+    tmp.close()
+    print(f'  [템플릿] 업로드본 "{tpl_name}" 검증 통과 → 사용')
+    return tmp.name, f'업로드({tpl_name})'
+
+
+# ════════════════════════════════════════════════════════════════════
 # 메인
 # ════════════════════════════════════════════════════════════════════
 def main():
     print(f'[Actions] PPTX 생성 시작 — {YEAR}년 {MONTH}월')
 
-    # ── 템플릿 검증 (생성 전 문지기) ──
-    print('[검증] 템플릿 이름표/구조 확인...')
-    with open(TEMPLATE_PATH, 'rb') as _tf:
+    # ── 템플릿 결정 + 검증 (생성 전 문지기) ──
+    print('[검증] 사용할 템플릿 결정 + 이름표/구조 확인...')
+    active_template_path, tpl_source = _resolve_template_path()
+    print(f'  최종 사용 템플릿: {tpl_source}')
+
+    # 최종 결정된 템플릿을 한 번 더 검증 (로컬이든 업로드든)
+    with open(active_template_path, 'rb') as _tf:
         _tpl_bytes = _tf.read()
     _vr = validate_template(_tpl_bytes)
     print(f'  {_vr["summary"]}')
@@ -382,7 +436,7 @@ def main():
 
                 try:
                     gen_pptx(
-                        cfg, adapted_menu, TEMPLATE_PATH, out_pptx,
+                        cfg, adapted_menu, active_template_path, out_pptx,
                         date_map=date_map,
                         origin_text=origin_text,
                         material_text=material_text,

@@ -126,6 +126,17 @@ class SupabaseREST:
     def get_public_url(self, bucket, path):
         return f'{self._url}/storage/v1/object/public/{bucket}/{urllib.parse.quote(path, safe="/")}'
 
+    def download_file(self, bucket, path):
+        """Storage에서 파일을 bytes로 다운로드."""
+        url = f'{self._url}/storage/v1/object/{bucket}/{urllib.parse.quote(path, safe="/")}'
+        req = urllib.request.Request(url, headers=self._auth_headers(), method='GET')
+        try:
+            with urllib.request.urlopen(req) as resp:
+                return resp.read()
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode(errors='replace')
+            raise RuntimeError(f'Storage download HTTP {exc.code}: {detail}') from exc
+
 
 # ════════════════════════════════════════════════════════════════════
 # 클라이언트 싱글턴
