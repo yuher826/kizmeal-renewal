@@ -1303,7 +1303,7 @@ function DietAutomationContent() {
                   {/* 검토 페이지 이동 */}
                   {menuStatus === 'review_requested' && (
                     <Link
-                      href={`/board/admin/diet-automation/review?year=${pptxYear}&month=${pptxMonth}`}
+                      href={`/erp/review?year=${pptxYear}&month=${pptxMonth}`}
                       className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-orange-300 text-orange-700 text-sm font-semibold hover:bg-orange-50 transition-colors"
                     >
                       👀 검토 페이지로 이동
