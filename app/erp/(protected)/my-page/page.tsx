@@ -1,15 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase-server'
 import PasswordChangeCard from './PasswordChangeCard'
-
-const ROLE_LABEL: Record<string, string> = {
-  super_admin:              '슈퍼관리자',
-  manager:                  '매니저',
-  director:                 '이사',
-  nutritionist_ck:          '영양사 (직영)',
-  nutritionist_consignment: '영양사 (위탁)',
-  admin:                    '관리자',
-}
+import { ROLE_LABEL } from '@/lib/roles'
 
 export const metadata = { title: '마이페이지 | 키즈밀 ERP' }
 

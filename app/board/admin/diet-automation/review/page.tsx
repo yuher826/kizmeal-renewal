@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef, Suspense, Fragment, type Reac
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { ChevronDown, ChevronRight as ChevronRightIcon } from 'lucide-react'
-import { isNutritionist, DEPLOY_ROLES, EMERGENCY_DEPLOY_ROLES } from '@/lib/roles'
+import { isNutritionist, DEPLOY_ROLES, EMERGENCY_DEPLOY_ROLES, ROLE_LABEL } from '@/lib/roles'
 
 // ── 타입 ──────────────────────────────────────────────────────────
 type HistoryEntry = {
@@ -955,7 +955,9 @@ function ManagerView({
                             <div key={i} className="flex flex-wrap gap-2 items-start text-xs text-gray-600">
                               <span>{historyIcon(h.action)}</span>
                               <span className="text-gray-400">{formatKST(h.at)}</span>
-                              <span className="font-medium">{h.by}</span>
+                              <span className="font-medium">
+                                {h.by}{h.role ? ` · ${ROLE_LABEL[h.role] ?? h.role}` : ''}
+                              </span>
                               {h.round && <span className="text-orange-600 font-semibold">수정 {h.round}회차</span>}
                               {h.category && <span className="bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded">{h.category}</span>}
                               {h.memo && <span className="text-gray-500">{h.memo}</span>}
@@ -1112,7 +1114,9 @@ function ManagerView({
                         <div key={i} className="flex flex-wrap gap-2 items-start text-xs text-gray-600">
                           <span>{historyIcon(h.action)}</span>
                           <span className="text-gray-400">{formatKST(h.at)}</span>
-                          <span className="font-medium">{h.by}</span>
+                          <span className="font-medium">
+                            {h.by}{h.role ? ` · ${ROLE_LABEL[h.role] ?? h.role}` : ''}
+                          </span>
                           {h.round && <span className="text-orange-600 font-semibold">수정 {h.round}회차</span>}
                           {h.category && <span className="bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded">{h.category}</span>}
                           {h.memo && <span className="text-gray-500">{h.memo}</span>}

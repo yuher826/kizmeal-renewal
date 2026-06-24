@@ -45,3 +45,13 @@ export const RESUBMIT_ROLES: string[] = [
 /** 영양사 여부 체크 */
 export const isNutritionist = (role: string): boolean =>
   NUTRITIONIST_ROLES.includes(role)
+
+/** 역할 → 한글 라벨 (공통) */
+export const ROLE_LABEL: Record<string, string> = {
+  super_admin:              '슈퍼관리자',
+  manager:                  '매니저',
+  director:                 '이사',
+  nutritionist_ck:          '영양사 (직영)',
+  nutritionist_consignment: '영양사 (위탁)',
+  admin:                    '관리자',
+}

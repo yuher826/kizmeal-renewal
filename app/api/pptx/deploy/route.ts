@@ -245,7 +245,7 @@ export async function POST(req: NextRequest) {
         const history = [
           ...(Array.isArray(item.memo_history) ? item.memo_history : []),
           {
-            by:     user.email ?? adminRow!.name ?? adminRow!.id,
+            by:     adminRow!.name ?? user.email ?? adminRow!.id,
             role:   adminRow!.role,
             action: 'deployed',
             memo:   is_emergency === true
