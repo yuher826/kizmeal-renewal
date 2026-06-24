@@ -20,6 +20,7 @@ export default function ChildTab({ items, selectedId, onSelect }: ChildTabProps)
             key={child.id}
             type="button"
             onClick={() => onSelect(child.id)}
+            title={child.branches ? [child.branches.brands?.name, child.branches.name].filter(Boolean).join(' ') : undefined}
             className={`flex-shrink-0 flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-colors ${
               active
                 ? 'bg-[#2D6A4F] text-white'
@@ -29,7 +30,7 @@ export default function ChildTab({ items, selectedId, onSelect }: ChildTabProps)
             <span className="w-6 h-6 rounded-full bg-[#E8F5E9] flex items-center justify-center text-xs font-bold text-[#2D6A4F] flex-shrink-0">
               {child.name_ko[0]}
             </span>
-            <span>
+            <span className="max-w-[120px] truncate">
               {child.name_ko}
               {child.branches && (
                 <span className="opacity-70 font-normal">

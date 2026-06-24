@@ -54,12 +54,12 @@ export default function BottomNav() {
           <Link
             key={item.href}
             href={item.href}
-            className={`flex-1 flex flex-col items-center py-4 gap-1 transition-colors ${
+            className={`flex-1 min-w-0 flex flex-col items-center py-4 gap-1 transition-colors ${
               active ? 'text-[#2D6A4F]' : 'text-[#9CA3AF] hover:text-[#2D6A4F]'
             }`}
           >
             <span className="[&>svg]:w-6 [&>svg]:h-6">{item.icon}</span>
-            <span className={`text-[10px] whitespace-nowrap ${active ? 'font-bold text-[#2D6A4F]' : 'font-medium'}`}>{item.label}</span>
+            <span className={`text-[10px] truncate w-full text-center ${active ? 'font-bold text-[#2D6A4F]' : 'font-medium'}`}>{item.label}</span>
           </Link>
         )
       })}
