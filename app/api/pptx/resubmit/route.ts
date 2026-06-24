@@ -91,7 +91,7 @@ export async function POST(req: NextRequest) {
   // weekly_menus.pptx_url 업데이트 (브랜치별 메뉴)
   await db.from('weekly_menus')
     .update({ pptx_url: newPptxUrl, updated_at: now })
-    .eq('id', weeklyMenuId)
+    .eq('id', reviewItem.weekly_menu_id)
     .eq('branch_id', branchId)
 
   // memo_history 추가
