@@ -886,43 +886,65 @@ function ManagerView({
                         </div>
                       )}
                       {item.review_status === 'deployed' && (
-                        <div className="space-y-0.5">
-                          <span className="inline-flex items-center gap-1 px-2 py-1 bg-teal-100 text-teal-700 rounded-full text-xs font-bold">📤 배포완료</span>
-                          {item.deployed_at && <div className="text-gray-400 text-[10px]">{formatKST(item.deployed_at)}</div>}
+                        <div className="space-y-1 flex flex-col items-center">
+                          <div className="space-y-0.5 text-center">
+                            <span className="inline-flex items-center gap-1 px-2 py-1 bg-teal-100 text-teal-700 rounded-full text-xs font-bold">📤 배포완료</span>
+                            {item.deployed_at && <div className="text-gray-400 text-[10px]">{formatKST(item.deployed_at)}</div>}
+                            {item.memo_history.filter(h => h.action === 'deployed').length >= 2 && (
+                              <div className="text-amber-600 text-[10px] font-semibold">🔄 재배포 {item.memo_history.filter(h => h.action === 'deployed').length}회</div>
+                            )}
+                          </div>
+                          {['manager', 'super_admin'].includes(role) && (
+                            <button type="button"
+                              onClick={() => {
+                                if (!window.confirm('⚠️ 이미 배포된 식단입니다.\n수정 후 정정본을 재발송해야 합니다.\n계속하시겠습니까?')) return
+                                setActiveInlineId(activeInlineId === item.id ? null : item.id)
+                                setInlineMemo('')
+                                setInlineCategory('')
+                              }}
+                              className="px-2 py-1 rounded-lg bg-amber-50 text-amber-700 text-xs font-semibold border border-amber-300 hover:bg-amber-100 transition-colors">
+                              ⚠️ 배포후 수정요청
+                            </button>
+                          )}
                         </div>
                       )}
                     </td>
                   </tr>
 
                   {/* 단건 수정요청 인라인 */}
-                  {activeInlineId === item.id && (
-                    <tr>
-                      <td colSpan={7} className="px-4 pb-3 bg-orange-50/30">
-                        <div className="rounded-xl border border-orange-200 bg-white p-3 space-y-2">
-                          <p className="text-xs font-semibold text-orange-700">수정 요청 — {item.branch_name}</p>
-                          <select value={inlineCategory} onChange={e => setInlineCategory(e.target.value)}
-                            className="w-full sm:w-48 text-xs border border-gray-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:border-orange-400">
-                            <option value="">카테고리 선택 (필수)</option>
-                            {CORRECTION_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                          </select>
-                          <textarea value={inlineMemo} onChange={e => setInlineMemo(e.target.value)}
-                            placeholder="예) 3주차 목요일 메뉴 오타 수정 바랍니다" rows={2}
-                            className="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 resize-none focus:outline-none focus:border-orange-400" />
-                          <div className="flex gap-2">
-                            <button type="button" onClick={() => handleCorrectionSubmit(item)}
-                              disabled={loadingItemIds.has(item.id) || !inlineMemo.trim() || !inlineCategory}
-                              className="px-4 py-1.5 rounded-lg bg-orange-600 text-white text-xs font-semibold disabled:opacity-40 flex items-center gap-1">
-                              {loadingItemIds.has(item.id)
-                                ? <><span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" /><span>처리중</span></>
-                                : '수정요청 제출'}
-                            </button>
-                            <button type="button" onClick={() => { setActiveInlineId(null); setInlineMemo(''); setInlineCategory('') }}
-                              className="px-4 py-1.5 rounded-lg bg-gray-100 text-gray-600 text-xs font-semibold">취소</button>
+                  {activeInlineId === item.id && (() => {
+                    const isPostDeploy = item.deployed_at !== null
+                    return (
+                      <tr>
+                        <td colSpan={7} className={`px-4 pb-3 ${isPostDeploy ? 'bg-amber-50/30' : 'bg-orange-50/30'}`}>
+                          <div className={`rounded-xl border ${isPostDeploy ? 'border-amber-300' : 'border-orange-200'} bg-white p-3 space-y-2`}>
+                            <p className={`text-xs font-semibold ${isPostDeploy ? 'text-amber-700' : 'text-orange-700'}`}>
+                              {isPostDeploy ? `⚠️ 배포후 수정요청 — ${item.branch_name}` : `수정 요청 — ${item.branch_name}`}
+                            </p>
+                            <select value={inlineCategory} onChange={e => setInlineCategory(e.target.value)}
+                              className={`w-full sm:w-48 text-xs border border-gray-200 rounded-lg px-3 py-2 bg-white focus:outline-none ${isPostDeploy ? 'focus:border-amber-400' : 'focus:border-orange-400'}`}>
+                              <option value="">카테고리 선택 (필수)</option>
+                              {CORRECTION_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                            </select>
+                            <textarea value={inlineMemo} onChange={e => setInlineMemo(e.target.value)}
+                              placeholder="예) 3주차 목요일 메뉴 오타 수정 바랍니다" rows={2}
+                              className={`w-full text-xs border border-gray-200 rounded-lg px-3 py-2 resize-none focus:outline-none ${isPostDeploy ? 'focus:border-amber-400' : 'focus:border-orange-400'}`} />
+                            <div className="flex gap-2">
+                              <button type="button" onClick={() => handleCorrectionSubmit(item)}
+                                disabled={loadingItemIds.has(item.id) || !inlineMemo.trim() || !inlineCategory}
+                                className={`px-4 py-1.5 rounded-lg ${isPostDeploy ? 'bg-amber-600' : 'bg-orange-600'} text-white text-xs font-semibold disabled:opacity-40 flex items-center gap-1`}>
+                                {loadingItemIds.has(item.id)
+                                  ? <><span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" /><span>처리중</span></>
+                                  : isPostDeploy ? '⚠️ 배포후 수정요청 제출' : '수정요청 제출'}
+                              </button>
+                              <button type="button" onClick={() => { setActiveInlineId(null); setInlineMemo(''); setInlineCategory('') }}
+                                className="px-4 py-1.5 rounded-lg bg-gray-100 text-gray-600 text-xs font-semibold">취소</button>
+                            </div>
                           </div>
-                        </div>
-                      </td>
-                    </tr>
-                  )}
+                        </td>
+                      </tr>
+                    )
+                  })()}
 
                   {/* 수정이력 아코디언 */}
                   {expandedHistory.has(item.id) && (

@@ -232,7 +232,7 @@ export async function POST(req: NextRequest) {
 
     const { data: currentItems, error: fetchError } = await db
       .from('diet_review_items')
-      .select('id, review_status, correction_count, memo_history')
+      .select('id, review_status, correction_count, memo_history, weekly_menu_id')
       .in('id', targetIds)
 
     if (fetchError) {
@@ -242,7 +242,7 @@ export async function POST(req: NextRequest) {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const eligibleItems = ((currentItems ?? []) as any[]).filter((i) =>
-      ['generation_complete', 'resubmitted'].includes(i.review_status)
+      ['generation_complete', 'resubmitted', 'deployed'].includes(i.review_status)
     )
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const skippedIds = targetIds.filter(id => !eligibleItems.find((i: any) => i.id === id))
@@ -281,6 +281,15 @@ export async function POST(req: NextRequest) {
 
     if (updated.length === 0) {
       return NextResponse.json({ success: false, error: lastUpdateError ?? '업데이트 실패' }, { status: 500 })
+    }
+
+    // 배포후 수정요청: 성공한 항목 중 originally deployed였던 것의 weekly_menus.status를 되돌림
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const deployedOrigIds = new Set((eligibleItems as any[]).filter(i => i.review_status === 'deployed').map((i: any) => i.id))
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const deployedMenuIds = updated.filter(u => deployedOrigIds.has(u.id)).map(u => (eligibleItems as any[]).find((i: any) => i.id === u.id)?.weekly_menu_id).filter((id): id is string => !!id)
+    if (deployedMenuIds.length > 0) {
+      await db.from('weekly_menus').update({ status: 'generation_complete', updated_at: now }).in('id', deployedMenuIds)
     }
 
     // 영양사에게 알림
