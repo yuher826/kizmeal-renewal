@@ -876,70 +876,88 @@ def replace_material_text(slide, material_text):
 
 
 # ════════════════════════════════════════════════════════════════════
-# 9-3. 알레르기 박스 위치/폰트 보정
+# 9-3. 하단 박스 공통 유틸
 # ════════════════════════════════════════════════════════════════════
-def _fix_allergy_position(prs):
+def _estimate_box_height(sp, ns_a, min_h=180000, line_h=95000):
+    """박스 내 텍스트 줄 수 기반 높이 추정 (5pt 기준)."""
+    lines = 0
+    for p in sp.findall(f'.//{{{ns_a}}}p'):
+        texts = ''.join(t.text or '' for t in p.findall(f'.//{{{ns_a}}}t'))
+        lines += max(1, (len(texts) // 40) + 1)  # 40자당 1줄 환산
+    return max(min_h, lines * line_h)
+
+
+def _set_box_pos(sp, ns_a, new_top, new_cy=None):
+    """박스 y(위치)와 선택적 cy(높이) 직접 설정. sp/grpSp 모두 a:xfrm 사용."""
+    xfrm = sp.find(f'.//{{{ns_a}}}xfrm')
+    if xfrm is None:
+        return False
+    off = xfrm.find(f'{{{ns_a}}}off')
+    ext = xfrm.find(f'{{{ns_a}}}ext')
+    if off is None or ext is None:
+        return False
+    off.set('y', str(int(new_top)))
+    if new_cy is not None:
+        ext.set('cy', str(int(new_cy)))
+    return True
+
+
+def _shrink_font(sp, ns_a, target_sz=500):
+    """박스 내 폰트를 target_sz 이하로 축소."""
+    for rPr in sp.findall(f'.//{{{ns_a}}}rPr'):
+        sz = rPr.get('sz')
+        if sz is None or int(sz) >= 700:
+            rPr.set('sz', str(target_sz))
+
+
+def _fix_bottom_boxes(prs):
+    """원산지·원재료·알레르기 세 박스를 table_bottom 아래로 동적 스택 (모든 슬라이드 대응)."""
     ns_p = 'http://schemas.openxmlformats.org/presentationml/2006/main'
     ns_a = 'http://schemas.openxmlformats.org/drawingml/2006/main'
     SLIDE_HEIGHT = 10680700
     GAP = 50000
+    BOX_GAP = 30000  # 박스 사이 간격
 
-    slide_el = prs.slides[0]._element
+    for slide in prs.slides:
+        slide_el = slide._element
 
-    # 테이블(graphicFrame) 찾기
-    gf = slide_el.find(f'.//{{{ns_p}}}graphicFrame')
-    if gf is None:
-        print("⚠️ graphicFrame(테이블)을 찾지 못함")
-        return
-    p_xfrm = gf.find(f'{{{ns_p}}}xfrm')
-    tbl = gf.find(f'.//{{{ns_a}}}tbl')
-    if p_xfrm is None or tbl is None:
-        print("⚠️ 테이블 xfrm 또는 tbl을 찾지 못함")
-        return
-    table_top = int(p_xfrm.find(f'{{{ns_a}}}off').get('y'))
+        # MENU_TABLE 이름표 우선으로 테이블 찾기 (없으면 첫 graphicFrame 폴백)
+        table_el, _ = find_shape_smart(slide_el, 'MENU_TABLE', fallback_keyword=None)
+        if table_el is None:
+            table_el = slide_el.find(f'.//{{{ns_p}}}graphicFrame')
+        if table_el is None:
+            continue
 
-    # 실제 행 높이(tr h) 합산으로 table_bottom 계산 (ext/cy 신뢰 안 함)
-    total_row_h = sum(int(tr.get('h', 0)) for tr in tbl.findall(f'{{{ns_a}}}tr'))
-    table_bottom = table_top + total_row_h
+        # graphicFrame의 xfrm은 PML 네임스페이스 (p:xfrm), off/ext는 DrawingML
+        p_xfrm = table_el.find(f'{{{ns_p}}}xfrm')
+        tbl = table_el.find(f'.//{{{ns_a}}}tbl')
+        if p_xfrm is None or tbl is None:
+            continue
+        table_top = int(p_xfrm.find(f'{{{ns_a}}}off').get('y'))
+        total_row_h = sum(int(tr.get('h', 0)) for tr in tbl.findall(f'{{{ns_a}}}tr'))
+        table_bottom = table_top + total_row_h
 
-    # 알레르기 박스 탐색: 이름표(ALLERGY_BOX) 우선, 없으면 텍스트 키워드 폴백
-    allergy_sp, found_by = find_shape_smart(
-        slide_el, 'ALLERGY_BOX', fallback_keyword='알레르기 표시'
-    )
-    if allergy_sp is not None:
-        print(f"  알레르기 박스 탐색: {found_by} 방식")
-    if allergy_sp is None:
-        print("⚠️ 알레르기 박스(sp)를 찾지 못함")
-        return
+        # 세 박스를 위→아래 순서로 스택
+        cursor = table_bottom + GAP
+        stack = [
+            ('ORIGIN_BOX',   '원산지 표기'),
+            ('MATERIAL_BOX', '원재료 표시안내'),
+            ('ALLERGY_BOX',  '알레르기 표시'),
+        ]
+        for name, kw in stack:
+            sp, found_by = find_shape_smart(slide_el, name, fallback_keyword=kw)
+            if sp is None:
+                continue
+            _shrink_font(sp, ns_a, target_sz=500)
+            box_h = _estimate_box_height(sp, ns_a)
+            # 슬라이드 하단 초과 방어
+            if cursor + box_h > SLIDE_HEIGHT:
+                cursor = SLIDE_HEIGHT - box_h - 20000
+            _set_box_pos(sp, ns_a, cursor, box_h)
+            print(f"  ✅ {name}: y={cursor:,} (h={box_h:,}, {found_by})")
+            cursor += box_h + BOX_GAP
 
-    # 위치/높이 직접 수정
-    a_xfrm = allergy_sp.find(f'.//{{{ns_a}}}xfrm')
-    if a_xfrm is None:
-        print("⚠️ 알레르기 박스 xfrm을 찾지 못함")
-        return
-    a_off = a_xfrm.find(f'{{{ns_a}}}off')
-    a_ext = a_xfrm.find(f'{{{ns_a}}}ext')
-    if a_off is None or a_ext is None:
-        print("⚠️ 알레르기 박스 off/ext를 찾지 못함")
-        return
-
-    new_top = table_bottom + GAP
-    new_cy = 230000
-    if new_top + new_cy > SLIDE_HEIGHT:
-        new_top = SLIDE_HEIGHT - new_cy - 20000
-
-    old_y = a_off.get('y')
-    a_off.set('y', str(new_top))
-    a_ext.set('cy', str(new_cy))
-
-    # 폰트 7pt → 5pt
-    for rPr in allergy_sp.findall(f'.//{{{ns_a}}}rPr'):
-        sz = rPr.get('sz')
-        if sz is None or int(sz) >= 700:
-            rPr.set('sz', '500')
-
-    print(f"✅ 알레르기 박스: y={old_y} → {new_top} (table_bottom={table_bottom:,}, 행높이합={total_row_h:,})")
-    print(f"✅ 알레르기 폰트: 7pt → 5pt 완료")
+        print(f"✅ 하단 3박스 스택 완료 (table_bottom={table_bottom:,})")
 
 
 # ════════════════════════════════════════════════════════════════════
@@ -983,6 +1001,6 @@ def generate(cfg, menu_data, template_path, out_path, date_map=None,
         _render_slide(table, plan_entry, week_days, cfg)
         _fix_row_heights(table, sections)
 
-    _fix_allergy_position(prs)
+    _fix_bottom_boxes(prs)
     prs.save(out_path)
     return out_path
