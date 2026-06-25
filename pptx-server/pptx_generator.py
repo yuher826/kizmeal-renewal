@@ -930,6 +930,49 @@ def _fix_allergy_only(prs):
 
         print(f"  ✅ ALLERGY_BOX: y={new_top:,} ({found_by})")
 
+        # ① 원산지/원재료 본문 폰트 6.5pt 축소 (위치 안 건드림)
+        for box_name in ('ORIGIN_BOX', 'MATERIAL_BOX'):
+            bsp, _ = find_shape_smart(slide_el, box_name, fallback_keyword=None)
+            if bsp is None:
+                continue
+            for rPr in bsp.findall(f'.//{{{ns_a}}}rPr'):
+                szv = rPr.get('sz')
+                if szv is None:
+                    rPr.set('sz', '650')
+                else:
+                    s = int(szv)
+                    if s >= 1000:
+                        rPr.set('sz', '850')   # 제목 10pt→8.5pt
+                    elif s >= 700:
+                        rPr.set('sz', '650')   # 본문 8~9pt→6.5pt
+            print(f"  ✅ {box_name} 폰트 6.5pt")
+
+        # ② 키즈밀 로고 축소 + 하단 이동 (pic name='그래픽 118')
+        SLIDE_H = 10680700
+        LOGO_BOTTOM_MARGIN = 120000  # 슬라이드 하단에서 띄울 여백
+        for pic in slide_el.findall(f'.//{{{ns_p}}}pic'):
+            c = pic.find(f'.//{{{ns_p}}}cNvPr')
+            if c is None or c.get('name') != '그래픽 118':
+                continue
+            xfrm = pic.find(f'.//{{{ns_a}}}xfrm')
+            if xfrm is None:
+                continue
+            off = xfrm.find(f'{{{ns_a}}}off')
+            ext = xfrm.find(f'{{{ns_a}}}ext')
+            if off is None or ext is None:
+                continue
+            ox = int(off.get('x')); oy = int(off.get('y'))
+            ocx = int(ext.get('cx')); ocy = int(ext.get('cy'))
+            # 80% 축소 (가로세로 비율 유지, 우측 정렬 유지)
+            ncx = int(ocx * 0.8); ncy = int(ocy * 0.8)
+            right_edge = ox + ocx
+            nx = right_edge - ncx        # 우측 끝 맞춤
+            ny = SLIDE_H - ncy - LOGO_BOTTOM_MARGIN  # 하단에 붙임
+            ext.set('cx', str(ncx)); ext.set('cy', str(ncy))
+            off.set('x', str(nx)); off.set('y', str(ny))
+            print(f"  ✅ 로고 축소80%+하단이동: y={ny:,} cy={ncy:,}")
+            break
+
 
 def _check_box_overlap(prs, branch_label=''):
     """원산지/원재료/알레르기 세 박스가 겹치는지 검사, 겹치면 경고 출력."""
