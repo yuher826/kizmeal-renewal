@@ -954,7 +954,7 @@ def _fix_allergy_only(prs):
         print(f"  ✅ ALLERGY_BOX: y={new_top:,} ({found_by})")
 
         # ① 원산지/원재료 본문 폰트 6.5pt 축소 (위치 안 건드림)
-        ORIGIN_Y = 8_550_000  # 클립보드 기준점 — 아래 클립보드 블록도 이 값 참조
+        ORIGIN_Y = 8_395_899  # 원본 좌표 복원 — 클립보드 기준점도 이 값 참조
         for box_name in ('ORIGIN_BOX', 'MATERIAL_BOX'):
             bsp, _ = find_shape_smart(slide_el, box_name, fallback_keyword=None)
             if bsp is None:
