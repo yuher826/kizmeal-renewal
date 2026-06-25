@@ -979,6 +979,27 @@ def _fix_allergy_only(prs):
             print(f"  ✅ 로고 축소80%+하단이동: y={ny:,} cy={ncy:,}")
             break
 
+        # 식단표 클립보드 아이콘을 5주 본식줄 안으로 (오전줄 침범 방지)
+        for pic in slide_el.findall(f'.//{{{ns_p}}}pic'):
+            c = pic.find(f'.//{{{ns_p}}}cNvPr')
+            if c is None or c.get('name') != '그림 224':
+                continue
+            xfrm = pic.find(f'.//{{{ns_a}}}xfrm')
+            if xfrm is None:
+                continue
+            off = xfrm.find(f'{{{ns_a}}}off')
+            ext = xfrm.find(f'{{{ns_a}}}ext')
+            if off is None or ext is None:
+                continue
+            ocx = int(ext.get('cx')); ocy = int(ext.get('cy'))
+            # 80% 축소
+            ncx = int(ocx * 0.8); ncy = int(ocy * 0.8)
+            ext.set('cx', str(ncx)); ext.set('cy', str(ncy))
+            # 5주 본식줄 시작 이후(8,500,000) 배치 = 오전줄(8,241,003) 안 넘음
+            off.set('y', '8500000')
+            print(f"  ✅ 클립보드 아이콘: y=8,500,000 (80%축소)")
+            break
+
 
 def _check_box_overlap(prs, branch_label=''):
     """원산지/원재료/알레르기 세 박스가 겹치는지 검사, 겹치면 경고 출력."""
