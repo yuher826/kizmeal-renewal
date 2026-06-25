@@ -901,9 +901,32 @@ def _fix_allergy_only(prs):
         if p_xfrm is None or tbl is None:
             continue
         table_top = int(p_xfrm.find(f'{{{ns_a}}}off').get('y'))
-        total_row_h = sum(int(tr.get('h', 0)) for tr in tbl.findall(f'{{{ns_a}}}tr'))
+        rows = tbl.findall(f'{{{ns_a}}}tr')
+        total_row_h = sum(int(tr.get('h', 0)) for tr in rows)
         table_bottom = table_top + total_row_h
+        row_count = len(rows)
 
+        if row_count >= 15:
+            # 15행: ALLERGY_BOX만 동적 배치, 나머지는 양식 원본 그대로
+            sp, found_by = find_shape_smart(slide_el, 'ALLERGY_BOX', fallback_keyword='알레르기 표시')
+            if sp is None:
+                continue
+            xfrm = sp.find(f'.//{{{ns_a}}}xfrm')
+            if xfrm is None:
+                continue
+            off = xfrm.find(f'{{{ns_a}}}off')
+            ext = xfrm.find(f'{{{ns_a}}}ext')
+            if off is None or ext is None:
+                continue
+            cy = int(ext.get('cy'))
+            new_top = table_bottom + GAP
+            if new_top + cy > SLIDE_HEIGHT:
+                new_top = SLIDE_HEIGHT - cy - 20000
+            off.set('y', str(int(new_top)))
+            print(f"  ✅ [15행] ALLERGY_BOX: y={new_top:,} ({found_by})")
+            continue
+
+        # 10행: 기존 코드 100% 그대로 (어제 완성본)
         sp, found_by = find_shape_smart(slide_el, 'ALLERGY_BOX', fallback_keyword='알레르기 표시')
         if sp is None:
             continue
@@ -931,6 +954,7 @@ def _fix_allergy_only(prs):
         print(f"  ✅ ALLERGY_BOX: y={new_top:,} ({found_by})")
 
         # ① 원산지/원재료 본문 폰트 6.5pt 축소 (위치 안 건드림)
+        ORIGIN_Y = 8_550_000  # 클립보드 기준점 — 아래 클립보드 블록도 이 값 참조
         for box_name in ('ORIGIN_BOX', 'MATERIAL_BOX'):
             bsp, _ = find_shape_smart(slide_el, box_name, fallback_keyword=None)
             if bsp is None:
@@ -951,7 +975,7 @@ def _fix_allergy_only(prs):
                 if bxfrm is not None:
                     boff = bxfrm.find(f'{{{ns_a}}}off')
                     if boff is not None:
-                        boff.set('y', '8550000')
+                        boff.set('y', str(ORIGIN_Y))
             print(f"  ✅ {box_name} 폰트5.5pt" + (" + 위치조정" if box_name == 'ORIGIN_BOX' else ""))
 
         # ② 키즈밀 로고 축소 + 하단 이동 (pic name='그래픽 118')
@@ -983,7 +1007,7 @@ def _fix_allergy_only(prs):
         # 식단표 클립보드 아이콘을 5주 본식줄 안으로 (오전줄 침범 방지)
         for pic in slide_el.findall(f'.//{{{ns_p}}}pic'):
             c = pic.find(f'.//{{{ns_p}}}cNvPr')
-            if c is None or c.get('name') != '그림 224':
+            if c is None or c.get('name') not in {'그림 3', '그림 224', '그림 193'}:
                 continue
             xfrm = pic.find(f'.//{{{ns_a}}}xfrm')
             if xfrm is None:
@@ -996,9 +1020,9 @@ def _fix_allergy_only(prs):
             # 80% 축소
             ncx = int(ocx * 0.8); ncy = int(ocy * 0.8)
             ext.set('cx', str(ncx)); ext.set('cy', str(ncy))
-            # 5주 본식줄 시작 이후(8,500,000) 배치 = 오전줄(8,241,003) 안 넘음
-            off.set('y', '9100000')
-            print(f"  ✅ 클립보드 아이콘: y=9,100,000 (80%축소)")
+            # 클립보드를 원산지 제목과 나란히 (15행 정답 간격 26,983 적용)
+            off.set('y', str(ORIGIN_Y + 26_983))
+            print(f"  ✅ 클립보드 아이콘: y={ORIGIN_Y + 26_983:,} (ORIGIN_Y+26,983)")
             break
 
 
@@ -1076,7 +1100,6 @@ def generate(cfg, menu_data, template_path, out_path, date_map=None,
             continue
 
         _render_slide(table, plan_entry, week_days, cfg)
-        _fix_row_heights(table, sections)
 
     _fix_allergy_only(prs)
     _check_box_overlap(prs, branch_label=cfg.get('name', out_path))
