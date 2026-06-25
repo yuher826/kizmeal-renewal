@@ -938,20 +938,21 @@ def _fix_allergy_only(prs):
             for rPr in bsp.findall(f'.//{{{ns_a}}}rPr'):
                 szv = rPr.get('sz')
                 if szv is None:
-                    rPr.set('sz', '650')
+                    rPr.set('sz', '550')
                 else:
                     s = int(szv)
                     if s >= 1000:
-                        rPr.set('sz', '850')   # 제목 10pt→8.5pt
-                    elif s >= 700:
-                        rPr.set('sz', '650')   # 본문 8~9pt→6.5pt
+                        rPr.set('sz', '850')   # 제목 8.5pt 유지
+                    elif s >= 600:
+                        rPr.set('sz', '550')   # 본문 5.5pt
+            # 원산지만 위치 조정 (autofit 유지, y만)
             if box_name == 'ORIGIN_BOX':
                 bxfrm = bsp.find(f'.//{{{ns_a}}}xfrm')
                 if bxfrm is not None:
                     boff = bxfrm.find(f'{{{ns_a}}}off')
                     if boff is not None:
-                        boff.set('y', '8700000')   # 오전 줄과 확실히 분리
-            print(f"  ✅ {box_name} 폰트 6.5pt")
+                        boff.set('y', '8550000')
+            print(f"  ✅ {box_name} 폰트5.5pt" + (" + 위치조정" if box_name == 'ORIGIN_BOX' else ""))
 
         # ② 키즈밀 로고 축소 + 하단 이동 (pic name='그래픽 118')
         SLIDE_H = 10680700
@@ -996,8 +997,8 @@ def _fix_allergy_only(prs):
             ncx = int(ocx * 0.8); ncy = int(ocy * 0.8)
             ext.set('cx', str(ncx)); ext.set('cy', str(ncy))
             # 5주 본식줄 시작 이후(8,500,000) 배치 = 오전줄(8,241,003) 안 넘음
-            off.set('y', '8500000')
-            print(f"  ✅ 클립보드 아이콘: y=8,500,000 (80%축소)")
+            off.set('y', '9100000')
+            print(f"  ✅ 클립보드 아이콘: y=9,100,000 (80%축소)")
             break
 
 
