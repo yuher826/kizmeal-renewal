@@ -876,47 +876,14 @@ def replace_material_text(slide, material_text):
 
 
 # ════════════════════════════════════════════════════════════════════
-# 9-3. 하단 박스 공통 유틸
+# 9-3. 알레르기 박스 동적 배치 + 박스 겹침 감지
 # ════════════════════════════════════════════════════════════════════
-def _estimate_box_height(sp, ns_a, min_h=180000, line_h=95000):
-    """박스 내 텍스트 줄 수 기반 높이 추정 (5pt 기준)."""
-    lines = 0
-    for p in sp.findall(f'.//{{{ns_a}}}p'):
-        texts = ''.join(t.text or '' for t in p.findall(f'.//{{{ns_a}}}t'))
-        lines += max(1, (len(texts) // 40) + 1)  # 40자당 1줄 환산
-    return max(min_h, lines * line_h)
-
-
-def _set_box_pos(sp, ns_a, new_top, new_cy=None):
-    """박스 y(위치)와 선택적 cy(높이) 직접 설정. sp/grpSp 모두 a:xfrm 사용."""
-    xfrm = sp.find(f'.//{{{ns_a}}}xfrm')
-    if xfrm is None:
-        return False
-    off = xfrm.find(f'{{{ns_a}}}off')
-    ext = xfrm.find(f'{{{ns_a}}}ext')
-    if off is None or ext is None:
-        return False
-    off.set('y', str(int(new_top)))
-    if new_cy is not None:
-        ext.set('cy', str(int(new_cy)))
-    return True
-
-
-def _shrink_font(sp, ns_a, target_sz=500):
-    """박스 내 폰트를 target_sz 이하로 축소."""
-    for rPr in sp.findall(f'.//{{{ns_a}}}rPr'):
-        sz = rPr.get('sz')
-        if sz is None or int(sz) >= 700:
-            rPr.set('sz', str(target_sz))
-
-
-def _fix_bottom_boxes(prs):
-    """원산지·원재료·알레르기 세 박스를 table_bottom 아래로 동적 스택 (모든 슬라이드 대응)."""
+def _fix_allergy_only(prs):
+    """ALLERGY_BOX만 table_bottom 기준 동적 배치. ORIGIN/MATERIAL 위치 불변."""
     ns_p = 'http://schemas.openxmlformats.org/presentationml/2006/main'
     ns_a = 'http://schemas.openxmlformats.org/drawingml/2006/main'
     SLIDE_HEIGHT = 10680700
-    GAP = 50000
-    BOX_GAP = 30000  # 박스 사이 간격
+    GAP = 30000
 
     for slide in prs.slides:
         slide_el = slide._element
@@ -937,27 +904,66 @@ def _fix_bottom_boxes(prs):
         total_row_h = sum(int(tr.get('h', 0)) for tr in tbl.findall(f'{{{ns_a}}}tr'))
         table_bottom = table_top + total_row_h
 
-        # 세 박스를 위→아래 순서로 스택
-        cursor = table_bottom + GAP
-        stack = [
-            ('ORIGIN_BOX',   '원산지 표기'),
-            ('MATERIAL_BOX', '원재료 표시안내'),
-            ('ALLERGY_BOX',  '알레르기 표시'),
-        ]
-        for name, kw in stack:
-            sp, found_by = find_shape_smart(slide_el, name, fallback_keyword=kw)
-            if sp is None:
-                continue
-            _shrink_font(sp, ns_a, target_sz=500)
-            box_h = _estimate_box_height(sp, ns_a)
-            # 슬라이드 하단 초과 방어
-            if cursor + box_h > SLIDE_HEIGHT:
-                cursor = SLIDE_HEIGHT - box_h - 20000
-            _set_box_pos(sp, ns_a, cursor, box_h)
-            print(f"  ✅ {name}: y={cursor:,} (h={box_h:,}, {found_by})")
-            cursor += box_h + BOX_GAP
+        sp, found_by = find_shape_smart(slide_el, 'ALLERGY_BOX', fallback_keyword='알레르기 표시')
+        if sp is None:
+            continue
+        xfrm = sp.find(f'.//{{{ns_a}}}xfrm')
+        if xfrm is None:
+            continue
+        off = xfrm.find(f'{{{ns_a}}}off')
+        ext = xfrm.find(f'{{{ns_a}}}ext')
+        if off is None or ext is None:
+            continue
 
-        print(f"✅ 하단 3박스 스택 완료 (table_bottom={table_bottom:,})")
+        cy = int(ext.get('cy'))
+        new_top = table_bottom + GAP
+        # 슬라이드 하단 초과 방어
+        if new_top + cy > SLIDE_HEIGHT:
+            new_top = SLIDE_HEIGHT - cy - 20000
+        off.set('y', str(int(new_top)))
+
+        # 폰트 7pt → 5pt
+        for rPr in sp.findall(f'.//{{{ns_a}}}rPr'):
+            szv = rPr.get('sz')
+            if szv is None or int(szv) >= 700:
+                rPr.set('sz', '500')
+
+        print(f"  ✅ ALLERGY_BOX: y={new_top:,} ({found_by})")
+
+
+def _check_box_overlap(prs, branch_label=''):
+    """원산지/원재료/알레르기 세 박스가 겹치는지 검사, 겹치면 경고 출력."""
+    ns_a = 'http://schemas.openxmlformats.org/drawingml/2006/main'
+
+    def get_rect(slide_el, name):
+        sp, _ = find_shape_smart(slide_el, name, fallback_keyword=None)
+        if sp is None:
+            return None
+        xfrm = sp.find(f'.//{{{ns_a}}}xfrm')
+        if xfrm is None:
+            return None
+        off = xfrm.find(f'{{{ns_a}}}off')
+        ext = xfrm.find(f'{{{ns_a}}}ext')
+        if off is None or ext is None:
+            return None
+        x  = int(off.get('x'));  y  = int(off.get('y'))
+        cx = int(ext.get('cx')); cy = int(ext.get('cy'))
+        return (x, y, x + cx, y + cy)
+
+    def overlap(a, b):
+        if a is None or b is None:
+            return False
+        ax1, ay1, ax2, ay2 = a
+        bx1, by1, bx2, by2 = b
+        return not (ax2 <= bx1 or bx2 <= ax1 or ay2 <= by1 or by2 <= ay1)
+
+    names = ['ORIGIN_BOX', 'MATERIAL_BOX', 'ALLERGY_BOX']
+    for si, slide in enumerate(prs.slides):
+        rects = {n: get_rect(slide._element, n) for n in names}
+        for i in range(len(names)):
+            for j in range(i + 1, len(names)):
+                if overlap(rects[names[i]], rects[names[j]]):
+                    print(f"  ⚠️ 겹침 감지! {branch_label} 슬라이드{si + 1}: {names[i]} ↔ {names[j]}")
 
 
 # ════════════════════════════════════════════════════════════════════
@@ -1001,6 +1007,7 @@ def generate(cfg, menu_data, template_path, out_path, date_map=None,
         _render_slide(table, plan_entry, week_days, cfg)
         _fix_row_heights(table, sections)
 
-    _fix_bottom_boxes(prs)
+    _fix_allergy_only(prs)
+    _check_box_overlap(prs, branch_label=cfg.get('name', out_path))
     prs.save(out_path)
     return out_path
