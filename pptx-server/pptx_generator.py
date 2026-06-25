@@ -945,11 +945,17 @@ def _fix_allergy_only(prs):
                         rPr.set('sz', '850')   # 제목 10pt→8.5pt
                     elif s >= 700:
                         rPr.set('sz', '650')   # 본문 8~9pt→6.5pt
+            if box_name == 'ORIGIN_BOX':
+                bxfrm = bsp.find(f'.//{{{ns_a}}}xfrm')
+                if bxfrm is not None:
+                    boff = bxfrm.find(f'{{{ns_a}}}off')
+                    if boff is not None:
+                        boff.set('y', '8700000')   # 오전 줄과 확실히 분리
             print(f"  ✅ {box_name} 폰트 6.5pt")
 
         # ② 키즈밀 로고 축소 + 하단 이동 (pic name='그래픽 118')
         SLIDE_H = 10680700
-        LOGO_BOTTOM_MARGIN = 120000  # 슬라이드 하단에서 띄울 여백
+        LOGO_BOTTOM_MARGIN = 300000  # 슬라이드 하단에서 띄울 여백
         for pic in slide_el.findall(f'.//{{{ns_p}}}pic'):
             c = pic.find(f'.//{{{ns_p}}}cNvPr')
             if c is None or c.get('name') != '그래픽 118':
