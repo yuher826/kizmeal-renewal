@@ -464,10 +464,19 @@ def set_label_cell(cell, label):
 
 
 def clear_cell(cell):
-    """셀 내 모든 run·br 제거 → endParaRPr만 남은 완전 빈 셀."""
-    p, _ = _get_p_and_runs(cell)
-    if p is None:
+    """셀 내 모든 문단의 run·br 제거 + 첫 문단만 남기고 나머지 문단 삭제."""
+    tc = cell._tc
+    txBody = tc.find(f'{{{_NS_A}}}txBody')
+    if txBody is None:
         return
+    paras = txBody.findall(f'{{{_NS_A}}}p')
+    if not paras:
+        return
+    # 두 번째 이후 문단(본식 잔재)을 통째로 제거
+    for extra_p in paras[1:]:
+        txBody.remove(extra_p)
+    # 남은 첫 문단의 run·br 제거 → 완전 빈 셀
+    p = paras[0]
     for child in list(p):
         tag = child.tag
         if tag == f'{{{_NS_A}}}r' or tag == f'{{{_NS_A}}}br':
@@ -735,6 +744,9 @@ def _render_slide(table, plan_entry, week_days, cfg):
                     set_snack_cell(cell, menu, kcal)
 
                 elif sec == 'pm':
+                    if day.get('is_holiday') and branch_name not in _HOLIDAY_OPERATING:
+                        clear_cell(cell)
+                        continue
                     menu, kcal = build_snack(
                         day.get('afternoon_snack', {}), branch_name, do_strip=do_strip)
                     if not menu:
@@ -743,6 +755,9 @@ def _render_slide(table, plan_entry, week_days, cfg):
                     set_snack_cell(cell, menu, kcal)
 
                 elif sec == 'care':
+                    if day.get('is_holiday') and branch_name not in _HOLIDAY_OPERATING:
+                        clear_cell(cell)
+                        continue
                     menu, kcal = build_snack(
                         day.get('care_snack', {}), branch_name, do_strip=do_strip)
                     set_snack_cell(cell, menu, kcal)
