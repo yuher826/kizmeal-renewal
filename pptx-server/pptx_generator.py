@@ -179,11 +179,16 @@ def build_pptx_from_plan(template_path, slide_indices):
 # 3. 표 셀 XML 초기화 (빈 셀 + 타입 불일치 셀 → 올바른 구조로 교체)
 # ════════════════════════════════════════════════════════════════════
 def _make_snack_tmpl_from_lunch(lunch_tmpl):
-    """7-run 중식 txBody에서 1-run 간식 txBody 파생."""
+    """본식 txBody(문단 여러 개)에서 1문단·1run 간식 txBody 파생."""
     tmpl = copy.deepcopy(lunch_tmpl)
-    p = tmpl.find(f'{{{_NS_A}}}p')
-    if p is None:
+    paras = tmpl.findall(f'{{{_NS_A}}}p')
+    if not paras:
         return tmpl
+    # 첫 문단만 남기고 나머지 본식 문단 전부 제거
+    for extra_p in paras[1:]:
+        tmpl.remove(extra_p)
+    # 남은 첫 문단의 run을 1개로 정리 + br 제거
+    p = paras[0]
     runs = p.findall(f'{{{_NS_A}}}r')
     brs  = p.findall(f'{{{_NS_A}}}br')
     for r in runs[1:]:
