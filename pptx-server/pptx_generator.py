@@ -52,6 +52,8 @@ _HOLIDAY_OPERATING = {'덕양P', '광교SLP'}
 _H_LUNCH = 1368000
 _H_SNACK = 403200
 _H_LAST  = 437413
+_H_LUNCH_15 = 1264998   # 15행 본식 행 (정답본 실측)
+_H_SNACK_15 = 262508    # 15행 간식 행 (정답본 실측)
 
 
 # ════════════════════════════════════════════════════════════════════
@@ -907,7 +909,23 @@ def _fix_allergy_only(prs):
         row_count = len(rows)
 
         if row_count >= 15:
-            # 15행: ALLERGY_BOX만 동적 배치, 나머지는 양식 원본 그대로
+            # 1) 행 높이를 정답값으로 재설정
+            for i, tr in enumerate(rows):
+                h = _H_LUNCH_15 if i % 3 == 0 else _H_SNACK_15
+                tr.set('h', str(h))
+
+            # 2) table_bottom 재계산
+            total_row_h = sum(int(tr.get('h', 0)) for tr in rows)
+            table_bottom = table_top + total_row_h
+
+            # 3) graphicFrame cy 갱신 (테두리 어긋남 방지)
+            p_ext = p_xfrm.find(f'{{{ns_a}}}ext')
+            if p_ext is not None:
+                p_ext.set('cy', str(total_row_h))
+
+            print(f"  ✅ [15행] 행높이 재설정 → table_bottom={table_bottom:,}")
+
+            # 4) ALLERGY_BOX 동적 배치 (재계산된 table_bottom 기준)
             sp, found_by = find_shape_smart(slide_el, 'ALLERGY_BOX', fallback_keyword='알레르기 표시')
             if sp is None:
                 continue
