@@ -176,9 +176,34 @@ def build_pptx_from_plan(template_path, slide_indices):
 # ════════════════════════════════════════════════════════════════════
 # 3. 표 셀 XML 초기화 (빈 셀 + 타입 불일치 셀 → 올바른 구조로 교체)
 # ════════════════════════════════════════════════════════════════════
+def _normalize_snack_tmpl(txBody):
+    """간식 txBody를 1단락·1run·빈텍스트로 정규화 (오염 템플릿 대비)."""
+    all_ps = txBody.findall(f'{{{_NS_A}}}p')
+    for extra_p in all_ps[1:]:
+        txBody.remove(extra_p)
+    p = txBody.find(f'{{{_NS_A}}}p')
+    if p is None:
+        return txBody
+    runs = p.findall(f'{{{_NS_A}}}r')
+    brs  = p.findall(f'{{{_NS_A}}}br')
+    for r in runs[1:]:
+        p.remove(r)
+    for br in brs:
+        p.remove(br)
+    if runs:
+        t = runs[0].find(f'{{{_NS_A}}}t')
+        if t is not None:
+            t.text = ''
+    return txBody
+
+
 def _make_snack_tmpl_from_lunch(lunch_tmpl):
-    """7-run 중식 txBody에서 1-run 간식 txBody 파생."""
+    """중식 txBody에서 1-run 간식 txBody 파생 (snack-only 슬라이드 폴백)."""
     tmpl = copy.deepcopy(lunch_tmpl)
+    # 여분 단락 제거 (다단락 lunch_tmpl이면 중식 데이터가 snack에 남음)
+    all_ps = tmpl.findall(f'{{{_NS_A}}}p')
+    for extra_p in all_ps[1:]:
+        tmpl.remove(extra_p)
     p = tmpl.find(f'{{{_NS_A}}}p')
     if p is None:
         return tmpl
@@ -188,6 +213,10 @@ def _make_snack_tmpl_from_lunch(lunch_tmpl):
         p.remove(r)
     for br in brs:
         p.remove(br)
+    if runs:
+        t = runs[0].find(f'{{{_NS_A}}}t')
+        if t is not None:
+            t.text = ''
     return tmpl
 
 
@@ -200,18 +229,21 @@ def _init_table_cells(table, sections):
     n_cols = len(table.columns)
     n_secs = len(sections)
 
-    # 모든 col1 셀에서 lunch(≥5 run) / snack(1~2 run) template 추출
+    # sections 기반으로 col1 셀에서 lunch/snack template 추출 (run 수 임계값 불사용)
     lunch_tmpl = None
     snack_tmpl = None
     for ri in range(len(table.rows)):
+        sec = sections[ri % n_secs]
         src_txBody = table.cell(ri, 1)._tc.find(f'{{{_NS_A}}}txBody')
         if src_txBody is None:
             continue
         n = len(src_txBody.findall(f'.//{{{_NS_A}}}r'))
-        if n >= 5 and lunch_tmpl is None:
+        if n == 0:
+            continue
+        if sec == 'lunch' and lunch_tmpl is None:
             lunch_tmpl = copy.deepcopy(src_txBody)
-        elif 1 <= n <= 2 and snack_tmpl is None:
-            snack_tmpl = copy.deepcopy(src_txBody)
+        elif sec != 'lunch' and snack_tmpl is None:
+            snack_tmpl = _normalize_snack_tmpl(copy.deepcopy(src_txBody))
         if lunch_tmpl is not None and snack_tmpl is not None:
             break
 
@@ -346,8 +378,9 @@ def _apply_inline_allergy(template_run, text, p):
         insert_pos += 1
 
 
-def _make_date_paragraph(date_num):
-    """날짜 전용 paragraph 생성: 왼쪽 정렬, #84B29C, 9pt, 볼드, Pretendard."""
+def _make_date_paragraph(date_num, color='84B29C'):
+    """날짜 전용 paragraph 생성: 왼쪽 정렬, 9pt, 볼드, Pretendard.
+    color: 평일=#84B29C(기본), 공휴일=#C00000."""
     date_p = etree.Element(f'{{{_NS_A}}}p')
 
     pPr = etree.SubElement(date_p, f'{{{_NS_A}}}pPr')
@@ -361,7 +394,7 @@ def _make_date_paragraph(date_num):
 
     solidFill = etree.SubElement(rPr, f'{{{_NS_A}}}solidFill')
     srgbClr   = etree.SubElement(solidFill, f'{{{_NS_A}}}srgbClr')
-    srgbClr.set('val', '84B29C')
+    srgbClr.set('val', color)
 
     latin = etree.SubElement(rPr, f'{{{_NS_A}}}latin')
     latin.set('typeface', 'Pretendard')
@@ -374,6 +407,35 @@ def _make_date_paragraph(date_num):
     t.text = date_num
 
     return date_p
+
+
+def _make_reason_paragraph(reason_text):
+    """공휴일 사유 단락 생성: 왼쪽 정렬, #C00000, 7pt, 볼드 없음, Pretendard."""
+    p = etree.Element(f'{{{_NS_A}}}p')
+
+    pPr = etree.SubElement(p, f'{{{_NS_A}}}pPr')
+    pPr.set('algn', 'l')
+
+    rPr = etree.Element(f'{{{_NS_A}}}rPr')
+    rPr.set('lang', 'ko-KR')
+    rPr.set('sz', '700')
+    rPr.set('dirty', '0')
+
+    solidFill = etree.SubElement(rPr, f'{{{_NS_A}}}solidFill')
+    srgbClr   = etree.SubElement(solidFill, f'{{{_NS_A}}}srgbClr')
+    srgbClr.set('val', 'C00000')
+
+    latin = etree.SubElement(rPr, f'{{{_NS_A}}}latin')
+    latin.set('typeface', 'Pretendard')
+    ea = etree.SubElement(rPr, f'{{{_NS_A}}}ea')
+    ea.set('typeface', 'Pretendard')
+
+    run = etree.SubElement(p, f'{{{_NS_A}}}r')
+    run.append(rPr)
+    t = etree.SubElement(run, f'{{{_NS_A}}}t')
+    t.text = reason_text
+
+    return p
 
 
 def set_lunch_cell(cell, lines, date_num=None):
@@ -404,20 +466,25 @@ def set_lunch_cell(cell, lines, date_num=None):
             p.insert(run_idx + 1, allergy_run)
 
 
-def _set_date_only_cell(cell, date_num):
-    """빈 셀(공휴일 clear 후)에 날짜 paragraph 1개만 삽입."""
+def _set_date_only_cell(cell, date_num, reason=''):
+    """빈 셀(공휴일 clear 후)에 날짜(+사유) paragraph 삽입.
+    reason 있으면 날짜 #C00000 + 사유 단락 추가, 없으면 날짜 #84B29C만."""
     tc     = cell._tc
     txBody = tc.find(f'{{{_NS_A}}}txBody')
     if txBody is None or not date_num:
         return
-    # 기존 p 앞에 날짜 paragraph 삽입 (빈 p는 그대로 두어 셀 구조 유지)
+    date_color = 'C00000' if reason else '84B29C'
+    date_p     = _make_date_paragraph(date_num, color=date_color)
     existing_p = txBody.find(f'{{{_NS_A}}}p')
-    date_p     = _make_date_paragraph(date_num)
     if existing_p is not None:
         p_idx = list(txBody).index(existing_p)
         txBody.insert(p_idx, date_p)
+        if reason:
+            txBody.insert(p_idx + 1, _make_reason_paragraph(reason))
     else:
         txBody.append(date_p)
+        if reason:
+            txBody.append(_make_reason_paragraph(reason))
 
 
 def set_snack_cell(cell, menu_line, kcal_line):
@@ -457,8 +524,15 @@ def set_label_cell(cell, label):
 
 
 def clear_cell(cell):
-    """셀 내 모든 run·br 제거 → endParaRPr만 남은 완전 빈 셀."""
-    p, _ = _get_p_and_runs(cell)
+    """셀 내 모든 run·br 제거 + 여분 단락 제거 → 완전 빈 셀."""
+    tc     = cell._tc
+    txBody = tc.find(f'{{{_NS_A}}}txBody')
+    if txBody is None:
+        return
+    all_ps = txBody.findall(f'{{{_NS_A}}}p')
+    for extra_p in all_ps[1:]:
+        txBody.remove(extra_p)
+    p = txBody.find(f'{{{_NS_A}}}p')
     if p is None:
         return
     for child in list(p):
@@ -694,10 +768,17 @@ def _render_slide(table, plan_entry, week_days, cfg):
 
                 if sec == 'lunch':
                     date_str = day.get('date', '')
-                    day_num  = date_str.split('-')[2] if len(date_str) == 10 else ''
+                    # ISO '2026-06-03' 또는 2자리 '03' 둘 다 처리, 앞의 0 제거
+                    if len(date_str) == 10 and date_str[4] == '-':
+                        day_num = date_str.split('-')[2]
+                    elif date_str.isdigit():
+                        day_num = date_str
+                    else:
+                        day_num = ''
+                    day_num = str(int(day_num)) if day_num else ''
                     if day.get('is_holiday') and branch_name not in _HOLIDAY_OPERATING:
                         clear_cell(cell)
-                        _set_date_only_cell(cell, day_num)
+                        _set_date_only_cell(cell, day_num, reason=day.get('holiday_reason', ''))
                         continue
                     lines = build_lunch_lines(
                         day.get('lunch', {}), branch_name,
@@ -728,6 +809,9 @@ def _render_slide(table, plan_entry, week_days, cfg):
                     set_snack_cell(cell, menu, kcal)
 
                 elif sec == 'pm':
+                    if day.get('is_holiday') and branch_name not in _HOLIDAY_OPERATING:
+                        clear_cell(cell)
+                        continue
                     menu, kcal = build_snack(
                         day.get('afternoon_snack', {}), branch_name, do_strip=do_strip)
                     if not menu:
