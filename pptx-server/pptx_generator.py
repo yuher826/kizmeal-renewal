@@ -52,8 +52,8 @@ _HOLIDAY_OPERATING = {'덕양P', '광교SLP'}
 _H_LUNCH = 1368000
 _H_SNACK = 403200
 _H_LAST  = 437413
-_H_LUNCH_15 = 1264998   # 15행 본식 행 (정답본 실측)
-_H_SNACK_15 = 262508    # 15행 간식 행 (정답본 실측)
+_H_LUNCH_15 = 1180800   # 강동ECC 정답본 본식 행 높이
+_H_SNACK_15 = 306000    # 강동ECC 정답본 간식 행 높이
 
 
 # ════════════════════════════════════════════════════════════════════
@@ -957,9 +957,12 @@ def _fix_allergy_only(prs):
             if off is None or ext is None:
                 continue
             cy = int(ext.get('cy'))
-            new_top = table_bottom + GAP
-            if new_top + cy > SLIDE_HEIGHT:
-                new_top = SLIDE_HEIGHT - cy - 20000
+            # 정답본 강동ECC: 알레르기 bottom이 슬라이드 끝에서 약 533,000 위
+            ALLERGY_BOTTOM_MARGIN = 532946
+            new_top = SLIDE_HEIGHT - cy - ALLERGY_BOTTOM_MARGIN
+            # 테이블과 겹치지 않도록 최소 위치 보장
+            if new_top < table_bottom + GAP:
+                new_top = table_bottom + GAP
             off.set('y', str(int(new_top)))
             print(f"  ✅ [15행] ALLERGY_BOX: y={new_top:,} ({found_by})")
             continue
