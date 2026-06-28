@@ -25,7 +25,7 @@ from bracket_parser import _BRACKET_RE, wants_fruit
 from pptx_generator import generate
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-EXCEL_PATH    = os.path.join(HERE, '키즈밀_식단표_6월_테스트데이터_v5.4.xlsx')
+EXCEL_PATH    = os.path.join(HERE, '키즈밀_식단표_6월_테스트데이터_v6.xlsx')
 TEMPLATE_PATH = os.path.join(HERE, 'templates', '2026년 6월 식단표(양식).pptx')
 OUTPUT_DIR    = os.path.join(HERE, 'output')
 
@@ -108,10 +108,12 @@ def parse_header(s):
     m = re.search(r'\d{1,2}/(\d{1,2})', s)
     if not m:
         return None
+    reason_m = re.search(r'\(([^)]+)\)', s)    # 괄호 안 사유 동적 추출
     return {
-        'date': m.group(1).zfill(2),
-        'is_holiday': '공휴일' in s or '휴원' in s,
-        'is_birthday': '🎂' in s or '생일' in s,
+        'date':           m.group(1).zfill(2),
+        'is_holiday':     '공휴일' in s or '휴원' in s,
+        'is_birthday':    '🎂' in s or '생일' in s,
+        'holiday_reason': reason_m.group(1) if reason_m else '',
     }
 
 
@@ -238,6 +240,7 @@ def parse_week(ws, wk_num):
             'date':           hdr['date'],
             'is_holiday':     hdr['is_holiday'] or not bool(bap),
             'is_birthday':    hdr['is_birthday'],
+            'holiday_reason': hdr.get('holiday_reason', ''),
             'is_skipped':     False,
             'lunch':          lunch,
             'morning_snack':  morning_snack,
