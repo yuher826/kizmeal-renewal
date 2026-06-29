@@ -380,6 +380,25 @@ def _apply_inline_allergy(template_run, text, p):
         insert_pos += 1
 
 
+def _clone_cell_paragraph(src_p, src_run, sz):
+    """양식 셀의 pPr(정렬·줄간격)·run rPr(Pretendard·색) 보존한 빈 문단 생성.
+    sz만 지정값으로 교체. 텍스트 빈 run 1개 포함."""
+    p = etree.Element(f'{{{_NS_A}}}p')
+    src_pPr = src_p.find(f'{{{_NS_A}}}pPr')
+    if src_pPr is not None:
+        p.append(copy.deepcopy(src_pPr))        # 정렬 ctr·lnSpc 100% 그대로
+    run = copy.deepcopy(src_run)                # Pretendard·색 그대로
+    rPr = run.find(f'{{{_NS_A}}}rPr')
+    if rPr is not None:
+        rPr.set('sz', sz)                       # ← 폰트 크기만 교체
+    t = run.find(f'{{{_NS_A}}}t')
+    if t is None:
+        t = etree.SubElement(run, f'{{{_NS_A}}}t')
+    t.text = ''
+    p.append(run)
+    return p
+
+
 def _make_date_paragraph(date_num, color='84B29C'):
     """날짜 전용 paragraph 생성: 왼쪽 정렬, 9pt, 볼드, Pretendard.
     color: 평일=#84B29C(기본), 공휴일=#C00000."""
@@ -441,31 +460,31 @@ def _make_reason_paragraph(reason_text):
 
 
 def set_lunch_cell(cell, lines, date_num=None):
-    """
-    중식 셀: run-br-run-br-... 구조에서 각 run에 라인별 텍스트 주입.
-    lines: [밥, 국, 반찬1, ..., 영양구성] (최대 7개)
-    date_num: 일자 문자열 (예: '01') — 있으면 별도 paragraph를 셀 맨 앞에 삽입
-    """
-    p, runs = _get_p_and_runs(cell)
-    if not runs:
+    """본식 셀: 원본 정답 서식(항목당 1문단·8.5pt·br없음·가운데정렬)으로 재생성.
+    lines: [밥, 국, 반찬1, ..., 영양구성]. date_num 있으면 날짜 문단(9pt) 맨 앞 유지."""
+    tc     = cell._tc
+    txBody = tc.find(f'{{{_NS_A}}}txBody')
+    if txBody is None:
         return
-
+    src_p = txBody.find(f'{{{_NS_A}}}p')
+    if src_p is None:
+        return
+    src_run = src_p.find(f'{{{_NS_A}}}r')
+    if src_run is None:
+        return
+    # 기존 문단 전부 제거 (양식 run-br 틀 폐기 후 재생성)
+    for p in txBody.findall(f'{{{_NS_A}}}p'):
+        txBody.remove(p)
+    # 날짜 문단 (우리 구조 유지, 9pt — 변경 없음)
     if date_num:
-        # 날짜 전용 paragraph를 기존 메뉴 p 앞에 삽입
-        txBody = p.getparent()
-        date_p = _make_date_paragraph(date_num)
-        p_idx  = list(txBody).index(p)
-        txBody.insert(p_idx, date_p)
-
-    for i, run in enumerate(runs):
-        text = lines[i] if i < len(lines) else ''
-        menu, allergy = split_menu_allergy(text)
-        _set_run_text(run, menu)
-        if allergy:
-            allergy_run = _make_allergy_run(run, allergy)
-            p = run.getparent()           # run 자체에서 부모 <a:p> 직접 획득 (안전)
-            run_idx = list(p).index(run)
-            p.insert(run_idx + 1, allergy_run)
+        txBody.append(_make_date_paragraph(date_num))
+    # 메뉴 항목별 문단 (8.5pt, 인라인 알레르기 빨강)
+    for text in lines:
+        if not text:
+            continue
+        p = _clone_cell_paragraph(src_p, src_run, '850')
+        _apply_inline_allergy(p.find(f'{{{_NS_A}}}r'), text, p)
+        txBody.append(p)
 
 
 def _set_date_only_cell(cell, date_num, reason=''):
@@ -490,33 +509,28 @@ def _set_date_only_cell(cell, date_num, reason=''):
 
 
 def set_snack_cell(cell, menu_line, kcal_line):
-    """
-    간식 셀: 첫 run에 메뉴, br+run 추가로 kcal.
-    """
-    p, runs = _get_p_and_runs(cell)
-    if p is None or not runs:
+    """간식 셀: 원본 정답 서식(2문단 메뉴/Kcal·6.5pt·br없음·가운데정렬)으로 재생성."""
+    tc     = cell._tc
+    txBody = tc.find(f'{{{_NS_A}}}txBody')
+    if txBody is None:
         return
-
-    _apply_inline_allergy(runs[0], menu_line, runs[0].getparent())
-
+    src_p = txBody.find(f'{{{_NS_A}}}p')
+    if src_p is None:
+        return
+    src_run = src_p.find(f'{{{_NS_A}}}r')
+    if src_run is None:
+        return
+    for p in txBody.findall(f'{{{_NS_A}}}p'):
+        txBody.remove(p)
+    # 문단0: 메뉴 (6.5pt, 인라인 알레르기 빨강)
+    p_menu = _clone_cell_paragraph(src_p, src_run, '650')
+    _apply_inline_allergy(p_menu.find(f'{{{_NS_A}}}r'), menu_line, p_menu)
+    txBody.append(p_menu)
+    # 문단1: Kcal (6.5pt)
     if kcal_line:
-        if len(runs) >= 2:
-            _set_run_text(runs[1], kcal_line)
-        else:
-            rPr = runs[0].find(f'{{{_NS_A}}}rPr')
-            br  = etree.Element(f'{{{_NS_A}}}br')
-            if rPr is not None:
-                br.append(copy.deepcopy(rPr))
-            p.append(br)
-            new_run = etree.Element(f'{{{_NS_A}}}r')
-            if rPr is not None:
-                new_run.append(copy.deepcopy(rPr))
-            t = etree.SubElement(new_run, f'{{{_NS_A}}}t')
-            t.text = kcal_line
-            p.append(new_run)
-    else:
-        if len(runs) >= 2:
-            _set_run_text(runs[1], '')
+        p_kcal = _clone_cell_paragraph(src_p, src_run, '650')
+        _set_run_text(p_kcal.find(f'{{{_NS_A}}}r'), kcal_line)
+        txBody.append(p_kcal)
 
 
 def set_label_cell(cell, label):
@@ -958,7 +972,7 @@ def replace_material_text(slide, material_text):
     if not material_text:
         return
     _replace_textbox_content(slide, '원재료 표시안내', [
-        {'text': '* 원재료 표시안내 *', 'sz': 900, 'bold': True, 'algn': 'l'},
+        {'text': '* 원재료 표시안내 *', 'sz': 800, 'bold': False, 'algn': 'l'},
         {'text': material_text,         'sz': 800},
         {'text': _MATERIAL_FIXED_LINE,  'sz': 800},
     ], target_name='MATERIAL_BOX')
@@ -1032,6 +1046,33 @@ def _fix_allergy_only(prs):
                 new_top = table_bottom + GAP
             off.set('y', str(int(new_top)))
             print(f"  ✅ [15행] ALLERGY_BOX: y={new_top:,} ({found_by})")
+
+            # ORIGIN/MATERIAL/클립보드: 빈 양식이 정답보다 175,260 EMU 위에 배치돼 있어 하향 보정
+            # (10행 분기와 무관 — 15행에서만 적용. ALLERGY 가드는 유지)
+            BOX_DOWN_15 = 175_260
+            for box_name in ('ORIGIN_BOX', 'MATERIAL_BOX'):
+                bsp, _ = find_shape_smart(slide_el, box_name, fallback_keyword=None)
+                if bsp is None:
+                    continue
+                bxfrm = bsp.find(f'.//{{{ns_a}}}xfrm')
+                if bxfrm is None:
+                    continue
+                boff = bxfrm.find(f'{{{ns_a}}}off')
+                if boff is not None:
+                    boff.set('y', str(int(boff.get('y')) + BOX_DOWN_15))
+                    print(f"  ✅ [15행] {box_name}: +{BOX_DOWN_15:,} 하향")
+            for pic in slide_el.findall(f'.//{{{ns_p}}}pic'):
+                c = pic.find(f'.//{{{ns_p}}}cNvPr')
+                if c is None or c.get('name') not in {'그림 3', '그림 224', '그림 193'}:
+                    continue
+                pxf = pic.find(f'.//{{{ns_a}}}xfrm')
+                if pxf is None:
+                    continue
+                poff = pxf.find(f'{{{ns_a}}}off')
+                if poff is not None:
+                    poff.set('y', str(int(poff.get('y')) + BOX_DOWN_15))
+                    print(f"  ✅ [15행] 클립보드: +{BOX_DOWN_15:,} 하향")
+                break
             continue
 
         # 10행: 기존 코드 100% 그대로 (어제 완성본)
