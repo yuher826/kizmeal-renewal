@@ -48,6 +48,11 @@ _S1, _S2, _S3 = 0, 1, 2
 # ── 공휴일에도 운영하는 원 ────────────────────────────────────────
 _HOLIDAY_OPERATING = {'덕양P', '광교SLP'}
 
+# ── 날짜·사유 텍스트 색 (원본 정답본 #318E72 초록으로 통일) ─────────
+# 평일/공휴일/선거일 날짜 숫자 + 공휴일 사유 텍스트 모두 이 색 사용.
+# 알레르기 번호색(#FF0000)·기타 박스색과는 별개 — 충돌 없음.
+DATE_COLOR_GREEN = '318E72'
+
 # ── 행 높이 고정값 (EMU) ─────────────────────────────────────────
 _H_LUNCH = 1368000
 _H_SNACK = 403200
@@ -399,9 +404,9 @@ def _clone_cell_paragraph(src_p, src_run, sz):
     return p
 
 
-def _make_date_paragraph(date_num, color='84B29C'):
+def _make_date_paragraph(date_num, color=DATE_COLOR_GREEN):
     """날짜 전용 paragraph 생성: 왼쪽 정렬, 9pt, 볼드, Pretendard.
-    color: 평일=#84B29C(기본), 공휴일=#C00000."""
+    color: 평일·공휴일·선거일 모두 #318E72(원본 정답본 초록)으로 통일."""
     date_p = etree.Element(f'{{{_NS_A}}}p')
 
     pPr = etree.SubElement(date_p, f'{{{_NS_A}}}pPr')
@@ -431,7 +436,7 @@ def _make_date_paragraph(date_num, color='84B29C'):
 
 
 def _make_reason_paragraph(reason_text):
-    """공휴일 사유 단락 생성: 왼쪽 정렬, #C00000, 7pt, 볼드 없음, Pretendard."""
+    """공휴일 사유 단락 생성: 왼쪽 정렬, #318E72, 8pt, 볼드 없음, Pretendard."""
     p = etree.Element(f'{{{_NS_A}}}p')
 
     pPr = etree.SubElement(p, f'{{{_NS_A}}}pPr')
@@ -439,12 +444,12 @@ def _make_reason_paragraph(reason_text):
 
     rPr = etree.Element(f'{{{_NS_A}}}rPr')
     rPr.set('lang', 'ko-KR')
-    rPr.set('sz', '700')
+    rPr.set('sz', '800')
     rPr.set('dirty', '0')
 
     solidFill = etree.SubElement(rPr, f'{{{_NS_A}}}solidFill')
     srgbClr   = etree.SubElement(solidFill, f'{{{_NS_A}}}srgbClr')
-    srgbClr.set('val', 'C00000')
+    srgbClr.set('val', DATE_COLOR_GREEN)
 
     latin = etree.SubElement(rPr, f'{{{_NS_A}}}latin')
     latin.set('typeface', 'Pretendard')
@@ -489,13 +494,15 @@ def set_lunch_cell(cell, lines, date_num=None):
 
 def _set_date_only_cell(cell, date_num, reason=''):
     """빈 셀(공휴일 clear 후)에 날짜(+사유) paragraph 삽입.
-    reason 있으면 날짜 #C00000 + 사유 단락 추가, 없으면 날짜 #84B29C만."""
+    날짜·사유 모두 #318E72(원본 초록)로 통일 — 공휴일/평일 색 구분 없음.
+    공휴일 칸은 내용 적어 기본(ctr)이면 날짜가 중앙으로 처짐 →
+    tcPr anchor=t로 위쪽 정렬, 평일 날짜와 높이 맞춤.
+    현충일 등 다른 공휴일도 동일하게 위쪽 정렬 — 의도된 일관 동작."""
     tc     = cell._tc
     txBody = tc.find(f'{{{_NS_A}}}txBody')
     if txBody is None or not date_num:
         return
-    date_color = 'C00000' if reason else '84B29C'
-    date_p     = _make_date_paragraph(date_num, color=date_color)
+    date_p = _make_date_paragraph(date_num, color=DATE_COLOR_GREEN)
     existing_p = txBody.find(f'{{{_NS_A}}}p')
     if existing_p is not None:
         p_idx = list(txBody).index(existing_p)
@@ -506,6 +513,11 @@ def _set_date_only_cell(cell, date_num, reason=''):
         txBody.append(date_p)
         if reason:
             txBody.append(_make_reason_paragraph(reason))
+    # 표 셀 수직정렬은 tcPr.anchor (bodyPr 아님)
+    tcPr = tc.find(f'{{{_NS_A}}}tcPr')
+    if tcPr is None:
+        tcPr = etree.SubElement(tc, f'{{{_NS_A}}}tcPr')
+    tcPr.set('anchor', 't')
 
 
 def set_snack_cell(cell, menu_line, kcal_line):
@@ -654,6 +666,197 @@ def replace_date_group(slide, date_map=None):
         parent = sp.getparent()
         if parent is not None:
             parent.remove(sp)
+
+
+# 양식 라벨 제거 시 절대 보존할 도형 이름 (코드가 이름으로 직접 참조)
+_LABEL_PRESERVE_NAMES = frozenset({'ORIGIN_BOX', 'MATERIAL_BOX', 'ALLERGY_BOX'})
+
+
+def remove_holiday_labels(slide, reasons):
+    """양식에 떠있는 공휴일/선거일 라벨 TextBox를 안전 제거.
+    우리가 셀에 날짜+사유를 직접 넣으므로 양식의 떠있는 라벨은 중복.
+
+    3중 가드 (이름 의존 금지 · 동적):
+      1) 단독 TEXT_BOX (sp) — pic/group/table 제외
+      2) 최상위 도형 (slide.shapes 직접 순회 = 그룹 내부 미진입, 헤더 장식 보호)
+      3) 이름이 보존 화이트리스트에 없음 (ORIGIN/MATERIAL/ALLERGY 보호)
+      4) 좌표(좌상단)가 MENU_TABLE bbox 내부 — 표 밖 범례/제목 보호
+      5) 텍스트 매칭: reason in 도형텍스트
+         (양식라벨 '지방선거일' 이 우리 reason '선거일' 을 포함 — 방향 주의)
+    수집 후 일괄 remove (순회 중 변형 방지 — replace_date_group 과 동일).
+    """
+    if not reasons:
+        return
+
+    # MENU_TABLE 도형 bbox 확보 (이름 우선, 없으면 첫 표)
+    tbl_shape = None
+    for sh in slide.shapes:
+        try:
+            if sh.name == 'MENU_TABLE' and sh.has_table:
+                tbl_shape = sh
+                break
+        except Exception:
+            continue
+    if tbl_shape is None:
+        for sh in slide.shapes:
+            try:
+                if sh.has_table:
+                    tbl_shape = sh
+                    break
+            except Exception:
+                continue
+    if tbl_shape is None:
+        return
+
+    t_left   = tbl_shape.left or 0
+    t_top    = tbl_shape.top or 0
+    t_right  = t_left + (tbl_shape.width or 0)
+    t_bottom = t_top + (tbl_shape.height or 0)
+
+    to_remove = []
+    for sh in slide.shapes:                       # 최상위만 (그룹 내부 미진입)
+        try:
+            if sh.shape_type != MSO_SHAPE_TYPE.TEXT_BOX:
+                continue
+        except Exception:
+            continue
+        if sh.name in _LABEL_PRESERVE_NAMES:
+            continue
+        try:
+            if not sh.has_text_frame:
+                continue
+        except Exception:
+            continue
+        l = sh.left or 0
+        t = sh.top or 0
+        if not (t_left <= l <= t_right and t_top <= t <= t_bottom):
+            continue
+        txt = sh.text_frame.text
+        if not any(r and r in txt for r in reasons):
+            continue
+        to_remove.append(sh)
+
+    for sh in to_remove:
+        print(f"  🗑️  양식 라벨 제거: name='{sh.name}' "
+              f"text={sh.text_frame.text.strip()!r}")
+        sp = sh._element
+        parent = sp.getparent()
+        if parent is not None:
+            parent.remove(sp)
+
+
+def _holiday_cell_rects(tbl_shape, sections, week_days):
+    """공휴일 날짜(is_holiday) 칸의 영역 rect 목록 반환.
+    각 rect = (left, top, right, bottom) EMU.
+    세로는 해당 주의 전체 섹션 행을 합친 범위(점심~오후)로 잡아
+    날짜·메뉴 어디를 가리든 겹침 판정되게 한다.
+    행 인덱싱은 _render_slide 와 동일: row = (wk-1)*len(sections) + sec순번."""
+    tbl    = tbl_shape.table
+    cols   = [c.width  for c in tbl.columns]
+    rows   = [r.height for r in tbl.rows]
+    t_left = tbl_shape.left or 0
+    t_top  = tbl_shape.top or 0
+
+    # 열·행 누적 경계 좌표
+    col_x = [t_left]
+    for w in cols:
+        col_x.append(col_x[-1] + w)
+    row_y = [t_top]
+    for h in rows:
+        row_y.append(row_y[-1] + h)
+
+    n_sec = len(sections)
+    rects = []
+    for wk in range(1, 6):
+        days = week_days.get(wk, [None] * 5)
+        for col in range(5):
+            day = days[col]
+            if not (day and day.get('is_holiday')):
+                continue
+            cell_col = col + 1          # col0 = 라벨열
+            if cell_col + 1 >= len(col_x):
+                continue
+            r0 = (wk - 1) * n_sec
+            r1 = min(r0 + n_sec, len(rows))
+            if r0 >= len(rows):
+                continue
+            rects.append((col_x[cell_col], row_y[r0],
+                          col_x[cell_col + 1], row_y[r1]))
+    return rects
+
+
+def remove_holiday_cover_pics(slide, sections, week_days):
+    """공휴일 셀 위에 떠서 날짜를 가리는 양식 장식 PICTURE(예: 선거 도장 그림4)를
+    동적 제거. B-2 라벨 제거의 그림(좌표) 버전.
+
+    제거 조건 (전부 AND):
+      1) 최상위 PICTURE (slide.shapes 직접 순회 = 그룹 내부 미진입)
+      2) MENU_TABLE 보다 위 z-order (spTree 순서상 뒤 = 위)
+      3) bbox 가 공휴일 셀 영역과 겹침 (그림은 텍스트 없음 → 좌표 겹침으로 판정)
+    보존: 로고(그림27)·하단 클립보드(그림3)는 셀과 안 겹쳐 자동 보존.
+          알레르기/원산지 박스는 PICTURE 아님 → 미대상.
+    수집 후 일괄 remove.
+    """
+    # 표 도형 확보
+    tbl_shape = None
+    for sh in slide.shapes:
+        try:
+            if sh.name == 'MENU_TABLE' and sh.has_table:
+                tbl_shape = sh
+                break
+        except Exception:
+            continue
+    if tbl_shape is None:
+        for sh in slide.shapes:
+            try:
+                if sh.has_table:
+                    tbl_shape = sh
+                    break
+            except Exception:
+                continue
+    if tbl_shape is None:
+        return
+
+    rects = _holiday_cell_rects(tbl_shape, sections, week_days)
+    if not rects:
+        return
+
+    spTree   = slide.shapes._spTree
+    children = list(spTree)
+    try:
+        tbl_idx = children.index(tbl_shape._element)
+    except ValueError:
+        tbl_idx = -1
+
+    to_remove = []
+    for sh in slide.shapes:                       # 최상위만
+        try:
+            if sh.shape_type != MSO_SHAPE_TYPE.PICTURE:
+                continue
+        except Exception:
+            continue
+        try:
+            z = children.index(sh._element)
+        except ValueError:
+            continue
+        if z <= tbl_idx:                          # 표보다 아래면 가리지 않음
+            continue
+        pl = sh.left or 0
+        pt = sh.top or 0
+        pr = pl + (sh.width or 0)
+        pb = pt + (sh.height or 0)
+        hit = any(not (pr <= rl or pl >= rr or pb <= rt or pt >= rb)
+                  for (rl, rt, rr, rb) in rects)
+        if hit:
+            to_remove.append(sh)
+
+    for sh in to_remove:
+        print(f"  🗑️  공휴일칸 가림 그림 제거: name='{sh.name}' "
+              f"pos=({sh.left:,},{sh.top:,}) size=({sh.width:,}x{sh.height:,})")
+        pic = sh._element
+        parent = pic.getparent()
+        if parent is not None:
+            parent.remove(pic)
 
 
 # ════════════════════════════════════════════════════════════════════
@@ -1230,6 +1433,13 @@ def generate(cfg, menu_data, template_path, out_path, date_map=None,
     if not date_map:
         date_map = {}
 
+    # 공휴일/선거일 사유 수집 (양식 떠있는 라벨 제거 매칭용)
+    holiday_reasons = set()
+    for days in week_days.values():
+        for day in days:
+            if day and day.get('holiday_reason'):
+                holiday_reasons.add(day['holiday_reason'])
+
     for sidx, plan_entry in enumerate(plan):
         if sidx >= len(slides):
             break
@@ -1237,6 +1447,7 @@ def generate(cfg, menu_data, template_path, out_path, date_map=None,
 
         replace_slide_metadata(slide, display_name, email)
         replace_date_group(slide)  # 날짜 그룹 텍스트 비우기 (날짜는 테이블 셀 안에 삽입)
+        remove_holiday_labels(slide, holiday_reasons)  # 양식 떠있는 공휴일 라벨 제거
         replace_origin_text(slide, origin_text)
         replace_material_text(slide, material_text)
 
@@ -1249,6 +1460,9 @@ def generate(cfg, menu_data, template_path, out_path, date_map=None,
             continue
 
         _render_slide(table, plan_entry, week_days, cfg)
+
+        # 공휴일 셀 위에 떠서 날짜를 가리는 장식 그림(선거도장 등) 제거
+        remove_holiday_cover_pics(slide, sections, week_days)
 
     _fix_allergy_only(prs)
     _check_box_overlap(prs, branch_label=cfg.get('name', out_path))
