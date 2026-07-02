@@ -108,6 +108,7 @@ function DietAutomationContent() {
   // ── PPTX 생성 상태 ────────────────────────────────────────────────
   const [genStatus,  setGenStatus]  = useState<PptxGenStatus>('idle')
   const [formGenStatus, setFormGenStatus] = useState<'idle'|'requesting'|'done'|'error'>('idle')
+  const [downloadStatus, setDownloadStatus] = useState<'idle'|'downloading'|'error'>('idle')
   const [genError,   setGenError]   = useState<string | null>(null)
   const [genResults, setGenResults] = useState<GenerationResults | null>(null)
 
@@ -288,6 +289,33 @@ function DietAutomationContent() {
       }
     } catch (err) {
       setFormGenStatus('error')
+      alert(String(err))
+    }
+  }
+
+  // ── 빈폼(양식) 다운로드 ─────────────────────────────
+  async function handleDownloadForm() {
+    setDownloadStatus('downloading')
+    try {
+      const res = await fetch(`/api/diet-automation/download-form?year=${pptxYear}&month=${pptxMonth}`)
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        setDownloadStatus('error')
+        alert(data.error || '양식 다운로드에 실패했습니다')
+        return
+      }
+      const blob = await res.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      // a.download 미지정 - 서버 Content-Disposition(한글명)에 일임
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      window.URL.revokeObjectURL(url)
+      setDownloadStatus('idle')
+    } catch (err) {
+      setDownloadStatus('error')
       alert(String(err))
     }
   }
@@ -839,6 +867,16 @@ function DietAutomationContent() {
                     className="px-8 py-2.5 rounded-xl bg-[#8B1E3F] text-white text-sm font-bold hover:bg-[#6B1730] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     {formGenStatus === 'requesting' ? '준비 중...' : '📋 이번 달 양식 준비'}
+                  </button>
+                )}
+                {userRole && UPLOAD_ROLES.includes(userRole) && (
+                  <button
+                    type="button"
+                    onClick={handleDownloadForm}
+                    disabled={downloadStatus === 'downloading'}
+                    className="px-8 py-2.5 rounded-xl border-2 border-[#8B1E3F] text-[#8B1E3F] text-sm font-bold hover:bg-[#8B1E3F] hover:text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {downloadStatus === 'downloading' ? '받는 중...' : '📥 이번 달 양식 받기'}
                   </button>
                 )}
                 {formGenStatus === 'done' && (
