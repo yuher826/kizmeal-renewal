@@ -850,13 +850,13 @@ function DietAutomationContent() {
                     type="button"
                     onClick={handleGenerateForm}
                     disabled={formGenStatus === 'requesting'}
-                    className="px-8 py-2.5 rounded-xl bg-[#1565C0] text-white text-sm font-bold hover:bg-[#0D47A1] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="px-8 py-2.5 rounded-xl bg-[#8B1E3F] text-white text-sm font-bold hover:bg-[#6B1730] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                   >
-                    {formGenStatus === 'requesting' ? '요청 중...' : '📋 빈 폼 준비'}
+                    {formGenStatus === 'requesting' ? '준비 중...' : '📋 이번 달 양식 준비'}
                   </button>
                 )}
                 {formGenStatus === 'done' && (
-                  <span className="text-xs text-[#1565C0] font-medium">✅ 생성 요청 완료 (약 12초 소요)</span>
+                  <span className="text-xs text-[#8B1E3F] font-medium">✅ 생성 요청 완료 (약 12초 소요)</span>
                 )}
                 {formGenStatus === 'error' && (
                   <span className="text-xs text-red-500 font-medium">⚠️ 요청 실패</span>
