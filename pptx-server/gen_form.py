@@ -46,8 +46,13 @@ def build_blank_form(base_path, out_path, year, month):
     return weeks, max_wk
 
 def storage_path_for(year, month):
-    """빈 폼의 Storage 경로 규칙 (방법 B — DB 저장 없이 경로로 결정)."""
-    fname = f'키즈밀_식단표_{year%100:02d}_{month:02d}_v6.xlsx'
+    """빈 폼의 Storage 경로 규칙 (방법 B — DB 저장 없이 경로로 결정).
+
+    ⚠️ 여기 파일명은 'Storage key 전용'이며 반드시 순수 ASCII.
+    (한글 key는 Supabase/S3에서 400 InvalidKey). 사용자 다운로드 시
+    한글 표시명은 다운로드 API의 Content-Disposition에서 별도 지정(조각6).
+    """
+    fname = f'blank_form_{year%100:02d}_{month:02d}_v6.xlsx'
     return f'{year}/{month:02d}/{fname}'
 
 def upload_blank_form(local_path, year, month):
@@ -85,7 +90,7 @@ def upload_blank_form(local_path, year, month):
     return ''
 
 if __name__ == '__main__':
-    import argparse
+    import argparse, sys
     ap = argparse.ArgumentParser(description='키즈밀 익월 빈 폼 생성기')
     ap.add_argument('year',  type=int)
     ap.add_argument('month', type=int)
@@ -96,6 +101,7 @@ if __name__ == '__main__':
 
     HERE = os.path.dirname(os.path.abspath(__file__))
     base = os.path.join(HERE, '키즈밀_식단표_기준폼_v6.xlsx')
+    # 로컬 생성 파일명은 한글 유지(영양사 친화). Storage key는 storage_path_for()에서 영문.
     out  = os.path.join(HERE, f'키즈밀_식단표_{y%100:02d}_{m:02d}_v6.xlsx')
     wks, mx = build_blank_form(base, out, y, m)
     print(f'생성: {os.path.basename(out)} ({mx}주)')
@@ -106,3 +112,4 @@ if __name__ == '__main__':
             print(f'업로드: {public_url}')
         else:
             print('업로드 실패 (위 로그 확인)')
+            sys.exit(1)   # 단일 파일 → 실패=전량실패, Actions 빨간불
