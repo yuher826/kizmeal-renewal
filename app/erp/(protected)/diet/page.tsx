@@ -3,7 +3,11 @@
 import { useState, useEffect, useCallback, useRef, Suspense, Fragment } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { ChevronDown, ChevronRight as ChevronRightIcon } from 'lucide-react'
+import {
+  ChevronDown, ChevronRight as ChevronRightIcon,
+  FileSpreadsheet, Download, Upload, Presentation,
+  CircleCheck, Lock, Play,
+} from 'lucide-react'
 import { createClient } from '@/lib/supabase'
 import DietNotificationPanel, { type DietNotification } from '@/components/board/DietNotificationPanel'
 import BranchProfileAlert from '@/components/erp/BranchProfileAlert'
@@ -30,6 +34,14 @@ function normalizeGroup(g: string | null): string {
   const t = g.trim()
   return GROUPS.find(gr => gr.tag === t) ? t : '기타'
 }
+
+// ── 워크플로우 4단계 정의 (조각7-3b) ──────────────────────────────────
+const WF_STEPS = [
+  { key: 'prepare',  label: '양식 준비',   who: '전월 · 관리자', desc: '디자이너 양식으로 빈 폼 생성', Icon: FileSpreadsheet, brand: '#8B1E3F', cta: '양식 준비' },
+  { key: 'download', label: '양식 받기',   who: '전월 · 영양사', desc: '빈 폼 엑셀 다운로드',          Icon: Download,        brand: '#8B1E3F', cta: '양식 받기' },
+  { key: 'upload',   label: '엑셀 업로드', who: '전월 · 영양사', desc: '작성한 식단 엑셀 등록',        Icon: Upload,          brand: '#2D6A4F', cta: '엑셀 업로드' },
+  { key: 'generate', label: 'PPTX 생성',  who: '전월 말',       desc: '49개 원 식단표 자동 생성',     Icon: Presentation,    brand: '#2D6A4F', cta: 'PPTX 생성' },
+]
 
 // ── 타입 ──────────────────────────────────────────────────────────────
 type HubTab = 'workflow' | 'notifications'
@@ -635,53 +647,24 @@ function DietAutomationContent() {
 
   // 4단계 진행 현황
   const pptxDone = ['generated','review_requested','approved','deployed'].includes(menuStatus ?? '') || !!actionsProgress?.is_complete
-  const progressSteps = [
-    {
-      key:    'upload',
-      label:  '엑셀 업로드',
-      icon:   '📤',
-      done:   hasMenuData,
-      active: false,
-      error:  false,
-      text:   hasMenuData ? '완료' : '미완료',
-    },
-    {
-      key:    'generate',
-      label:  'PPTX 생성',
-      icon:   '🖨️',
-      done:   pptxDone && genStatus !== 'error',
-      active: genStatus === 'generating',
-      error:  genStatus === 'error',
-      text:   genStatus === 'generating'
-        ? `${actionsProgress ? `${actionsProgress.generated + actionsProgress.error}/${actionsProgress.total}` : '...'}개 진행 중`
-        : pptxDone
-          ? `${generatedThisMonth}개 완료`
-          : genStatus === 'error'
-            ? '오류 발생'
-            : '대기 중',
-    },
-    {
-      key:    'review',
-      label:  '검토·승인',
-      icon:   '👀',
-      done:   ['review_requested','approved','deployed'].includes(menuStatus ?? ''),
-      active: false,
-      error:  false,
-      text:   menuStatus === 'approved' ? '승인 완료'
-              : menuStatus === 'review_requested' ? '검토 중'
-              : menuStatus === 'deployed' ? '완료'
-              : '대기 중',
-    },
-    {
-      key:    'deploy',
-      label:  '배포',
-      icon:   '🚀',
-      done:   menuStatus === 'deployed',
-      active: false,
-      error:  false,
-      text:   menuStatus === 'deployed' ? '완료' : '대기 중',
-    },
-  ]
+
+  // 4단계 워크플로우 진행도 (앞 단계 done이어야 다음 active — 순서 강제) — 조각7-3b
+  const wfProgress =
+    !formExists     ? 0 :
+    !formDownloaded ? 1 :
+    !hasMenuData    ? 2 :
+    !pptxDone       ? 3 :
+                      4
+
+  // 각 단계 active 시 실행할 액션 (조각7-3b)
+  function handleWfStep(idx: number) {
+    switch (idx) {
+      case 0: return handleGenerateForm()
+      case 1: return handleDownloadForm()
+      case 2: return router.push('/board/admin/diet-automation/upload')
+      case 3: return handleGenerate()
+    }
+  }
 
   return (
     <main className="min-h-screen bg-[#F6FAF6] px-4 sm:px-6 py-6 sm:py-8">
@@ -786,46 +769,94 @@ function DietAutomationContent() {
       {tab === 'workflow' && (
         <div>
 
-          {/* ── 이번 달 진행 현황 (4단계) ─────────────────────────────── */}
+          {/* ── 식단표 준비 워크플로우 stepper (조각7-3b) ─────────────── */}
           <div className="bg-white rounded-2xl border border-gray-100 p-6 mb-6 shadow-sm">
-            <p className="text-xs font-bold text-gray-500 mb-4 uppercase tracking-wide">이번 달 진행 현황</p>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {progressSteps.map((step, idx) => (
-                <div
-                  key={step.key}
-                  className={`relative rounded-xl p-4 border transition-colors ${
-                    step.error
-                      ? 'bg-red-50 border-red-200'
-                      : step.active
-                        ? 'bg-blue-50 border-blue-200'
-                        : step.done
-                          ? 'bg-[#E8F5E9] border-[#A5D6A7]'
-                          : 'bg-gray-50 border-gray-100'
-                  }`}
-                >
-                  {idx < progressSteps.length - 1 && (
-                    <span className="hidden sm:block absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 text-gray-300 text-xs z-10">›</span>
-                  )}
-                  <div className="flex items-center gap-1.5 mb-2">
-                    <span className="text-base">{step.icon}</span>
-                    <span className={`text-[10px] font-bold uppercase tracking-wide ${
-                      step.error ? 'text-red-500' : step.active ? 'text-blue-600' : step.done ? 'text-[#2D6A4F]' : 'text-gray-400'
-                    }`}>
-                      {step.label}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-base">
-                      {step.error ? '❌' : step.active ? '🔄' : step.done ? '✅' : '⬜'}
-                    </span>
-                    <span className={`text-xs font-semibold ${
-                      step.error ? 'text-red-600' : step.active ? 'text-blue-700' : step.done ? 'text-[#2D6A4F]' : 'text-gray-400'
-                    }`}>
-                      {step.text}
-                    </span>
-                  </div>
+
+            {/* 헤더 */}
+            <div className="flex items-start justify-between gap-3 mb-1">
+              <div>
+                <div className="flex items-center gap-2">
+                  <FileSpreadsheet size={18} className="text-[#2D6A4F]" />
+                  <span className="text-[15px] font-semibold text-[#1C2B1E]">식단표 준비 워크플로우</span>
                 </div>
-              ))}
+                <p className="text-xs text-gray-500 mt-1.5 ml-7">
+                  {pptxYear}년 <b className="text-[#8B1E3F] font-semibold">{pptxMonth}월분</b> · 전월에 미리 준비합니다
+                </p>
+              </div>
+              <div className="flex items-center gap-1.5 px-2.5 py-1.5 border border-gray-200 rounded-lg bg-gray-50 shrink-0">
+                <span className="text-xs font-semibold text-gray-700">{pptxYear} / {pptxMonth}월</span>
+              </div>
+            </div>
+
+            {/* 범례 */}
+            <div className="flex items-center gap-3.5 mt-3 mb-5 ml-7">
+              <span className="inline-flex items-center gap-1.5 text-[11px] text-gray-500"><CircleCheck size={13} className="text-[#2D6A4F]" /> 완료</span>
+              <span className="inline-flex items-center gap-1.5 text-[11px] text-gray-500"><span className="w-2 h-2 rounded-full bg-[#185FA5]" /> 진행 중</span>
+              <span className="inline-flex items-center gap-1.5 text-[11px] text-gray-500"><Lock size={13} className="text-gray-400" /> 대기</span>
+            </div>
+
+            {/* 진행 라인 + 노드 */}
+            <div className="relative mb-4">
+              <div className="absolute top-4 left-[12.5%] right-[12.5%] h-[3px] bg-gray-200 rounded-full" />
+              <div className="absolute top-4 left-[12.5%] h-[3px] bg-[#2D6A4F] rounded-full transition-all duration-500" style={{ width: `${(wfProgress / 4) * 75}%` }} />
+              <div className="grid grid-cols-4 relative">
+                {WF_STEPS.map((_, i) => {
+                  const stepNo = i + 1
+                  const done   = stepNo <= wfProgress
+                  const active = stepNo === wfProgress + 1
+                  return (
+                    <div key={i} className="flex justify-center">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[13px] font-semibold border-2 transition-all ${done ? 'bg-[#2D6A4F] border-[#2D6A4F] text-white' : active ? 'bg-white border-[#185FA5] text-[#185FA5]' : 'bg-white border-gray-300 text-gray-400'}`}>
+                        {done ? <CircleCheck size={16} /> : stepNo}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* 4단계 카드 */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+              {WF_STEPS.map((step, i) => {
+                const stepNo   = i + 1
+                const done     = stepNo <= wfProgress
+                const active   = stepNo === wfProgress + 1
+                const locked   = stepNo > wfProgress + 1
+                const Icon     = step.Icon
+                const canClick = !!(userRole && UPLOAD_ROLES.includes(userRole))
+                const busy =
+                  (i === 0 && formPolling) ||
+                  (i === 1 && downloadStatus === 'downloading') ||
+                  (i === 3 && isGenerating)
+                return (
+                  <div key={step.key} className={`rounded-xl p-3.5 border-[1.5px] flex flex-col gap-2 min-h-[168px] transition-all ${done ? 'bg-[#E8F5E9] border-[#A5D6A7]' : active ? 'bg-white border-[#185FA5] ring-4 ring-[#E6F1FB]' : 'bg-gray-50 border-gray-100'}`}>
+                    <div className="flex items-center justify-between">
+                      <Icon size={22} className={done ? 'text-[#2D6A4F]' : !active ? 'text-gray-400' : ''} style={active ? { color: step.brand } : undefined} />
+                      {done ? <CircleCheck size={17} className="text-[#2D6A4F]" /> : active ? <Play size={17} className="text-[#185FA5]" /> : <Lock size={17} className="text-gray-400" />}
+                    </div>
+                    <div>
+                      <p className="text-[13.5px] font-semibold text-[#1C2B1E]">{step.label}</p>
+                      <p className="text-[11px] text-gray-500 mt-0.5">{step.who}</p>
+                    </div>
+                    <p className={`text-[11px] ${done ? 'text-[#3B6D11]' : active ? 'text-gray-500' : 'text-gray-400'}`}>{step.desc}</p>
+                    <div className="mt-auto">
+                      <p className={`text-[11px] font-semibold mb-2 ${done ? 'text-[#2D6A4F]' : active ? 'text-[#185FA5]' : 'text-gray-400'}`}>
+                        {busy ? '진행 중...' : done ? '완료' : active ? '지금 진행하세요' : '대기 중'}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => handleWfStep(i)}
+                        disabled={locked || busy || !canClick}
+                        aria-label={`${step.label} ${done ? '다시 실행' : '실행'}`}
+                        className={`w-full py-1.5 rounded-lg text-xs font-semibold transition-colors disabled:cursor-not-allowed ${done ? 'bg-transparent border border-[#A5D6A7] text-[#2D6A4F] hover:bg-[#E8F5E9]' : active ? 'text-white' : 'bg-gray-100 text-gray-400'}`}
+                        style={active && !busy ? { backgroundColor: step.brand } : undefined}
+                      >
+                        {busy ? '진행 중...' : done ? '다시' : step.cta}
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           </div>
 
