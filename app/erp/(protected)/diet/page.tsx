@@ -105,6 +105,10 @@ function DietAutomationContent() {
   const [menuStatus,  setMenuStatus]  = useState<string | null>(null)
   const [hasMenuData, setHasMenuData] = useState(false)
 
+  // ── 워크플로우 stepper 상태 (조각7-2) ─────────────────────────────
+  const [formExists,     setFormExists]     = useState<boolean | null>(null)  // ①양식준비: Storage 존재
+  const [formDownloaded, setFormDownloaded] = useState<boolean | null>(null)  // ②양식받기: form_downloads 이력
+
   // ── PPTX 생성 상태 ────────────────────────────────────────────────
   const [genStatus,  setGenStatus]  = useState<PptxGenStatus>('idle')
   const [formGenStatus, setFormGenStatus] = useState<'idle'|'requesting'|'done'|'error'>('idle')
@@ -227,8 +231,33 @@ function DietAutomationContent() {
     }
   }, [pptxYear, pptxMonth])
 
+  // ── 상태판정 ①: check-form API로 Storage 빈폼 존재 확인 (조각7-2) ──
+  const fetchFormExists = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/diet-automation/check-form?year=${pptxYear}&month=${pptxMonth}`)
+      if (!res.ok) { setFormExists(false); return }
+      const data = await res.json()
+      setFormExists(!!data.exists)
+    } catch {
+      setFormExists(false)
+    }
+  }, [pptxYear, pptxMonth])
+
+  // ── 상태판정 ②: form_downloads 이력으로 양식받기 완료 확인 (조각7-2) ──
+  const fetchFormDownloaded = useCallback(async () => {
+    const supabase = createClient()
+    const { count } = await supabase
+      .from('form_downloads')
+      .select('id', { count: 'exact', head: true })
+      .eq('year',  pptxYear)
+      .eq('month', pptxMonth)
+    setFormDownloaded((count ?? 0) > 0)
+  }, [pptxYear, pptxMonth])
+
   useEffect(() => { fetchMenuRow() }, [fetchMenuRow])
   useEffect(() => { fetchStats()   }, [fetchStats])
+  useEffect(() => { fetchFormExists()     }, [fetchFormExists])
+  useEffect(() => { fetchFormDownloaded() }, [fetchFormDownloaded])
   // 마운트 및 연/월 변경 시 DB에서 브랜치 결과 로드 (페이지 재방문 복원)
   useEffect(() => { fetchBranchMenuRows() }, [fetchBranchMenuRows])
 
