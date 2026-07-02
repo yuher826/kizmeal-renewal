@@ -1,0 +1,33 @@
+name: Generate Blank Form
+
+on:
+  workflow_dispatch:
+    inputs:
+      year:
+        description: '년도'
+        required: true
+      month:
+        description: '월'
+        required: true
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r pptx-server/requirements.txt
+
+      - name: Generate Blank Form
+        env:
+          SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python pptx-server/gen_form.py ${{ inputs.year }} ${{ inputs.month }} --upload
