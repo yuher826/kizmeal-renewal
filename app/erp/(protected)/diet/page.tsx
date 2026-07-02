@@ -119,6 +119,9 @@ function DietAutomationContent() {
   const [actionsProgress, setActionsProgress] = useState<ActionsProgress | null>(null)
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
+  const formPollingRef = useRef<ReturnType<typeof setInterval> | null>(null)  // 양식준비 폴링 (조각7-3a)
+  const [formPolling, setFormPolling] = useState(false)  // 양식 생성 대기 중 여부
+
   // Actions 흐름 브랜치 결과
   const [branchMenuRows, setBranchMenuRows] = useState<BranchMenuRow[]>([])
 
@@ -315,6 +318,7 @@ function DietAutomationContent() {
         alert(data.error || '빈 폼 생성 요청 실패')
       } else {
         setFormGenStatus('done')
+        setFormPolling(true)   // 폴링 시작 → Storage에 파일 뜨면 자동으로 stepper 진행 (조각7-3a)
       }
     } catch (err) {
       setFormGenStatus('error')
@@ -343,6 +347,7 @@ function DietAutomationContent() {
       a.remove()
       window.URL.revokeObjectURL(url)
       setDownloadStatus('idle')
+      await fetchFormDownloaded()   // 받기 이력 즉시 반영 → stepper ②완료 처리 (조각7-3a)
     } catch (err) {
       setDownloadStatus('error')
       alert(String(err))
@@ -375,6 +380,43 @@ function DietAutomationContent() {
     pollingRef.current = setInterval(poll, 3000)
     return () => { if (pollingRef.current) { clearInterval(pollingRef.current); pollingRef.current = null } }
   }, [genStatus, pptxYear, pptxMonth, fetchMenuRow, fetchBranchMenuRows, showToast])
+
+  // ── 양식준비 폴링 (formPolling 동안 3초마다, 최대 40초) — 조각7-3a ──
+  useEffect(() => {
+    if (!formPolling) {
+      if (formPollingRef.current) { clearInterval(formPollingRef.current); formPollingRef.current = null }
+      return
+    }
+
+    let elapsed = 0
+    const MAX_MS = 40000   // 최대 40초 (gen_form.py 약 12초 소요 + 여유)
+
+    const poll = async () => {
+      elapsed += 3000
+      await fetchFormExists()
+      // formExists가 true로 바뀌면 아래 effect 재실행 → formPolling 해제됨
+      if (elapsed >= MAX_MS) {
+        setFormPolling(false)
+        showToast('양식 준비가 예상보다 오래 걸립니다. 잠시 후 새로고침 해주세요.')
+      }
+    }
+
+    formPollingRef.current = setInterval(poll, 3000)
+    return () => { if (formPollingRef.current) { clearInterval(formPollingRef.current); formPollingRef.current = null } }
+  }, [formPolling, fetchFormExists, showToast])
+
+  // formExists가 true가 되면 폴링 종료 (조각7-3a)
+  useEffect(() => {
+    if (formExists === true && formPolling) {
+      setFormPolling(false)
+      showToast('양식 준비 완료! 이제 양식을 받을 수 있습니다 ✅')
+    }
+  }, [formExists, formPolling, showToast])
+
+  // 연/월 바뀌면 진행 중이던 양식 폴링 중단 (조각7-3a)
+  useEffect(() => {
+    setFormPolling(false)
+  }, [pptxYear, pptxMonth])
 
   // ── 재시도 (수정 금지) ─────────────────────────────────────────────
   async function handleRetry(_branchId: string | null, branchName: string) {
