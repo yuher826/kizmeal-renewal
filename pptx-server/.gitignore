@@ -12,6 +12,8 @@ _verify_result.txt
 *.xlsx
 # v6 테스트 데이터만 PC 간 동기화 위해 추적
 !키즈밀_식단표_6월_테스트데이터_v6.xlsx
+# 빈 폼 생성기 베이스 (gen_form.py 의존 — PC/CI 간 동기화)
+!키즈밀_식단표_기준폼_v6.xlsx
 
 # 환경변수 (실제 키 노출 방지)
 .env
