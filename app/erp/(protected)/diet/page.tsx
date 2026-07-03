@@ -110,7 +110,6 @@ function DietAutomationContent() {
   const now = new Date()
   const [pptxYear,    setPptxYear]    = useState(() => Number(searchParams.get('year'))  || now.getFullYear())
   const [pptxMonth,   setPptxMonth]   = useState(() => Number(searchParams.get('month')) || (now.getMonth() + 1))
-  const [pptxWeekNum, setPptxWeekNum] = useState(0)
 
   // ── 메뉴 row 상태 ─────────────────────────────────────────────────
   const [menuRowId,   setMenuRowId]   = useState<string | null>(null)
@@ -783,8 +782,23 @@ function DietAutomationContent() {
                   {pptxYear}년 <b className="text-[#8B1E3F] font-semibold">{pptxMonth}월분</b> · 전월에 미리 준비합니다
                 </p>
               </div>
-              <div className="flex items-center gap-1.5 px-2.5 py-1.5 border border-gray-200 rounded-lg bg-gray-50 shrink-0">
-                <span className="text-xs font-semibold text-gray-700">{pptxYear} / {pptxMonth}월</span>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <select
+                  value={pptxYear}
+                  onChange={e => setPptxYear(Number(e.target.value))}
+                  disabled={isGenerating}
+                  className="border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-gray-700 bg-white focus:outline-none focus:border-[#2D6A4F] disabled:opacity-50"
+                >
+                  {[2024,2025,2026,2027,2028,2029,2030].map(y => <option key={y} value={y}>{y}년</option>)}
+                </select>
+                <select
+                  value={pptxMonth}
+                  onChange={e => setPptxMonth(Number(e.target.value))}
+                  disabled={isGenerating}
+                  className="border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-gray-700 bg-white focus:outline-none focus:border-[#2D6A4F] disabled:opacity-50"
+                >
+                  {Array.from({ length: 12 }, (_, i) => i + 1).map(m => <option key={m} value={m}>{m}월</option>)}
+                </select>
               </div>
             </div>
 
@@ -860,22 +874,6 @@ function DietAutomationContent() {
             </div>
           </div>
 
-          {/* ── 식단 업로드 CTA ──────────────────────────────────────── */}
-          <div className="bg-[#F6FAF6] border border-[#B7E4C7] rounded-2xl p-5 flex items-center justify-between gap-4 mb-4 shadow-sm">
-            <div>
-              <p className="text-sm font-bold text-[#1C2B1E] mb-0.5">📤 이번 달 CK 식단 업로드</p>
-              <p className="text-xs text-gray-500">기준폼 엑셀 파일을 업로드하여 식단을 등록합니다</p>
-            </div>
-            {userRole && UPLOAD_ROLES.includes(userRole) && (
-              <Link
-                href="/board/admin/diet-automation/upload"
-                className="shrink-0 px-5 py-2.5 rounded-xl bg-[#2D6A4F] text-white text-sm font-semibold hover:bg-[#1B4332] transition-colors whitespace-nowrap"
-              >
-                ↑ 엑셀 업로드
-              </Link>
-            )}
-          </div>
-
           {/* ── 빠른 이동 링크 ──────────────────────────────────────── */}
           <div className="flex flex-wrap gap-2 mb-8">
             <Link
@@ -901,113 +899,6 @@ function DietAutomationContent() {
             <div className="flex items-center gap-2 mb-4">
               <span className="text-xl">🖨️</span>
               <h2 className="text-sm font-bold text-[#1C2B1E]">PPTX 자동 생성</h2>
-            </div>
-
-            {/* 컨트롤 카드 */}
-            <div className="bg-white rounded-2xl border border-gray-100 p-6 mb-4 shadow-sm">
-              <div className="flex flex-wrap items-end gap-3">
-                {/* 연도 */}
-                <div className="flex flex-col gap-1">
-                  <span className="text-xs font-medium text-gray-500">연도</span>
-                  <select
-                    value={pptxYear}
-                    onChange={e => setPptxYear(Number(e.target.value))}
-                    disabled={isGenerating}
-                    className="border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:border-[#2D6A4F] disabled:opacity-50"
-                  >
-                    {[2024,2025,2026,2027,2028,2029,2030].map(y =>
-                      <option key={y} value={y}>{y}년</option>
-                    )}
-                  </select>
-                </div>
-
-                {/* 월 */}
-                <div className="flex flex-col gap-1">
-                  <span className="text-xs font-medium text-gray-500">월</span>
-                  <select
-                    value={pptxMonth}
-                    onChange={e => setPptxMonth(Number(e.target.value))}
-                    disabled={isGenerating}
-                    className="border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:border-[#2D6A4F] disabled:opacity-50"
-                  >
-                    {Array.from({ length: 12 }, (_, i) => i + 1).map(m =>
-                      <option key={m} value={m}>{m}월</option>
-                    )}
-                  </select>
-                </div>
-
-                {/* 주차 */}
-                <div className="flex flex-col gap-1">
-                  <span className="text-xs font-medium text-gray-500">주차</span>
-                  <select
-                    value={pptxWeekNum}
-                    onChange={e => setPptxWeekNum(Number(e.target.value))}
-                    disabled={isGenerating}
-                    className="border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:border-[#2D6A4F] disabled:opacity-50"
-                  >
-                    <option value={0}>전체</option>
-                    {[1,2,3,4,5].map(w => <option key={w} value={w}>{w}주차</option>)}
-                  </select>
-                </div>
-
-                {/* 생성 버튼 */}
-                {userRole && UPLOAD_ROLES.includes(userRole) && (
-                  <button
-                    type="button"
-                    onClick={handleGenerate}
-                    disabled={!hasMenuData || isGenerating}
-                    className="px-8 py-2.5 rounded-xl bg-[#2E7D32] text-white text-sm font-bold hover:bg-[#1B5E20] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    {isGenerating ? '생성 중...' : '▶ PPTX 생성 시작'}
-                  </button>
-                )}
-                {userRole && UPLOAD_ROLES.includes(userRole) && (
-                  <button
-                    type="button"
-                    onClick={handleGenerateForm}
-                    disabled={formGenStatus === 'requesting'}
-                    className="px-8 py-2.5 rounded-xl bg-[#8B1E3F] text-white text-sm font-bold hover:bg-[#6B1730] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    {formGenStatus === 'requesting' ? '준비 중...' : '📋 이번 달 양식 준비'}
-                  </button>
-                )}
-                {userRole && UPLOAD_ROLES.includes(userRole) && (
-                  <button
-                    type="button"
-                    onClick={handleDownloadForm}
-                    disabled={downloadStatus === 'downloading'}
-                    className="px-8 py-2.5 rounded-xl border-2 border-[#8B1E3F] text-[#8B1E3F] text-sm font-bold hover:bg-[#8B1E3F] hover:text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    {downloadStatus === 'downloading' ? '받는 중...' : '📥 이번 달 양식 받기'}
-                  </button>
-                )}
-                {formGenStatus === 'done' && (
-                  <span className="text-xs text-[#8B1E3F] font-medium">✅ 생성 요청 완료 (약 12초 소요)</span>
-                )}
-                {formGenStatus === 'error' && (
-                  <span className="text-xs text-red-500 font-medium">⚠️ 요청 실패</span>
-                )}
-              </div>
-
-              {/* menu_data 없음 경고 */}
-              {!hasMenuData && (
-                <div className="mt-4 flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl p-3">
-                  <span className="text-sm mt-0.5">⚠️</span>
-                  <div>
-                    <p className="text-xs font-bold text-amber-800">엑셀을 먼저 업로드해주세요</p>
-                    <p className="text-xs text-amber-700 mt-0.5">
-                      {pptxYear}년 {pptxMonth}월 식단 데이터가 없습니다.{' '}
-                      <button
-                        type="button"
-                        onClick={() => router.push('/board/admin/diet-automation/upload')}
-                        className="underline font-semibold"
-                      >
-                        업로드 페이지로 이동
-                      </button>
-                    </p>
-                  </div>
-                </div>
-              )}
             </div>
 
             {/* 상태 표시 */}
