@@ -7,6 +7,7 @@ import {
   ChevronDown, ChevronRight as ChevronRightIcon,
   FileSpreadsheet, Download, Upload, Presentation,
   CircleCheck, Lock, Play,
+  History, Building2, Printer, LoaderCircle, ArrowUp,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
 import DietNotificationPanel, { type DietNotification } from '@/components/board/DietNotificationPanel'
@@ -874,21 +875,33 @@ function DietAutomationContent() {
             </div>
           </div>
 
-          {/* ── 빠른 이동 링크 ──────────────────────────────────────── */}
-          <div className="flex flex-wrap gap-2 mb-8">
+          {/* ── 빠른 이동 링크 (조각7-3d) ─────────────────────────────── */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-8">
             <Link
               href="/board/admin/diet-automation/history"
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white border border-gray-200 text-sm font-medium text-gray-700 hover:border-[#2D6A4F] hover:text-[#2D6A4F] transition-colors shadow-sm"
+              className="group flex items-center gap-3 px-4 py-3 rounded-xl bg-white border border-gray-200 hover:border-[#2D6A4F] transition-colors shadow-sm"
             >
-              <span>📋</span>
-              배포 이력
+              <span className="flex items-center justify-center w-9 h-9 rounded-lg bg-[#F6FAF6] text-[#2D6A4F] shrink-0">
+                <History size={18} />
+              </span>
+              <div className="text-left flex-1 min-w-0">
+                <p className="text-sm font-semibold text-[#1C2B1E]">배포 이력</p>
+                <p className="text-[11px] text-gray-400">지난 배포 기록 보기</p>
+              </div>
+              <ChevronRightIcon size={16} className="text-gray-300 group-hover:text-[#2D6A4F] transition-colors shrink-0" />
             </Link>
             <Link
               href="/board/admin/diet/branch-profile"
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white border border-gray-200 text-sm font-medium text-gray-700 hover:border-[#2D6A4F] hover:text-[#2D6A4F] transition-colors shadow-sm"
+              className="group flex items-center gap-3 px-4 py-3 rounded-xl bg-white border border-gray-200 hover:border-[#2D6A4F] transition-colors shadow-sm"
             >
-              <span>🏫</span>
-              원 프로파일 설정
+              <span className="flex items-center justify-center w-9 h-9 rounded-lg bg-[#F6FAF6] text-[#2D6A4F] shrink-0">
+                <Building2 size={18} />
+              </span>
+              <div className="text-left flex-1 min-w-0">
+                <p className="text-sm font-semibold text-[#1C2B1E]">원 프로파일 설정</p>
+                <p className="text-[11px] text-gray-400">원별 정보·형식 관리</p>
+              </div>
+              <ChevronRightIcon size={16} className="text-gray-300 group-hover:text-[#2D6A4F] transition-colors shrink-0" />
             </Link>
           </div>
 
@@ -897,21 +910,22 @@ function DietAutomationContent() {
           {/* ════════════════════════════════════════════════════════════ */}
           <div>
             <div className="flex items-center gap-2 mb-4">
-              <span className="text-xl">🖨️</span>
-              <h2 className="text-sm font-bold text-[#1C2B1E]">PPTX 자동 생성</h2>
+              <Printer size={18} className="text-[#2D6A4F]" />
+              <h2 className="text-sm font-bold text-[#1C2B1E]">식단표 생성 결과</h2>
             </div>
 
             {/* 상태 표시 */}
             <div className="mb-4">
               {genStatus === 'idle' && (
-                <div className="bg-gray-50 rounded-2xl border border-gray-100 p-5 text-center">
-                  <p className="text-sm text-gray-400">생성 버튼을 눌러 PPTX 생성을 시작하세요</p>
+                <div className="bg-gray-50 rounded-2xl border border-gray-100 p-5 flex items-center justify-center gap-2">
+                  <ArrowUp size={16} className="text-gray-400" />
+                  <p className="text-sm text-gray-400">위 <b className="font-semibold text-gray-500">④ PPTX 생성</b> 단계에서 생성을 시작하세요</p>
                 </div>
               )}
 
               {genStatus === 'waking' && (
                 <div className="bg-orange-50 rounded-2xl border border-orange-200 p-5 flex items-center gap-3">
-                  <span className="text-xl animate-spin inline-block">🟠</span>
+                  <LoaderCircle size={20} className="animate-spin text-orange-500" />
                   <div>
                     <p className="text-sm font-bold text-orange-700">GitHub Actions 실행 준비 중...</p>
                     <p className="text-xs text-orange-600 mt-0.5">잠시 후 자동으로 진행됩니다</p>
@@ -922,7 +936,7 @@ function DietAutomationContent() {
               {genStatus === 'generating' && (
                 <div className="bg-blue-50 rounded-2xl border border-blue-200 p-5">
                   <div className="flex items-center gap-3 mb-3">
-                    <span className="text-xl animate-spin inline-block">🔵</span>
+                    <LoaderCircle size={20} className="animate-spin text-blue-500" />
                     <div>
                       <p className="text-sm font-bold text-blue-700">
                         GitHub Actions PPTX 생성 중
