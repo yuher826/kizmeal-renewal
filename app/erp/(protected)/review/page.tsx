@@ -2090,7 +2090,7 @@ function DietReviewPageInner() {
 
   function handleYearMonth(y: number, m: number) {
     setYear(y); setMonth(m); setSearch(''); setManagerTab('all')
-    router.replace(`?year=${y}&month=${m}`, { scroll: false })
+    window.history.replaceState(null, '', `?year=${y}&month=${m}`)
   }
 
   const filteredItems = search
