@@ -813,7 +813,7 @@ function DietAutomationContent() {
             {/* 진행 라인 + 노드 */}
             <div className="relative mb-4">
               <div className="absolute top-4 left-[12.5%] right-[12.5%] h-[3px] bg-gray-200 rounded-full" />
-              <div className="absolute top-4 left-[12.5%] h-[3px] bg-[#2D6A4F] rounded-full transition-all duration-500" style={{ width: `${(wfProgress / 4) * 75}%` }} />
+              <div className="absolute top-4 left-[12.5%] h-[3px] bg-[#2D6A4F] rounded-full transition-all duration-500" style={{ width: `${Math.max(0, wfProgress - 1) * 25}%` }} />
               <div className="grid grid-cols-4 relative">
                 {WF_STEPS.map((_, i) => {
                   const stepNo = i + 1
