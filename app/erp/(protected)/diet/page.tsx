@@ -8,6 +8,7 @@ import {
   FileSpreadsheet, Download, Upload, Presentation,
   CircleCheck, Lock, Play,
   History, Building2, Printer, LoaderCircle, ArrowUp,
+  Package, CircleX, Send, RefreshCw, ExternalLink,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
 import DietNotificationPanel, { type DietNotification } from '@/components/board/DietNotificationPanel'
@@ -970,7 +971,7 @@ function DietAutomationContent() {
                         rel="noopener noreferrer"
                         className="text-xs text-blue-500 hover:underline mt-2 inline-block"
                       >
-                        🔗 GitHub Actions에서 실행 중
+                        <span className="inline-flex items-center gap-1"><ExternalLink size={13} /> GitHub Actions에서 실행 중</span>
                       </a>
                     </div>
                   )}
@@ -979,7 +980,7 @@ function DietAutomationContent() {
 
               {genStatus === 'done' && (
                 <div className="bg-green-50 rounded-2xl border border-green-200 p-5 flex items-center gap-3">
-                  <span className="text-xl">🟢</span>
+                  <CircleCheck size={22} className="text-green-600" />
                   <div>
                     {genResults ? (
                       <>
@@ -1034,7 +1035,7 @@ function DietAutomationContent() {
                       disabled={downloadingZip}
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-medium text-gray-600 hover:border-[#2D6A4F] hover:text-[#2D6A4F] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                     >
-                      {downloadingZip ? '⏳' : '📦'} 전체 ZIP
+                      {downloadingZip ? <LoaderCircle size={14} className="animate-spin" /> : <Package size={14} />} 전체 ZIP
                     </button>
                   </div>
                 </div>
@@ -1152,9 +1153,9 @@ function DietAutomationContent() {
                             {/* 상태 */}
                             <td className="text-center px-3 py-[14px]">
                               {isSuccess ? (
-                                <span className="text-green-600 font-medium text-xs">✅ 성공</span>
+                                <span className="inline-flex items-center gap-1 text-green-600 font-medium text-xs"><CircleCheck size={13} /> 성공</span>
                               ) : isError ? (
-                                <span className="text-red-600 text-xs cursor-help" title={row.errorMsg}>❌ 실패</span>
+                                <span className="inline-flex items-center gap-1 text-red-600 text-xs cursor-help" title={row.errorMsg}><CircleX size={13} /> 실패</span>
                               ) : (
                                 <span className="inline-flex items-center gap-1 text-blue-600 text-xs">
                                   <span className="w-3 h-3 border border-blue-400 border-t-transparent rounded-full animate-spin" />
@@ -1366,7 +1367,7 @@ function DietAutomationContent() {
                       disabled={reviewSent || sendingReview}
                       className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#2D6A4F] text-white text-sm font-semibold hover:bg-[#1B4332] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      {sendingReview ? '⏳ 전송 중...' : reviewSent ? '✅ 검토 요청 완료' : '📩 검토 요청'}
+                      {sendingReview ? <span className="inline-flex items-center gap-1"><LoaderCircle size={14} className="animate-spin" /> 전송 중...</span> : reviewSent ? <span className="inline-flex items-center gap-1"><CircleCheck size={14} /> 검토 요청 완료</span> : <span className="inline-flex items-center gap-1"><Send size={14} /> 검토 요청</span>}
                     </button>
                   )}
 
@@ -1398,7 +1399,7 @@ function DietAutomationContent() {
                       onClick={() => showToast('🚧 이메일 배포 기능 준비 중입니다. 곧 제공될 예정이에요!')}
                       className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-gray-300 text-gray-600 text-sm font-semibold hover:bg-gray-50 transition-colors"
                     >
-                      🔄 전체 재발송
+                      <span className="inline-flex items-center gap-1"><RefreshCw size={14} /> 전체 재발송</span>
                     </button>
                   )}
                 </div>
