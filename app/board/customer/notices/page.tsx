@@ -107,7 +107,7 @@ export default function CustomerNoticesPage() {
         )}
       </header>
 
-      <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6 space-y-3">
+      <div className="px-4 sm:px-6 py-6 space-y-3">
         {loading ? (
           Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="bg-white rounded-2xl h-16 animate-pulse border border-gray-100" />

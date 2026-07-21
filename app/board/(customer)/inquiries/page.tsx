@@ -103,7 +103,7 @@ export default function CustomerInquiriesPage() {
         <span className="text-xs text-gray-400">{inquiries.length}건</span>
       </header>
 
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6">
+      <div className="px-4 sm:px-6 py-6">
         {/* 상태 필터 탭 */}
         <div className="flex gap-2 mb-5 overflow-x-auto pb-1 scrollbar-none">
           {TABS.map(tab => (

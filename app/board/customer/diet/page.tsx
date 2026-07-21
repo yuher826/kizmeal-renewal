@@ -132,7 +132,7 @@ export default function CustomerDietPage() {
         </div>
       </header>
 
-      <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6 space-y-4">
+      <div className="px-4 sm:px-6 py-6 space-y-4">
         {loading ? (
           Array.from({ length: 3 }).map((_, i) => (
             <div key={i} className="bg-white rounded-2xl h-28 animate-pulse border border-gray-100" />

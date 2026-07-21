@@ -64,7 +64,7 @@ export default function CustomerSettingsPage() {
         <h1 className="font-bold text-[#1C2B1E]">계정 설정</h1>
       </header>
 
-      <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6 space-y-4">
+      <div className="px-4 sm:px-6 py-6 space-y-4">
         {/* 지점 정보 */}
         <form onSubmit={handleSave} className="bg-white rounded-2xl border border-gray-100 p-6">
           <h2 className="font-bold text-[#1C2B1E] mb-4">지점 정보</h2>
