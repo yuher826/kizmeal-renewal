@@ -152,11 +152,12 @@ export default function CustomerDashboardPage() {
         {/* 환영 메시지 */}
         <div className="bg-gradient-to-r from-[#2D6A4F] to-[#52B788] rounded-2xl px-6 py-5 text-white">
           {/* 원 로고 칩 (logo_url 있고 로드 성공 시에만 — NULL/로드실패면 렌더 안 하고 아래 원 이름 텍스트로 폴백)
-              · 배경: 살짝 회색빛 흰색 → 흰 글자 로고도 윤곽이 살고, 어떤 색 로고든 안전
+              · 배경: 반투명 흰색(bg-white/85) + 얇은 반투명 테두리 → 배너 초록이 살짝 비쳐 녹아들되,
+                0.85 불투명도라 어두운 로고도 충분히 보임 (어떤 색 로고든 안전)
               · 이미지: 박스(max-h/max-w) 안에 비율 유지하며 맞춤 → 가로긴/세로긴/정사각 모두 안 잘림
               · 모바일에선 max 값을 줄여 배너가 안 깨지게 */}
           {branch?.logo_url && !logoError && (
-            <div className="inline-flex items-center bg-[#F5F6F4] rounded-xl px-3 py-2 mb-4 shadow-sm">
+            <div className="inline-flex items-center bg-white/85 border border-white/40 rounded-xl px-3 py-2 mb-4">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={branch.logo_url}
