@@ -27,8 +27,8 @@ function getAudioContext(): AudioContext | null {
 }
 
 /**
- * 딩동 알림음 재생.
- * Web Audio API의 oscillator로 짧은 딩(C6)→동(G5) 두 음을 즉석 생성한다.
+ * 알림음 재생.
+ * Web Audio API의 oscillator로 밝은 상승 멜로디(도-미-솔-도, C5→C6)를 즉석 생성한다.
  * 별도 음원 파일이 필요 없고, 어느 환경에서도 소리가 난다.
  * (자동재생 정책상 최초 사용자 상호작용 전에는 무음일 수 있으나,
  *  버튼 클릭 등 제스처 이후 resume 되어 정상 재생된다 — 실패해도 페이지엔 영향 없음)
@@ -39,9 +39,20 @@ export function playNotify(): void {
   try {
     if (ctx.state === 'suspended') void ctx.resume()
     const now = ctx.currentTime
+
+    // 리미터(컴프레서)로 볼륨을 키우되 찢어짐(클리핑) 방지
+    const comp = ctx.createDynamicsCompressor()
+    const master = ctx.createGain()
+    master.gain.value = 1
+    master.connect(comp).connect(ctx.destination)
+
+    const PEAK = 0.6 // 소리 크기 (기존 0.32 → 0.6 으로 확실히 업)
+    // 밝은 상승 멜로디: 도(C5)-미(E5)-솔(G5)-도(C6), 마지막 음은 길게 울림
     const notes = [
-      { freq: 1046.5, start: 0,    dur: 0.18 }, // 딩 (C6)
-      { freq: 783.99, start: 0.16, dur: 0.34 }, // 동 (G5)
+      { freq: 523.25, start: 0.00, dur: 0.20 }, // 도 C5
+      { freq: 659.25, start: 0.13, dur: 0.20 }, // 미 E5
+      { freq: 783.99, start: 0.26, dur: 0.20 }, // 솔 G5
+      { freq: 1046.5, start: 0.39, dur: 0.75 }, // 도 C6 (여운)
     ]
     for (const n of notes) {
       const osc = ctx.createOscillator()
@@ -51,9 +62,9 @@ export function playNotify(): void {
       const t0 = now + n.start
       const t1 = t0 + n.dur
       gain.gain.setValueAtTime(0.0001, t0)
-      gain.gain.exponentialRampToValueAtTime(0.32, t0 + 0.015) // 빠른 어택
-      gain.gain.exponentialRampToValueAtTime(0.0001, t1)       // 벨 느낌의 지수 감쇠
-      osc.connect(gain).connect(ctx.destination)
+      gain.gain.exponentialRampToValueAtTime(PEAK, t0 + 0.02) // 빠른 어택
+      gain.gain.exponentialRampToValueAtTime(0.0001, t1)      // 음마다 짧은 감쇠
+      osc.connect(gain).connect(master)
       osc.start(t0)
       osc.stop(t1 + 0.02)
     }
