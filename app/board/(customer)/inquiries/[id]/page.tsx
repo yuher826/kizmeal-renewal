@@ -9,6 +9,8 @@ import MessageBubble from '@/components/board/MessageBubble'
 import StatusBadge from '@/components/board/StatusBadge'
 import SlaBadge from '@/components/board/SlaBadge'
 import FileUpload from '@/components/board/FileUpload'
+import { useNotifier } from '@/lib/useNotifier'
+import NotifyToggleButton from '@/components/NotifyToggleButton'
 
 const STATUS_STEPS = [
   { key: 'pending', label: '접수' },
@@ -29,6 +31,9 @@ export default function CustomerInquiryDetailPage({ params }: { params: { id: st
   const [toast, setToast] = useState('')
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  // 관리자 답변 알림 (소리+팝업, 기본 ON)
+  const { enabled: notifyOn, toggle: toggleNotify, notify } = useNotifier()
 
   const scrollToBottom = useCallback(() => {
     if (messagesContainerRef.current) {
@@ -98,6 +103,12 @@ export default function CustomerInquiryDetailPage({ params }: { params: { id: st
         if (full) {
           setMessages(prev => prev.find(m => m.id === full.id) ? prev : [...prev, full as unknown as Message])
         }
+        // ★ "관리자가 보낸 답변"일 때만 알림 (고객 본인 발신 제외)
+        if (newMsg.sender_type === 'admin') {
+          const preview = newMsg.content.length > 40
+            ? `${newMsg.content.slice(0, 40)}…` : newMsg.content
+          notify(newMsg.id, '키즈밀 답변 도착', preview)
+        }
       })
       .on('postgres_changes', {
         event: 'UPDATE',
@@ -110,7 +121,7 @@ export default function CustomerInquiryDetailPage({ params }: { params: { id: st
       .subscribe()
 
     return () => { supabase.removeChannel(channel) }
-  }, [id])
+  }, [id, notify])
 
   useEffect(() => { scrollToBottom() }, [messages, scrollToBottom])
 
@@ -254,6 +265,7 @@ export default function CustomerInquiryDetailPage({ params }: { params: { id: st
             )}
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
+            <NotifyToggleButton enabled={notifyOn} onToggle={toggleNotify} />
             {inquiry && <StatusBadge status={inquiry.status} />}
             {inquiry && slaRule && <SlaBadge inquiry={inquiry} rule={slaRule} />}
           </div>

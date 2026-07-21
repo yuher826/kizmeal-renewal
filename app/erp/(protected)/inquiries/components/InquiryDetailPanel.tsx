@@ -590,10 +590,14 @@ function ThreadMessage({
 interface Props {
   /** 현재 선택된 문의 ID (없으면 빈 안내 화면) */
   inquiryId: string | null
+  /** 알림 함수 (상단 토글과 공유). 고객이 보낸 메시지에만 호출 — 중복 방지는 내부 처리 */
+  onNotify?: (id: string, title: string, body?: string) => void
 }
 
-export default function InquiryDetailPanel({ inquiryId }: Props) {
+export default function InquiryDetailPanel({ inquiryId, onNotify }: Props) {
   const id = inquiryId
+  // realtime 콜백에서 최신 지점명을 읽기 위한 ref (state는 클로저에 갇힘)
+  const branchNameRef = useRef<string>('')
 
   const [inquiry, setInquiry] = useState<Inquiry | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
@@ -780,7 +784,11 @@ export default function InquiryDetailPanel({ inquiryId }: Props) {
         supabase.from('admins').select('*').eq('auth_id', user.id).maybeSingle(),
       ])
 
-      if (inqRes.data) setInquiry(inqRes.data as unknown as Inquiry)
+      if (inqRes.data) {
+        setInquiry(inqRes.data as unknown as Inquiry)
+        branchNameRef.current =
+          (inqRes.data as unknown as Inquiry)?.branches?.name ?? ''
+      }
       if (msgsRes.data) setMessages(msgsRes.data as unknown as Message[])
 
       const inqBranchId = (inqRes.data as unknown as Inquiry)?.branch_id
@@ -826,6 +834,13 @@ export default function InquiryDetailPanel({ inquiryId }: Props) {
         if (full) {
           setMessages(prev => prev.find(m => m.id === full.id) ? prev : [...prev, full as unknown as Message])
         }
+        // ★ "고객이 보낸 메시지"일 때만 알림 (관리자 본인 발신·내부메모 제외)
+        if (newMsg.sender_type === 'branch' && !newMsg.is_internal) {
+          const name = branchNameRef.current || '고객사'
+          const preview = newMsg.content.length > 40
+            ? `${newMsg.content.slice(0, 40)}…` : newMsg.content
+          onNotify?.(newMsg.id, `새 메시지: ${name}`, preview)
+        }
       })
       .on('postgres_changes', {
         event: 'UPDATE', schema: 'public', table: 'messages',
@@ -854,7 +869,7 @@ export default function InquiryDetailPanel({ inquiryId }: Props) {
       .subscribe()
 
     return () => { supabase.removeChannel(channel) }
-  }, [id])
+  }, [id, onNotify])
 
   // ── 초안 자동저장 (debounce 1초) ─────────────────────────────
   useEffect(() => {

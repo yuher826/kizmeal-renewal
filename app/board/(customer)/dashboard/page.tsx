@@ -13,6 +13,7 @@ export default function CustomerDashboardPage() {
   const [slaRules, setSlaRules] = useState<Record<string, SlaRule>>({})
   const [loading, setLoading] = useState(true)
   const [hasDietThisMonth, setHasDietThisMonth] = useState<boolean | null>(null)
+  const [logoError, setLogoError] = useState(false) // 로고 로드 실패 시 원 이름 텍스트로 폴백
 
   useEffect(() => {
     const supabase = createClient()
@@ -150,6 +151,18 @@ export default function CustomerDashboardPage() {
       <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 space-y-6">
         {/* 환영 메시지 */}
         <div className="bg-gradient-to-r from-[#2D6A4F] to-[#52B788] rounded-2xl px-6 py-5 text-white">
+          {/* 원 로고 (logo_url 있고 로드 성공 시에만 — 실패/NULL이면 아래 원 이름 텍스트로 폴백) */}
+          {branch?.logo_url && !logoError && (
+            <div className="inline-flex items-center bg-white rounded-lg px-3 py-1.5 mb-3">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={branch.logo_url}
+                alt={`${branch.name} 로고`}
+                className="h-10 w-auto object-contain"
+                onError={() => setLogoError(true)}
+              />
+            </div>
+          )}
           <p className="text-sm opacity-80 mb-1">안녕하세요!</p>
           <h2 className="text-xl font-bold">{branch?.name || '...'} 님 👋</h2>
           <p className="text-sm opacity-70 mt-1">

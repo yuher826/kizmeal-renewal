@@ -119,6 +119,7 @@ export interface Branch {
   auth_id?: string
   kos_id: string // 키즈밀 자체 원코드 (KZM-001 형식)
   name: string
+  logo_url?: string // 원 로고 이미지 URL (NULL이면 원 이름 텍스트만 표시)
   owner_name?: string
   phone?: string
   email?: string

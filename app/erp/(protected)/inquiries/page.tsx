@@ -11,6 +11,8 @@ import { getSlaStatus } from '@/lib/sla'
 import InquiryDetailPanel from './components/InquiryDetailPanel'
 import Link from 'next/link'
 import { getGroupStyle } from '@/lib/cs-group-styles'
+import { useNotifier } from '@/lib/useNotifier'
+import NotifyToggleButton from '@/components/NotifyToggleButton'
 
 const PAGE_SIZE = 20
 const UNGROUPED = '미분류'
@@ -121,6 +123,9 @@ function CsManagementInner() {
   // 임시저장 초안이 있는 문의 ID 목록 (localStorage 기반)
   const [draftIds, setDraftIds] = useState<Set<string>>(new Set())
 
+  // 새 문의/새 메시지 알림 (소리+팝업, 기본 ON) — 하위 상세 패널과 토글 공유
+  const { enabled: notifyOn, toggle: toggleNotify, notify } = useNotifier()
+
   // ── 데이터 로드 ──────────────────────────────────────────────
   const load = useCallback(async () => {
     const supabase = createClient()
@@ -172,10 +177,24 @@ function CsManagementInner() {
     const supabase = createClient()
     const channel = supabase
       .channel('erp-cs-list')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'inquiries' }, () => load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'inquiries' }, async (payload) => {
+        load()
+        // ★ "고객이 생성한 새 문의"일 때만 알림 (관리자 본인이 만든 건 제외)
+        if (payload.eventType !== 'INSERT') return
+        const row = payload.new as {
+          id: string; branch_id: string; category: InquiryCategory; created_by_type?: string
+        }
+        if (row.created_by_type !== 'branch') return
+        let branchName = '고객사'
+        const { data: b } = await supabase
+          .from('branches').select('name').eq('id', row.branch_id).maybeSingle()
+        if (b?.name) branchName = b.name
+        const catLabel = CATEGORY_LABELS[row.category] ?? row.category
+        notify(row.id, '새 문의', `${branchName} - ${catLabel}`)
+      })
       .subscribe()
     return () => { supabase.removeChannel(channel) }
-  }, [load])
+  }, [load, notify])
 
   // 마운트 시 localStorage 스캔하여 초안이 있는 문의 ID 수집
   useEffect(() => {
@@ -373,6 +392,10 @@ function CsManagementInner() {
         >
           이력 검색
         </Link>
+        {/* 새 문의/새 메시지 알림 ON/OFF */}
+        <div className="ml-auto flex items-center pr-3">
+          <NotifyToggleButton enabled={notifyOn} onToggle={toggleNotify} />
+        </div>
       </div>
 
       {/* 2패널 영역 */}
@@ -574,7 +597,8 @@ function CsManagementInner() {
 
       {/* ── 오른쪽 패널 (62%) ────────────────────────────────── */}
       <div className="flex-1 min-w-0 overflow-hidden">
-        <InquiryDetailPanel inquiryId={selectedId} />
+        {/* onNotify: 상단 토글과 공유되는 알림 함수 (고객이 보낸 메시지에만 발동) */}
+        <InquiryDetailPanel inquiryId={selectedId} onNotify={notify} />
       </div>
       </div>
     </div>
