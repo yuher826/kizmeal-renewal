@@ -3,6 +3,7 @@
 import { Suspense, useState } from 'react'
 import { useParams, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+import { KIZMEAL_LOGO_PATH } from '@/lib/brand'
 
 const STATUS_STEPS = [
   { key: 'pending', label: '접수중' },
@@ -194,7 +195,10 @@ function InquiryDetailContent() {
             {inquiry.status === 'resolved' && inquiry.admin_reply ? (
               <div className="bg-[#E8F5E9] rounded-2xl p-6">
                 <div className="flex items-center gap-2 mb-3">
-                  <div className="w-7 h-7 bg-[#2D6A4F] rounded-lg flex items-center justify-center text-white text-xs font-bold">K</div>
+                  <div className="w-7 h-7 rounded-lg overflow-hidden flex items-center justify-center">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={KIZMEAL_LOGO_PATH} alt="키즈밀 로고" className="w-full h-full object-contain" />
+                  </div>
                   <span className="text-sm font-bold text-[#2D6A4F]">키즈밀 답변</span>
                   {inquiry.replied_at && (
                     <span className="text-xs text-[#52B788] ml-auto">

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
+import { KIZMEAL_LOGO_PATH } from '@/lib/brand'
 import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import type { Inquiry, InquiryStatus, InquiryCategory, SlaRule, Admin } from '@/lib/types'
@@ -226,7 +227,10 @@ export default function AdminInquiriesPage() {
     <div className="min-h-screen bg-[#F6FAF6] font-sans">
       <header className="bg-white border-b border-gray-100 px-4 sm:px-6 py-4 hidden sm:flex items-center justify-between sticky top-0 z-10">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-gradient-to-br from-[#2D6A4F] to-[#52B788] rounded-xl flex items-center justify-center text-white font-bold text-sm">K</div>
+          <div className="w-8 h-8 rounded-xl overflow-hidden flex items-center justify-center">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={KIZMEAL_LOGO_PATH} alt="키즈밀 로고" className="w-full h-full object-contain" />
+          </div>
           <div>
             <div className="flex items-center gap-1 text-xs text-gray-400 mb-0.5">
               <Link href="/board/admin" className="hover:text-[#2D6A4F] transition-colors">소통채널</Link>

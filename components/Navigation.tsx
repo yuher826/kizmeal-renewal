@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import Link from 'next/link';
+import Link from 'next/link'
+import { KIZMEAL_LOGO_PATH } from '@/lib/brand';
 import { usePathname } from 'next/navigation';
 
 type DropdownItem = { icon: string; label: string; href: string };
@@ -123,7 +124,10 @@ export default function Navigation() {
     <nav className={`fixed top-0 inset-x-0 z-50 transition-all duration-300 ${navBg}`} ref={navRef}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-16">
         <Link href="/" className="flex items-center gap-2.5 flex-shrink-0">
-          <div className="w-9 h-9 rounded-xl bg-[#2D6A4F] flex items-center justify-center text-white font-bold text-lg font-serif">K</div>
+          <div className="w-9 h-9 rounded-xl overflow-hidden flex items-center justify-center">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={KIZMEAL_LOGO_PATH} alt="키즈밀 로고" className="w-full h-full object-contain" />
+          </div>
           <span className={`font-serif font-bold text-lg leading-none transition-colors ${navText}`}>키즈밀</span>
         </Link>
 

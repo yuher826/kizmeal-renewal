@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { KIZMEAL_LOGO_PATH } from '@/lib/brand'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 
@@ -52,7 +53,10 @@ export default function NutritionistMobileNav() {
           </svg>
         </button>
         <div className="flex items-center gap-2 min-w-0">
-          <div className="w-7 h-7 bg-gradient-to-br from-[#2D6A4F] to-[#52B788] rounded-lg flex items-center justify-center text-white font-bold text-xs flex-shrink-0">K</div>
+          <div className="w-7 h-7 rounded-lg overflow-hidden flex items-center justify-center flex-shrink-0">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={KIZMEAL_LOGO_PATH} alt="키즈밀 로고" className="w-full h-full object-contain" />
+          </div>
           <div className="min-w-0">
             <p className="text-xs text-gray-400 leading-none">영양사</p>
             <p className="text-sm font-bold text-[#1C2B1E] leading-tight truncate">
@@ -86,7 +90,10 @@ export default function NutritionistMobileNav() {
         {/* 드로어 헤더 */}
         <div className="flex items-center justify-between px-5 h-16 border-b border-gray-100 flex-shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-gradient-to-br from-[#2D6A4F] to-[#52B788] rounded-xl flex items-center justify-center text-white font-bold">K</div>
+            <div className="w-9 h-9 rounded-xl overflow-hidden flex items-center justify-center">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={KIZMEAL_LOGO_PATH} alt="키즈밀 로고" className="w-full h-full object-contain" />
+            </div>
             <div>
               <p className="text-xs text-gray-400 leading-none mb-0.5">키즈밀</p>
               <p className="text-sm font-bold text-[#1C2B1E]">영양사 메뉴</p>

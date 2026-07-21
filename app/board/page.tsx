@@ -8,6 +8,7 @@ import type { Ticket, TicketStatus, Msg } from '@/components/board/types';
 import TicketList from '@/components/board/TicketList';
 import ChatWindow from '@/components/board/ChatWindow';
 import ClientProfile from '@/components/board/ClientProfile';
+import { KIZMEAL_LOGO_PATH } from '@/lib/brand';
 
 // ── Mock data ─────────────────────────────────────────────────────
 const INITIAL_TICKETS: Ticket[] = [
@@ -361,7 +362,10 @@ export default function BoardPage() {
           </a>
           <span className="text-gray-200 hidden sm:block">|</span>
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 bg-[#2D6A4F] rounded-lg flex items-center justify-center text-white font-bold text-sm">K</div>
+            <div className="w-7 h-7 rounded-lg overflow-hidden flex items-center justify-center">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={KIZMEAL_LOGO_PATH} alt="키즈밀 로고" className="w-full h-full object-contain" />
+            </div>
             <span className="font-bold text-[#1C2B1E] text-sm">소통 채널</span>
           </div>
         </div>

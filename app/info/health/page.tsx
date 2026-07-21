@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase-server';
+import { KIZMEAL_LOGO_PATH } from '@/lib/brand';
 import { SiteFooter } from '@/components/SubPage';
 
 export const metadata: Metadata = {
@@ -49,7 +50,10 @@ export default async function Page() {
       <section className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 -mt-8 pb-20 relative z-10">
         {items.length === 0 ? (
           <div className="bg-[#E8F5E9] rounded-2xl p-12 sm:p-16 text-center">
-            <div className="w-16 h-16 rounded-2xl bg-[#2D6A4F] flex items-center justify-center text-white font-serif font-bold text-2xl mx-auto mb-5">K</div>
+            <div className="w-16 h-16 rounded-2xl overflow-hidden flex items-center justify-center mx-auto mb-5">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={KIZMEAL_LOGO_PATH} alt="키즈밀 로고" className="w-full h-full object-contain" />
+            </div>
             <p className="font-serif font-semibold text-xl sm:text-2xl text-[#1B4332] mb-2">곧 업데이트될 예정입니다 😊</p>
             <p className="text-[#2D6A4F]/70 text-sm">키즈밀이 건강정보지를 열심히 준비하고 있습니다.</p>
           </div>

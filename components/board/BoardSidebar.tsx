@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { usePathname, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { ADMIN_TABS, getActiveAdminTab } from '@/lib/admin-tabs'
+import { KIZMEAL_LOGO_PATH } from '@/lib/brand'
 
 type MenuItem = { icon: string; label: string; href: string }
 
@@ -76,7 +77,10 @@ export default function BoardSidebar() {
   return (
     <aside className="hidden lg:flex lg:flex-col w-60 flex-shrink-0 bg-white border-r border-gray-100 h-full">
       <Link href={role === 'admin' ? '/board/admin' : '/board/dashboard'} className="flex items-center gap-2.5 px-5 h-16 border-b border-gray-100 hover:opacity-80 transition-opacity">
-        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#2D6A4F] to-[#52B788] flex items-center justify-center text-white font-bold text-lg font-serif">K</div>
+        <div className="w-9 h-9 rounded-xl overflow-hidden flex items-center justify-center">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={KIZMEAL_LOGO_PATH} alt="키즈밀 로고" className="w-full h-full object-contain" />
+        </div>
         <div>
           <p className="font-bold text-[#1C2B1E] text-sm leading-none">소통채널</p>
           <p className="text-gray-400 text-xs mt-1">{role === 'admin' ? '관리자' : '고객사'}</p>

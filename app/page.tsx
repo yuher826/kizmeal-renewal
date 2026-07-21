@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Image from 'next/image';
-import Link from 'next/link';
+import Link from 'next/link'
+import { KIZMEAL_LOGO_PATH } from '@/lib/brand';
 import CustomerChannelSection from '@/components/CustomerChannelSection';
 import FaqSection from '@/components/FaqSection';
 
@@ -513,7 +514,10 @@ export default function Home() {
           <div className="grid md:grid-cols-4 gap-8 mb-10">
             <div className="md:col-span-1">
               <Link href="/" className="flex items-center gap-2.5 mb-4">
-                <div className="w-9 h-9 rounded-xl bg-[#2D6A4F] flex items-center justify-center text-white font-bold font-serif text-lg">K</div>
+                <div className="w-9 h-9 rounded-xl overflow-hidden flex items-center justify-center">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={KIZMEAL_LOGO_PATH} alt="키즈밀 로고" className="w-full h-full object-contain" />
+                </div>
                 <span className="font-serif font-bold text-white text-lg">키즈밀</span>
               </Link>
               <p className="text-white/40 text-sm leading-relaxed max-w-xs">
