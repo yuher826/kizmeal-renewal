@@ -826,6 +826,7 @@ export default function InquiryDetailPanel({ inquiryId, onNotify }: Props) {
         filter: `inquiry_id=eq.${id}`,
       }, async (payload) => {
         const newMsg = payload.new as Message
+        console.log('[detail] messages 이벤트', { sender_type: newMsg.sender_type, id: newMsg.id, is_internal: newMsg.is_internal }) // [임시 디버그]
         const { data: full } = await supabase
           .from('messages')
           .select('*, message_attachments(*)')
@@ -839,7 +840,10 @@ export default function InquiryDetailPanel({ inquiryId, onNotify }: Props) {
           const name = branchNameRef.current || '고객사'
           const preview = newMsg.content.length > 40
             ? `${newMsg.content.slice(0, 40)}…` : newMsg.content
+          console.log('[detail] notify 호출 시도', { id: newMsg.id, name }) // [임시 디버그]
           onNotify?.(newMsg.id, `새 메시지: ${name}`, preview)
+        } else {
+          console.log('[detail] 스킵 - 고객 메시지 아님/내부', newMsg.sender_type) // [임시 디버그]
         }
       })
       .on('postgres_changes', {

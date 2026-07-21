@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback, useMemo, Suspense } from 'react'
+import { useEffect, useState, useCallback, useMemo, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import type { InquiryStatus, InquiryCategory, SlaRule, Inquiry } from '@/lib/types'
@@ -112,6 +112,9 @@ function CsManagementInner() {
   const [didInit, setDidInit] = useState(false)
 
   const [selectedId, setSelectedId] = useState<string | null>(urlId)
+  // 현재 열어둔 문의 id (realtime 콜백에서 최신값 읽기용 — 상세 패널과 중복 알림 방지)
+  const selectedIdRef = useRef<string | null>(urlId)
+  useEffect(() => { selectedIdRef.current = selectedId }, [selectedId])
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set())
 
   const [search, setSearch] = useState('')
@@ -200,6 +203,37 @@ function CsManagementInner() {
         const catLabel = CATEGORY_LABELS[row.category] ?? row.category
         console.log('[realtime] notify 호출 시도', { id: row.id, branchName, catLabel, created_by_type: row.created_by_type }) // [임시 디버그]
         notify(row.id, '새 문의', `${branchName} - ${catLabel}`)
+      })
+      // ★ 목록만 보고 있어도 고객이 기존 문의에 답장하면 알림 (messages INSERT 구독)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, async (payload) => {
+        const msg = payload.new as {
+          id: string; inquiry_id: string; sender_type: string; is_internal?: boolean; content?: string
+        }
+        console.log('[list-msg] messages INSERT', { sender_type: msg.sender_type, inquiry_id: msg.inquiry_id, is_internal: msg.is_internal }) // [임시 디버그]
+        // 고객이 보낸 메시지만 (관리자 발신·내부메모 제외)
+        if (msg.sender_type !== 'branch' || msg.is_internal) {
+          console.log('[list-msg] 스킵 - 고객 메시지 아님/내부', msg.sender_type) // [임시 디버그]
+          return
+        }
+        // 현재 열어둔 문의는 상세 패널(feature B)이 알림 → 목록에선 스킵 (중복 방지)
+        if (selectedIdRef.current === msg.inquiry_id) {
+          console.log('[list-msg] 스킵 - 현재 열어둔 문의(상세 패널이 알림)', msg.inquiry_id) // [임시 디버그]
+          return
+        }
+        // 지점명 조회 (messages payload엔 없어서 inquiry→branch 조회)
+        let branchName = '고객사'
+        const { data: inqRow } = await supabase
+          .from('inquiries').select('branch_id').eq('id', msg.inquiry_id).maybeSingle()
+        if (inqRow?.branch_id) {
+          const { data: b } = await supabase
+            .from('branches').select('name').eq('id', inqRow.branch_id).maybeSingle()
+          if (b?.name) branchName = b.name
+        }
+        const preview = (msg.content ?? '').length > 40
+          ? `${(msg.content ?? '').slice(0, 40)}…` : (msg.content ?? '')
+        // notify 는 message id 로 중복방지되므로 상세 패널과 겹쳐도 안전
+        console.log('[list-msg] notify 호출 시도', { id: msg.id, branchName }) // [임시 디버그]
+        notify(msg.id, `새 메시지: ${branchName}`, preview)
       })
       .subscribe()
     return () => { supabase.removeChannel(channel) }
