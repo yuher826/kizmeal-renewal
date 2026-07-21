@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase-server'
-import { getSupabaseAdmin } from '@/lib/supabase-admin'
 
 async function getAdmin(supabase: ReturnType<typeof createClient>) {
   const { data: { user } } = await supabase.auth.getUser()
@@ -42,10 +41,14 @@ export async function POST(
       return NextResponse.json({ error: '이메일 정보가 없습니다' }, { status: 404 })
     }
 
-    const supabaseAdmin = getSupabaseAdmin()
-    const { error } = await supabaseAdmin.auth.admin.generateLink({
-      type: 'recovery',
-      email: branch.email,
+    // 비밀번호 재설정(recovery) 메일 발송.
+    // generateLink는 링크만 생성하고 메일을 보내지 않으므로, 실제로 메일이 발송되는
+    // resetPasswordForEmail을 사용한다. redirectTo를 지정해 재설정 링크가 홈페이지가 아니라
+    // /board/auth/callback으로 오게 한다(초대 경로와 동일). 콜백이 recovery 세션을 받아
+    // change-password 화면으로 이어준다.
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'
+    const { error } = await supabase.auth.resetPasswordForEmail(branch.email, {
+      redirectTo: `${siteUrl}/board/auth/callback`,
     })
 
     if (error) {

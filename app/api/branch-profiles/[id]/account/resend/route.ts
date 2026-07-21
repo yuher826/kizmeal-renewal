@@ -54,13 +54,16 @@ export async function POST(
       return NextResponse.json({ success: true })
     }
 
-    const { error: linkError } = await supabaseAdmin.auth.admin.generateLink({
-      type: 'recovery',
-      email: branch.email,
-    })
+    // 이미 가입/확정된 계정이면 invite가 실패하므로 recovery 메일로 재발송.
+    // generateLink는 메일을 보내지 않으므로 실제 발송되는 resetPasswordForEmail을 쓰고,
+    // redirectTo를 지정해 링크가 홈페이지가 아니라 /board/auth/callback으로 오게 한다.
+    const { error: recoverError } = await supabase.auth.resetPasswordForEmail(
+      branch.email,
+      { redirectTo: `${siteUrl}/board/auth/callback` }
+    )
 
-    if (linkError) {
-      console.error('[account/resend POST] 재발송 오류:', linkError)
+    if (recoverError) {
+      console.error('[account/resend POST] 재발송 오류:', recoverError)
       return NextResponse.json({ error: '재발송에 실패했습니다' }, { status: 500 })
     }
 
