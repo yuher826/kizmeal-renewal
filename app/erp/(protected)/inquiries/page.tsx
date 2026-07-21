@@ -178,18 +178,27 @@ function CsManagementInner() {
     const channel = supabase
       .channel('erp-cs-list')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'inquiries' }, async (payload) => {
+        console.log('[realtime] inquiries 이벤트', payload.eventType, payload) // [임시 디버그]
         load()
         // ★ "고객이 생성한 새 문의"일 때만 알림 (관리자 본인이 만든 건 제외)
-        if (payload.eventType !== 'INSERT') return
+        if (payload.eventType !== 'INSERT') {
+          console.log('[realtime] INSERT 아님 - 알림 스킵', payload.eventType) // [임시 디버그]
+          return
+        }
+        console.log('[realtime] INSERT 이벤트', payload) // [임시 디버그]
         const row = payload.new as {
           id: string; branch_id: string; category: InquiryCategory; created_by_type?: string
         }
-        if (row.created_by_type !== 'branch') return
+        if (row.created_by_type !== 'branch') {
+          console.log('[realtime] 스킵됨 - 이유(created_by_type)', row.created_by_type) // [임시 디버그]
+          return
+        }
         let branchName = '고객사'
         const { data: b } = await supabase
           .from('branches').select('name').eq('id', row.branch_id).maybeSingle()
         if (b?.name) branchName = b.name
         const catLabel = CATEGORY_LABELS[row.category] ?? row.category
+        console.log('[realtime] notify 호출 시도', { id: row.id, branchName, catLabel, created_by_type: row.created_by_type }) // [임시 디버그]
         notify(row.id, '새 문의', `${branchName} - ${catLabel}`)
       })
       .subscribe()
