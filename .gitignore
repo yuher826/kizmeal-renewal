@@ -37,3 +37,15 @@ yarn-error.log*
 next-env.d.ts
 
 .vercel
+
+# pptx-server 실험/디버그 파일 및 실제 원 데이터 (저장소에 올리지 않음)
+pptx-server/_debug_*.py
+pptx-server/analyze_*.py
+pptx-server/diag_*.py
+pptx-server/test_*.pptx
+pptx-server/원본_*.pptx
+pptx-server/원본_*.pdf
+# 위 패턴에 안 걸리는 나머지 실험 스크립트도 명시적으로 제외
+pptx-server/_check_templates.py
+pptx-server/find_15row.py
+pptx-server/verify_fix.py
