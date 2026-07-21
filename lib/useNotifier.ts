@@ -68,21 +68,17 @@ export function setupAudioUnlock(): void {
  * (unlock 은 도우미일 뿐 — 없거나 실패해도 여기서 그냥 재생을 시도한다. 실패해도 페이지엔 영향 없음)
  */
 export function playNotify(): void {
-  console.log('[playNotify] 진입') // [임시 디버그]
   const audio = getNotifyAudio()
-  if (!audio) {
-    console.log('[playNotify] audio 없음(SSR?) - 중단') // [임시 디버그]
-    return
-  }
+  if (!audio) return
   try {
     audio.muted = false          // unlock 등으로 바뀌었을 수 있어 매번 확실히 해제
     audio.volume = NOTIFY_VOLUME  // 볼륨도 매번 보정
     audio.currentTime = 0         // 연속 알림 대비 처음부터 재생
-    void audio.play()
-      .then(() => console.log('[playNotify] 재생 성공')) // [임시 디버그]
-      .catch((error) => console.log('[playNotify] 재생 실패', error)) // [임시 디버그]
-  } catch (e) {
-    console.log('[playNotify] 예외', e) // [임시 디버그]
+    void audio.play().catch(() => {
+      /* 자동재생 차단 등은 조용히 무시 */
+    })
+  } catch {
+    /* 오디오 미지원/차단 시 조용히 무시 */
   }
 }
 
@@ -101,11 +97,7 @@ export async function requestNotificationPermission(): Promise<boolean> {
 
 /** 팝업 표시 — 권한 없거나 미지원이면 조용히 스킵 (소리는 별도 처리) */
 export function showBrowserNotification(title: string, body?: string): void {
-  if (typeof window === 'undefined' || !('Notification' in window)) {
-    console.log('[popup] Notification 미지원') // [임시 디버그]
-    return
-  }
-  console.log('[popup] Notification.permission =', Notification.permission) // [임시 디버그]
+  if (typeof window === 'undefined' || !('Notification' in window)) return
   try {
     if (Notification.permission !== 'granted') return
     // silent: true → 팝업은 뜨되 OS 기본 알림음은 안 남 (우리 mp3만 재생)
@@ -149,15 +141,8 @@ export function useNotifier(defaultEnabled = true) {
 
   // 안정적인 identity(deps []) — realtime 콜백에 넘겨도 재구독을 유발하지 않는다
   const notify = useCallback((id: string, title: string, body?: string) => {
-    console.log('[notify] 호출됨', { enabled: enabledRef.current, id, title, body }) // [임시 디버그]
-    if (!enabledRef.current) {
-      console.log('[notify] enabled=false 로 중단') // [임시 디버그]
-      return
-    }
-    if (id && lastNotifiedIdRef.current === id) {
-      console.log('[notify] 중복 id 로 스킵', id) // [임시 디버그]
-      return // 중복 방지
-    }
+    if (!enabledRef.current) return
+    if (id && lastNotifiedIdRef.current === id) return // 중복 방지
     lastNotifiedIdRef.current = id
     playNotify()
     showBrowserNotification(title, body)

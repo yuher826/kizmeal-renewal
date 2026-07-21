@@ -181,27 +181,18 @@ function CsManagementInner() {
     const channel = supabase
       .channel('erp-cs-list')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'inquiries' }, async (payload) => {
-        console.log('[realtime] inquiries 이벤트', payload.eventType, payload) // [임시 디버그]
         load()
         // ★ "고객이 생성한 새 문의"일 때만 알림 (관리자 본인이 만든 건 제외)
-        if (payload.eventType !== 'INSERT') {
-          console.log('[realtime] INSERT 아님 - 알림 스킵', payload.eventType) // [임시 디버그]
-          return
-        }
-        console.log('[realtime] INSERT 이벤트', payload) // [임시 디버그]
+        if (payload.eventType !== 'INSERT') return
         const row = payload.new as {
           id: string; branch_id: string; category: InquiryCategory; created_by_type?: string
         }
-        if (row.created_by_type !== 'branch') {
-          console.log('[realtime] 스킵됨 - 이유(created_by_type)', row.created_by_type) // [임시 디버그]
-          return
-        }
+        if (row.created_by_type !== 'branch') return
         let branchName = '고객사'
         const { data: b } = await supabase
           .from('branches').select('name').eq('id', row.branch_id).maybeSingle()
         if (b?.name) branchName = b.name
         const catLabel = CATEGORY_LABELS[row.category] ?? row.category
-        console.log('[realtime] notify 호출 시도', { id: row.id, branchName, catLabel, created_by_type: row.created_by_type }) // [임시 디버그]
         notify(row.id, '새 문의', `${branchName} - ${catLabel}`)
       })
       .subscribe()
@@ -215,17 +206,10 @@ function CsManagementInner() {
         const msg = payload.new as {
           id: string; inquiry_id: string; sender_type: string; is_internal?: boolean; content?: string
         }
-        console.log('[list-msg] messages INSERT', { sender_type: msg.sender_type, inquiry_id: msg.inquiry_id, is_internal: msg.is_internal }) // [임시 디버그]
         // 고객이 보낸 메시지만 (관리자 발신·내부메모 제외)
-        if (msg.sender_type !== 'branch' || msg.is_internal) {
-          console.log('[list-msg] 스킵 - 고객 메시지 아님/내부', msg.sender_type) // [임시 디버그]
-          return
-        }
+        if (msg.sender_type !== 'branch' || msg.is_internal) return
         // 현재 열어둔 문의는 상세 패널(feature B)이 알림 → 목록에선 스킵 (중복 방지)
-        if (selectedIdRef.current === msg.inquiry_id) {
-          console.log('[list-msg] 스킵 - 현재 열어둔 문의(상세 패널이 알림)', msg.inquiry_id) // [임시 디버그]
-          return
-        }
+        if (selectedIdRef.current === msg.inquiry_id) return
         // 지점명 조회 (messages payload엔 없어서 inquiry→branch 조회)
         let branchName = '고객사'
         const { data: inqRow } = await supabase
@@ -238,10 +222,9 @@ function CsManagementInner() {
         const preview = (msg.content ?? '').length > 40
           ? `${(msg.content ?? '').slice(0, 40)}…` : (msg.content ?? '')
         // notify 는 message id 로 중복방지되므로 상세 패널과 겹쳐도 안전
-        console.log('[list-msg] notify 호출 시도', { id: msg.id, branchName }) // [임시 디버그]
         notify(msg.id, `새 메시지: ${branchName}`, preview)
       })
-      .subscribe((status) => console.log('[list-msg] 채널 상태', status)) // [임시 디버그]
+      .subscribe()
 
     return () => {
       supabase.removeChannel(channel)
