@@ -15,6 +15,7 @@ const NOTIFY_VOLUME = 0.55
 
 let notifyAudio: HTMLAudioElement | null = null
 let audioUnlockBound = false
+let audioUnlocked = false
 
 /** 알림음 오디오 엘리먼트 (지연 생성, 단일 인스턴스 재사용) */
 function getNotifyAudio(): HTMLAudioElement | null {
@@ -27,30 +28,33 @@ function getNotifyAudio(): HTMLAudioElement | null {
 }
 
 /**
- * 오디오 자동재생 unlock.
- * 첫 사용자 상호작용(클릭/키/터치) 시 오디오를 무음으로 살짝 재생했다 멈춰서
- * 브라우저의 자동재생 잠금을 해제한다. 이후 제스처 없이 발생한 알림에서도
- * mp3가 안정적으로 재생된다. (한 번만 바인딩)
+ * 오디오 자동재생 unlock (도우미 — 없어도 mp3는 재생됨).
+ * 첫 사용자 상호작용(클릭/키/터치) 시 오디오를 muted 로 살짝 재생했다 멈춰서
+ * 브라우저의 자동재생 잠금을 해제한다. volume 은 건드리지 않고 muted 만 사용하며,
+ * 끝나면 muted=false 로 반드시 원복한다. (한 번만 바인딩)
  */
 export function setupAudioUnlock(): void {
   if (typeof window === 'undefined' || audioUnlockBound) return
   audioUnlockBound = true
   const unlock = () => {
-    const audio = getNotifyAudio()
-    if (audio) {
-      const prevVol = audio.volume
-      audio.volume = 0 // unlock은 무음으로
-      audio.play().then(() => {
-        audio.pause()
-        audio.currentTime = 0
-        audio.volume = prevVol
-      }).catch(() => {
-        audio.volume = prevVol
-      })
-    }
     window.removeEventListener('pointerdown', unlock)
     window.removeEventListener('keydown', unlock)
     window.removeEventListener('touchstart', unlock)
+    if (audioUnlocked) return
+    const audio = getNotifyAudio()
+    if (!audio) return
+    audio.muted = true // volume 이 아니라 muted 로 무음 처리
+    audio.play().then(() => {
+      // 그 사이 실제 알림(playNotify)이 muted 를 풀었으면 건드리지 않는다 (재생 클로버 방지)
+      if (audio.muted) {
+        audio.pause()
+        audio.currentTime = 0
+        audio.muted = false // 무음 원복 보장
+      }
+      audioUnlocked = true
+    }).catch(() => {
+      audio.muted = false   // 실패해도 무음 원복 보장
+    })
   }
   window.addEventListener('pointerdown', unlock)
   window.addEventListener('keydown', unlock)
@@ -60,15 +64,16 @@ export function setupAudioUnlock(): void {
 /**
  * 알림음 재생.
  * public/sounds/notify.mp3 (happy bells 종소리)를 재생한다.
- * (최초 사용자 상호작용 전에는 play()가 거부될 수 있으나, setupAudioUnlock()으로
- *  첫 제스처에 unlock 되므로 이후엔 제스처 없이도 재생된다 — 실패해도 페이지엔 영향 없음)
+ * unlock 여부와 무관하게 항상 muted=false, volume=0.55 로 세팅한 뒤 play() 를 시도한다.
+ * (unlock 은 도우미일 뿐 — 없거나 실패해도 여기서 그냥 재생을 시도한다. 실패해도 페이지엔 영향 없음)
  */
 export function playNotify(): void {
   const audio = getNotifyAudio()
   if (!audio) return
   try {
-    audio.volume = NOTIFY_VOLUME // unlock 등으로 바뀌었을 수 있어 매번 보정
-    audio.currentTime = 0 // 연속 알림 대비 처음부터 재생
+    audio.muted = false          // unlock 등으로 바뀌었을 수 있어 매번 확실히 해제
+    audio.volume = NOTIFY_VOLUME  // 볼륨도 매번 보정
+    audio.currentTime = 0         // 연속 알림 대비 처음부터 재생
     void audio.play().catch(() => {
       /* 자동재생 차단 등은 조용히 무시 */
     })
