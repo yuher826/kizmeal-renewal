@@ -608,6 +608,8 @@ export default function InquiryDetailPanel({ inquiryId, onNotify }: Props) {
   const [templates, setTemplates] = useState<ReplyTemplate[]>([])
   const [currentAdmin, setCurrentAdmin] = useState<Admin | null>(null)
   const [loading, setLoading] = useState(true)
+  // 원 로고 로드 실패 시 폴백 (문의 전환 시 초기화)
+  const [detailLogoError, setDetailLogoError] = useState(false)
   const [branchComplaints, setBranchComplaints] = useState(0)
 
   const [content, setContent] = useState('')
@@ -749,6 +751,7 @@ export default function InquiryDetailPanel({ inquiryId, onNotify }: Props) {
     setDraftSavedAt('')
     setShowResolvedBanner(false)
     setLoading(true)
+    setDetailLogoError(false) // 문의 전환 시 로고 폴백 상태 초기화
 
     // 초안 로드 (id 전환 시 localStorage에서 바로 복원)
     skipNextDraftSave.current = true
@@ -1533,6 +1536,18 @@ export default function InquiryDetailPanel({ inquiryId, onNotify }: Props) {
             {/* 고객사 정보 */}
             <div>
               <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-3">고객사 정보</h3>
+              {/* 원 로고 (logo_url 있고 로드 성공 시에만 — NULL/실패면 아래 정보 텍스트만) */}
+              {inquiry?.branches?.logo_url && !detailLogoError && (
+                <div className="inline-flex items-center bg-[#F5F6F4] border border-gray-200 rounded-lg px-2.5 py-1.5 mb-3">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={inquiry.branches.logo_url}
+                    alt={inquiry.branches.name ? `${inquiry.branches.name} 로고` : '원 로고'}
+                    className="w-auto h-auto object-contain max-h-8 max-w-[120px]"
+                    onError={() => setDetailLogoError(true)}
+                  />
+                </div>
+              )}
               <div className="space-y-2">
                 {[
                   { label: '브랜드', value: inquiry?.branches?.brands?.name },

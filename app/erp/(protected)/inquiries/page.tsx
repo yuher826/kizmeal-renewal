@@ -32,6 +32,7 @@ interface ListBranch {
   id: string
   name: string
   is_active: boolean
+  logo_url: string | null // 원 로고 (NULL이면 텍스트만 표시)
 }
 interface ListInquiry {
   id: string
@@ -52,6 +53,7 @@ interface RowItem {
   groupTag: string
   sortOrder: number
   displayName: string
+  logoUrl: string | null // 원 로고 URL (없으면 텍스트만)
   isComplaint: boolean
   isUrgentComplaint: boolean
 }
@@ -125,6 +127,8 @@ function CsManagementInner() {
 
   // 임시저장 초안이 있는 문의 ID 목록 (localStorage 기반)
   const [draftIds, setDraftIds] = useState<Set<string>>(new Set())
+  // 로드 실패한 로고 URL 모음 (같은 URL은 한 번만 실패 처리 → 해당 로고 숨김)
+  const [failedLogos, setFailedLogos] = useState<Set<string>>(new Set())
 
   // 새 문의/새 메시지 알림 (소리+팝업, 기본 ON) — 하위 상세 패널과 토글 공유
   const { enabled: notifyOn, toggle: toggleNotify, notify } = useNotifier()
@@ -140,7 +144,7 @@ function CsManagementInner() {
         .select(`
           id, title, status, category, created_at, unread_count_admin,
           branch_id, resolved_at, closed_at,
-          branches!inner ( id, name, is_active )
+          branches!inner ( id, name, is_active, logo_url )
         `)
         // 비활성 지점 제외 (branches.is_active = true)
         .eq('branches.is_active', true)
@@ -271,6 +275,7 @@ function CsManagementInner() {
         groupTag: profile?.group_tag || UNGROUPED,
         sortOrder: profile?.sort_order ?? UNGROUPED_SORT,
         displayName: profile?.branch_full_name || branch?.name || '—',
+        logoUrl: branch?.logo_url ?? null,
         isComplaint,
         isUrgentComplaint,
       }
@@ -550,7 +555,7 @@ function CsManagementInner() {
                     </button>
 
                     {/* 그룹 내 문의 아이템 — 그룹 연한 색상 hover */}
-                    {isOpen && group.items.map(({ inq, displayName, isUrgentComplaint }) => {
+                    {isOpen && group.items.map(({ inq, displayName, logoUrl, isUrgentComplaint }) => {
                       const unread = (inq.unread_count_admin ?? 0) > 0
                       const isSelected = selectedId === inq.id
                       const hasDraft = draftIds.has(inq.id)
@@ -569,6 +574,18 @@ function CsManagementInner() {
                             {unread && <span className="w-1.5 h-1.5 rounded-full bg-blue-500 flex-shrink-0" />}
                             {isUrgentComplaint && <span className="text-xs flex-shrink-0" title="긴급 컴플레인">⚡</span>}
                             {hasDraft && <span className="text-xs flex-shrink-0" title="임시저장된 초안 있음">✏️</span>}
+                            {/* 원 로고 (logo_url 있고 로드 성공 시에만 — NULL/실패면 원 이름만) */}
+                            {logoUrl && !failedLogos.has(logoUrl) && (
+                              <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-[#F5F6F4] p-0.5 flex-shrink-0">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img
+                                  src={logoUrl}
+                                  alt=""
+                                  className="max-w-full max-h-full object-contain"
+                                  onError={() => setFailedLogos(prev => new Set(prev).add(logoUrl))}
+                                />
+                              </span>
+                            )}
                             <span className={`text-sm truncate ${unread ? 'font-semibold text-[#1C2B1E]' : 'text-gray-700'}`}>
                               {displayName}
                             </span>
