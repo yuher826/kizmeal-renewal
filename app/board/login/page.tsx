@@ -27,7 +27,12 @@ export default function BoardLoginPage() {
       const { data: adminRow } = await supabase.from('admins').select('id').eq('auth_id', uid).maybeSingle()
       if (adminRow) { router.replace('/board/admin'); return }
       const { data: branchRow } = await supabase.from('branches').select('id').eq('auth_id', uid).maybeSingle()
-      if (branchRow) { router.replace('/board/customer'); return }
+      if (branchRow) { router.replace('/board/dashboard'); return }
+      const { data: memberRow } = await supabase.from('branch_members').select('id, role').eq('auth_id', uid).maybeSingle()
+      if (memberRow) {
+        router.replace(memberRow.role === 'nutritionist' ? '/nutritionist/dashboard' : '/board/dashboard')
+        return
+      }
       await supabase.auth.signOut()
     })
   }, [router])
@@ -75,12 +80,12 @@ export default function BoardLoginPage() {
       const { data: branchData } = await supabase.from('branches').select('id').eq('auth_id', data.user.id).maybeSingle()
       if (branchData) {
         await supabase.from('branches').update({ last_login_at: new Date().toISOString() }).eq('id', branchData.id)
-        router.push('/board/customer'); router.refresh(); return
+        router.push('/board/dashboard'); router.refresh(); return
       }
 
       const { data: memberData } = await supabase.from('branch_members').select('id, role').eq('auth_id', data.user.id).maybeSingle()
       if (memberData) {
-        router.push(memberData.role === 'nutritionist' ? '/nutritionist/dashboard' : '/board/customer')
+        router.push(memberData.role === 'nutritionist' ? '/nutritionist/dashboard' : '/board/dashboard')
         router.refresh()
         return
       }
