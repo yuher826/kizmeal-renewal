@@ -151,14 +151,17 @@ export default function CustomerDashboardPage() {
       <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 space-y-6">
         {/* 환영 메시지 */}
         <div className="bg-gradient-to-r from-[#2D6A4F] to-[#52B788] rounded-2xl px-6 py-5 text-white">
-          {/* 원 로고 (logo_url 있고 로드 성공 시에만 — 실패/NULL이면 아래 원 이름 텍스트로 폴백) */}
+          {/* 원 로고 칩 (logo_url 있고 로드 성공 시에만 — NULL/로드실패면 렌더 안 하고 아래 원 이름 텍스트로 폴백)
+              · 배경: 살짝 회색빛 흰색 → 흰 글자 로고도 윤곽이 살고, 어떤 색 로고든 안전
+              · 이미지: 박스(max-h/max-w) 안에 비율 유지하며 맞춤 → 가로긴/세로긴/정사각 모두 안 잘림
+              · 모바일에선 max 값을 줄여 배너가 안 깨지게 */}
           {branch?.logo_url && !logoError && (
-            <div className="inline-flex items-center bg-white rounded-lg px-3 py-1.5 mb-3">
+            <div className="inline-flex items-center bg-[#F5F6F4] rounded-xl px-3 py-2 mb-4 shadow-sm">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={branch.logo_url}
-                alt={`${branch.name} 로고`}
-                className="h-10 w-auto object-contain"
+                alt={branch.name ? `${branch.name} 로고` : '원 로고'}
+                className="w-auto h-auto object-contain max-h-9 max-w-[110px] sm:max-h-11 sm:max-w-[140px]"
                 onError={() => setLogoError(true)}
               />
             </div>
