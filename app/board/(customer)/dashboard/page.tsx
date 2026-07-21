@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
+import { KIZMEAL_LOGO_PATH } from '@/lib/brand'
 import type { Inquiry, Branch, Notification, SlaRule } from '@/lib/types'
 import InquiryCard from '@/components/board/InquiryCard'
 
@@ -113,9 +114,8 @@ export default function CustomerDashboardPage() {
       {/* Header */}
       <header className="bg-white border-b border-gray-100 px-4 sm:px-6 py-4 hidden sm:flex items-center justify-between sticky top-0 z-10">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-gradient-to-br from-[#2D6A4F] to-[#52B788] rounded-xl flex items-center justify-center text-white font-bold text-sm shadow-sm">
-            K
-          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={KIZMEAL_LOGO_PATH} alt="키즈밀 로고" className="h-7 w-auto object-contain" />
           <div>
             <h1 className="font-bold text-[#1C2B1E] text-sm">키즈밀 소통채널</h1>
             <p className="text-gray-400 text-xs">{branch?.name || '로딩 중...'}</p>
@@ -148,7 +148,7 @@ export default function CustomerDashboardPage() {
         </div>
       </header>
 
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+      <div className="w-full px-4 sm:px-6 py-6 space-y-6">
         {/* 환영 메시지 */}
         <div className="bg-gradient-to-r from-[#2D6A4F] to-[#52B788] rounded-2xl px-6 py-5 text-white">
           {/* 원 로고 칩 (logo_url 있고 로드 성공 시에만 — NULL/로드실패면 렌더 안 하고 아래 원 이름 텍스트로 폴백)
