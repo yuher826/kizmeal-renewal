@@ -25,7 +25,7 @@ export function playNotify(): void {
   try {
     if (!notifyAudio) {
       notifyAudio = new Audio(NOTIFY_SOUND_SRC)
-      notifyAudio.volume = 0.9 // 크게
+      notifyAudio.volume = 0.55 // 볼륨 (약간 낮춤)
     }
     notifyAudio.currentTime = 0 // 연속 알림 대비 처음부터 재생
     void notifyAudio.play().catch(() => {
