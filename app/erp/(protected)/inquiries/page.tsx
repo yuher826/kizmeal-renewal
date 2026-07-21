@@ -204,7 +204,13 @@ function CsManagementInner() {
         console.log('[realtime] notify 호출 시도', { id: row.id, branchName, catLabel, created_by_type: row.created_by_type }) // [임시 디버그]
         notify(row.id, '새 문의', `${branchName} - ${catLabel}`)
       })
-      // ★ 목록만 보고 있어도 고객이 기존 문의에 답장하면 알림 (messages INSERT 구독)
+      .subscribe()
+
+    // ★ 목록만 보고 있어도 고객이 기존 문의에 답장하면 알림 (messages INSERT).
+    //   한 채널에 postgres_changes 를 여러 개 붙이면 일부 바인딩이 누락되는
+    //   Supabase Realtime 이슈가 있어 messages 구독은 별도 채널로 분리한다.
+    const msgChannel = supabase
+      .channel('erp-cs-messages')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, async (payload) => {
         const msg = payload.new as {
           id: string; inquiry_id: string; sender_type: string; is_internal?: boolean; content?: string
@@ -235,8 +241,12 @@ function CsManagementInner() {
         console.log('[list-msg] notify 호출 시도', { id: msg.id, branchName }) // [임시 디버그]
         notify(msg.id, `새 메시지: ${branchName}`, preview)
       })
-      .subscribe()
-    return () => { supabase.removeChannel(channel) }
+      .subscribe((status) => console.log('[list-msg] 채널 상태', status)) // [임시 디버그]
+
+    return () => {
+      supabase.removeChannel(channel)
+      supabase.removeChannel(msgChannel)
+    }
   }, [load, notify])
 
   // 마운트 시 localStorage 스캔하여 초안이 있는 문의 ID 수집
