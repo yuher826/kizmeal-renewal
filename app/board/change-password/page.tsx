@@ -64,10 +64,8 @@ export default function ChangePasswordPage() {
       <div className="w-full max-w-sm">
         <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-8">
           <div className="text-center mb-8">
-            <div className="w-14 h-14 rounded-2xl overflow-hidden flex items-center justify-center mx-auto mb-4">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={KIZMEAL_LOGO_PATH} alt="키즈밀 로고" className="w-full h-full object-contain" />
-            </div>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={KIZMEAL_LOGO_PATH} alt="키즈밀 로고" className="h-12 w-auto object-contain mx-auto mb-4" />
             <h1 className="text-xl font-bold text-[#1C2B1E]">비밀번호 변경</h1>
             <p className="text-sm text-gray-400 mt-1">첫 로그인 시 새 비밀번호를 설정해주세요</p>
           </div>

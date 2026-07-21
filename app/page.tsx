@@ -514,10 +514,8 @@ export default function Home() {
           <div className="grid md:grid-cols-4 gap-8 mb-10">
             <div className="md:col-span-1">
               <Link href="/" className="flex items-center gap-2.5 mb-4">
-                <div className="w-9 h-9 rounded-xl overflow-hidden flex items-center justify-center">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={KIZMEAL_LOGO_PATH} alt="키즈밀 로고" className="w-full h-full object-contain" />
-                </div>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={KIZMEAL_LOGO_PATH} alt="키즈밀 로고" className="h-7 w-auto object-contain" />
                 <span className="font-serif font-bold text-white text-lg">키즈밀</span>
               </Link>
               <p className="text-white/40 text-sm leading-relaxed max-w-xs">

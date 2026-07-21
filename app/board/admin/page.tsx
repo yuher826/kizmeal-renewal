@@ -166,10 +166,8 @@ export default function AdminDashboard() {
     <div className="min-h-screen bg-[#F0F4F0] font-sans">
       <header className="bg-white border-b border-gray-100 px-6 py-4 hidden sm:flex items-center justify-between sticky top-0 z-10">
         <Link href="/board/admin" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
-          <div className="w-8 h-8 rounded-xl overflow-hidden flex items-center justify-center">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={KIZMEAL_LOGO_PATH} alt="키즈밀 로고" className="w-full h-full object-contain" />
-          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={KIZMEAL_LOGO_PATH} alt="키즈밀 로고" className="h-7 w-auto object-contain" />
           <div>
             <h1 className="font-bold text-[#1C2B1E] text-sm">소통채널 관리자</h1>
             <p className="text-gray-400 text-xs">{adminName || '관리자'} · 대시보드</p>

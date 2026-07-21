@@ -362,10 +362,8 @@ export default function BoardPage() {
           </a>
           <span className="text-gray-200 hidden sm:block">|</span>
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg overflow-hidden flex items-center justify-center">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={KIZMEAL_LOGO_PATH} alt="키즈밀 로고" className="w-full h-full object-contain" />
-            </div>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={KIZMEAL_LOGO_PATH} alt="키즈밀 로고" className="h-7 w-auto object-contain" />
             <span className="font-bold text-[#1C2B1E] text-sm">소통 채널</span>
           </div>
         </div>

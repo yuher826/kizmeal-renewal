@@ -194,10 +194,8 @@ export default function AdminParentInquiryDetailPage() {
                 return (
                   <div key={msg.id} className={`flex mb-3 ${isParent ? 'justify-end' : 'justify-start gap-2'}`}>
                     {!isParent && (
-                      <div className="w-8 h-8 rounded-full overflow-hidden flex items-center justify-center flex-shrink-0 mt-1">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={KIZMEAL_LOGO_PATH} alt="키즈밀 로고" className="w-full h-full object-contain" />
-                      </div>
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={KIZMEAL_LOGO_PATH} alt="키즈밀 로고" className="h-7 w-auto object-contain flex-shrink-0 mt-1" />
                     )}
                     <div className="max-w-[75%]">
                       <div className={`rounded-2xl px-4 py-3 shadow-sm ${

@@ -63,10 +63,8 @@ export default function AuthCallbackPage() {
   return (
     <div className="min-h-screen bg-[#F6FAF6] flex items-center justify-center px-4">
       <div className="text-center space-y-4">
-        <div className="w-14 h-14 rounded-2xl overflow-hidden flex items-center justify-center mx-auto">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={KIZMEAL_LOGO_PATH} alt="키즈밀 로고" className="w-full h-full object-contain" />
-        </div>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={KIZMEAL_LOGO_PATH} alt="키즈밀 로고" className="h-12 w-auto object-contain mx-auto" />
         <p className="text-[#1C2B1E] font-medium">계정을 확인하는 중입니다...</p>
         <p className="text-gray-400 text-sm">잠시만 기다려주세요.</p>
       </div>
