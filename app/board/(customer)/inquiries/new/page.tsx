@@ -27,36 +27,36 @@ const CAT_CONFIG: Record<string, CatConfig> = {
     showItemName: true,
     showDate: true, dateLabel: '발생일',
     showContent: true, contentLabel: '구체적 내용',
-    showFile: true, fileHint: '📸 불량 사진을 첨부하면 더 빠르게 처리됩니다',
+    showFile: true, fileHint: '관련 사진이나 파일을 첨부하실 수 있습니다',
   },
   MENU: {
     showDate: true, dateLabel: '해당 날짜',
     showContent: true, contentLabel: '구체적 요청사항',
-    showFile: true, fileHint: '관련 사진이나 파일을 첨부하면 더 빠르게 처리됩니다',
+    showFile: true, fileHint: '관련 사진이나 파일을 첨부하실 수 있습니다',
   },
   STAFF_MEAL: {
     showDate: true, dateLabel: '해당 날짜',
     showStaffCount: true,
     showContent: true, contentLabel: '컴플레인 내용',
-    showFile: true,
+    showFile: true, fileHint: '관련 사진이나 파일을 첨부하실 수 있습니다',
   },
   HYGIENE: {
     showDate: true, dateLabel: '발생일',
     showContent: true, contentLabel: '구체적 내용',
-    showFile: true, fileHint: '📸 이물질·위생 관련 사진을 첨부하면 더 빠르게 처리됩니다',
+    showFile: true, fileHint: '관련 사진이나 파일을 첨부하실 수 있습니다',
   },
   COMPLAINT: {
     showDate: true, dateLabel: '발생일',
     showContent: true, contentLabel: '컴플레인 내용',
-    showFile: true, fileHint: '📸 관련 사진을 첨부하면 더 빠르게 처리됩니다',
+    showFile: true, fileHint: '관련 사진이나 파일을 첨부하실 수 있습니다',
   },
   CONTRACT: {
     showContent: true, contentLabel: '문의 내용',
-    showFile: true, fileHint: '계약 관련 서류를 첨부해 주세요',
+    showFile: true, fileHint: '관련 서류나 파일을 첨부하실 수 있습니다',
   },
   OTHER: {
     showContent: true, contentLabel: '문의 내용',
-    showFile: true, fileHint: '관련 사진이나 파일을 첨부하면 더 빠르게 처리됩니다',
+    showFile: true, fileHint: '관련 사진이나 파일을 첨부하실 수 있습니다',
   },
 }
 

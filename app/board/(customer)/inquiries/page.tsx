@@ -100,7 +100,13 @@ export default function CustomerInquiriesPage() {
           </svg>
         </Link>
         <h1 className="font-bold text-[#1C2B1E] flex-1">내 문의 목록</h1>
-        <span className="text-xs text-gray-400">{inquiries.length}건</span>
+        <span className="text-xs text-gray-400 mr-3">{inquiries.length}건</span>
+        <Link
+          href="/board/inquiries/new"
+          className="bg-[#156153] text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#0f4a3e] transition-colors"
+        >
+          + 새 문의 작성하기
+        </Link>
       </header>
 
       <div className="px-4 sm:px-6 py-6">
@@ -152,10 +158,10 @@ export default function CustomerInquiriesPage() {
         </div>
       </div>
 
-      {/* 새 문의 FAB */}
+      {/* 새 문의 FAB (모바일 전용) */}
       <Link
         href="/board/inquiries/new"
-        className="fixed bottom-6 right-6 w-14 h-14 bg-[#F97316] hover:bg-[#EA6C0A] text-white rounded-full flex items-center justify-center shadow-lg shadow-orange-200 transition-colors text-2xl font-light z-20"
+        className="sm:hidden fixed bottom-6 right-6 w-14 h-14 bg-[#F97316] hover:bg-[#EA6C0A] text-white rounded-full flex items-center justify-center shadow-lg shadow-orange-200 transition-colors text-2xl font-light z-20"
         aria-label="새 문의 작성"
       >
         +
