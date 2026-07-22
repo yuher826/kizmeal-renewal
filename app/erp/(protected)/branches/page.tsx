@@ -125,10 +125,20 @@ interface SummaryCardProps {
   label: string
   value: number
   color: string
+  isActive?: boolean
+  onClick?: () => void
 }
-function SummaryCard({ icon, label, value, color }: SummaryCardProps) {
+function SummaryCard({ icon, label, value, color, isActive, onClick }: SummaryCardProps) {
   return (
-    <div className="bg-white border border-slate-200 rounded-xl p-5 flex items-center gap-4">
+    <button
+      type="button"
+      onClick={onClick}
+      className={`bg-white border rounded-xl p-5 flex items-center gap-4 w-full text-left transition-all ${
+        isActive
+          ? 'border-emerald-400 ring-2 ring-emerald-300 brightness-95'
+          : 'border-slate-200 hover:brightness-95'
+      }`}
+    >
       <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${color}`}>
         {icon}
       </div>
@@ -136,7 +146,7 @@ function SummaryCard({ icon, label, value, color }: SummaryCardProps) {
         <p className="text-2xl font-bold text-slate-800">{value}</p>
         <p className="text-xs text-slate-500 mt-0.5">{label}</p>
       </div>
-    </div>
+    </button>
   )
 }
 
@@ -220,6 +230,7 @@ export default function BranchesPage() {
   const [dietTypeFilter, setDietTypeFilter] = useState('전체')
   const [fileFormatFilter, setFileFormatFilter] = useState('전체')
   const [contractFilter, setContractFilter] = useState('전체')
+  const [statFilter, setStatFilter] = useState<'ck' | 'catering' | 'deployedThisMonth' | 'incomplete' | null>(null)
 
   // 아코디언 / 페이지네이션
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set())
@@ -259,9 +270,16 @@ export default function BranchesPage() {
     setGroupPages(new Map())
   }, [searchQuery, rows])
 
+  // statFilter 변경 시 페이지 리셋
+  useEffect(() => { setGroupPages(new Map()) }, [statFilter])
+
   // 필터링된 데이터
   const filteredData = useMemo(() => {
     let list = rows
+    if (statFilter === 'ck') list = list.filter(r => r.diet_type === 'ck')
+    else if (statFilter === 'catering') list = list.filter(r => r.diet_type === 'consignment')
+    else if (statFilter === 'deployedThisMonth') list = list.filter(r => r.this_month_deployed)
+    else if (statFilter === 'incomplete') list = list.filter(r => !r.is_profile_complete && r.contract_status === 'active')
     if (dietTypeFilter !== '전체') {
       if (dietTypeFilter === 'CK') list = list.filter(r => r.diet_type === 'ck')
       else if (dietTypeFilter === '위탁') list = list.filter(r => r.diet_type === 'consignment')
@@ -282,7 +300,7 @@ export default function BranchesPage() {
       )
     }
     return list
-  }, [rows, dietTypeFilter, fileFormatFilter, contractFilter, searchQuery])
+  }, [rows, dietTypeFilter, fileFormatFilter, contractFilter, searchQuery, statFilter])
 
   // 요약 집계 (전체 rows 기준 고정)
   const total           = rows.length
@@ -329,11 +347,36 @@ export default function BranchesPage() {
     <div className="space-y-4">
       {/* 요약 카드 (전체 rows 기준 고정) */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-        <SummaryCard icon={<Building2 size={20} className="text-emerald-600" />} label="총 원수"             value={total}           color="bg-emerald-50" />
-        <SummaryCard icon={<Utensils   size={20} className="text-blue-600"    />} label="CK"                 value={ckCount}         color="bg-blue-50"    />
-        <SummaryCard icon={<Truck      size={20} className="text-orange-600"  />} label="위탁"               value={conCount}        color="bg-orange-50"  />
-        <SummaryCard icon={<CheckCircle size={20} className="text-green-600"  />} label="이번달 배포완료"    value={deployedCount}   color="bg-green-50"   />
-        <SummaryCard icon={<AlertTriangle size={20} className="text-amber-600"/>} label="미완료 (PPTX 미설정)" value={incompleteCount} color="bg-amber-50"   />
+        <SummaryCard
+          icon={<Building2 size={20} className="text-emerald-600" />}
+          label="총 원수" value={total} color="bg-emerald-50"
+          isActive={statFilter === null}
+          onClick={() => setStatFilter(null)}
+        />
+        <SummaryCard
+          icon={<Utensils size={20} className="text-blue-600" />}
+          label="CK" value={ckCount} color="bg-blue-50"
+          isActive={statFilter === 'ck'}
+          onClick={() => setStatFilter(prev => prev === 'ck' ? null : 'ck')}
+        />
+        <SummaryCard
+          icon={<Truck size={20} className="text-orange-600" />}
+          label="위탁" value={conCount} color="bg-orange-50"
+          isActive={statFilter === 'catering'}
+          onClick={() => setStatFilter(prev => prev === 'catering' ? null : 'catering')}
+        />
+        <SummaryCard
+          icon={<CheckCircle size={20} className="text-green-600" />}
+          label="이번달 배포완료" value={deployedCount} color="bg-green-50"
+          isActive={statFilter === 'deployedThisMonth'}
+          onClick={() => setStatFilter(prev => prev === 'deployedThisMonth' ? null : 'deployedThisMonth')}
+        />
+        <SummaryCard
+          icon={<AlertTriangle size={20} className="text-amber-600" />}
+          label="미완료 (PPTX 미설정)" value={incompleteCount} color="bg-amber-50"
+          isActive={statFilter === 'incomplete'}
+          onClick={() => setStatFilter(prev => prev === 'incomplete' ? null : 'incomplete')}
+        />
       </div>
 
       {/* 검색창 + 신규 등록 */}
