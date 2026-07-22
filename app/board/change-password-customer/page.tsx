@@ -49,7 +49,8 @@ export default function CustomerChangePasswordPage() {
       await fetch('/api/branches/complete-password-change', { method: 'POST' })
     } catch {}
 
-    window.location.href = '/board/login'
+    await supabase.auth.signOut()
+    window.location.replace('/board/login')
   }
 
   return (
