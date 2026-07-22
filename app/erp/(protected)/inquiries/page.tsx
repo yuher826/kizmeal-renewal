@@ -124,6 +124,7 @@ function CsManagementInner() {
   const [filterMonth, setFilterMonth] = useState('')
   const [unreadOnly, setUnreadOnly] = useState(false)
   const [page, setPage] = useState(1)
+  const [statFilter, setStatFilter] = useState<'pending' | 'today' | 'slaExceeded' | 'doneThisMonth' | null>(null)
 
   // 임시저장 초안이 있는 문의 ID 목록 (localStorage 기반)
   const [draftIds, setDraftIds] = useState<Set<string>>(new Set())
@@ -317,9 +318,25 @@ function CsManagementInner() {
 
   // ── 필터 적용 + 정렬 (그룹 sort_order → 미해결 컴플레인 우선 → 최신) ──
   const filtered: RowItem[] = useMemo(() => {
+    const now = new Date()
+    const todayStr = now.toDateString()
+    const thisMonth = now.getFullYear() * 100 + now.getMonth()
+    const inMonth = (iso?: string | null) => {
+      if (!iso) return false
+      const d = new Date(iso)
+      return d.getFullYear() * 100 + d.getMonth() === thisMonth
+    }
     const q = search.trim().toLowerCase()
     return rows
       .filter(r => {
+        // 통계 카드 필터
+        if (statFilter === 'pending' && r.inq.status !== 'pending') return false
+        if (statFilter === 'today' && new Date(r.inq.created_at).toDateString() !== todayStr) return false
+        if (statFilter === 'slaExceeded' && getSlaStatus(r.inq as unknown as Inquiry, slaRules[r.inq.category]) !== 'exceeded') return false
+        if (statFilter === 'doneThisMonth' && !(
+          (r.inq.status === 'resolved' || r.inq.status === 'closed') &&
+          (inMonth(r.inq.resolved_at) || inMonth(r.inq.closed_at))
+        )) return false
         // 월별 필터
         if (filterMonth) {
           const d = new Date(r.inq.created_at)
@@ -340,7 +357,7 @@ function CsManagementInner() {
         if (a.isUrgentComplaint !== b.isUrgentComplaint) return a.isUrgentComplaint ? -1 : 1
         return new Date(b.inq.created_at).getTime() - new Date(a.inq.created_at).getTime()
       })
-  }, [rows, search, filterStatus, unreadOnly, filterMonth])
+  }, [rows, search, filterStatus, unreadOnly, filterMonth, statFilter, slaRules])
 
   // ── 페이지네이션 (전체 목록 기준 20건씩) ─────────────────────
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
@@ -350,7 +367,7 @@ function CsManagementInner() {
   )
 
   // 필터 변경 시 1페이지로
-  useEffect(() => { setPage(1) }, [search, filterStatus, unreadOnly, filterMonth])
+  useEffect(() => { setPage(1) }, [search, filterStatus, unreadOnly, filterMonth, statFilter])
   // 페이지 범위 보정
   useEffect(() => { if (page > totalPages) setPage(totalPages) }, [page, totalPages])
 
@@ -450,16 +467,24 @@ function CsManagementInner() {
           {/* 통계 바 */}
           <div className="grid grid-cols-4 gap-2 p-3">
             {[
-              { label: '미처리',     value: stats.pending,      color: 'text-red-600',    bg: 'bg-red-50' },
-              { label: '오늘 신규',  value: stats.today,        color: 'text-blue-600',   bg: 'bg-blue-50' },
-              { label: 'SLA 초과',   value: stats.slaExceeded,  color: 'text-orange-600', bg: 'bg-orange-50' },
-              { label: '이번달 처리', value: stats.doneThisMonth, color: 'text-green-600',  bg: 'bg-green-50' },
-            ].map(c => (
-              <div key={c.label} className={`rounded-xl px-2.5 py-2 ${c.bg}`}>
-                <div className={`text-lg font-bold leading-none ${c.color}`}>{c.value}</div>
-                <div className="text-[10px] text-gray-500 mt-1 whitespace-nowrap">{c.label}</div>
-              </div>
-            ))}
+              { key: 'pending'       as const, label: '미처리',      value: stats.pending,       color: 'text-red-600',    bg: 'bg-red-50',    activeBg: 'bg-red-100',    ring: 'ring-red-400' },
+              { key: 'today'         as const, label: '오늘 신규',   value: stats.today,         color: 'text-blue-600',   bg: 'bg-blue-50',   activeBg: 'bg-blue-100',   ring: 'ring-blue-400' },
+              { key: 'slaExceeded'   as const, label: 'SLA 초과',    value: stats.slaExceeded,   color: 'text-orange-600', bg: 'bg-orange-50', activeBg: 'bg-orange-100', ring: 'ring-orange-400' },
+              { key: 'doneThisMonth' as const, label: '이번달 처리', value: stats.doneThisMonth, color: 'text-green-600',  bg: 'bg-green-50',  activeBg: 'bg-green-100',  ring: 'ring-green-400' },
+            ].map(c => {
+              const isActive = statFilter === c.key
+              return (
+                <button
+                  key={c.key}
+                  type="button"
+                  onClick={() => setStatFilter(prev => prev === c.key ? null : c.key)}
+                  className={`rounded-xl px-2.5 py-2 text-left w-full transition-all ${isActive ? `${c.activeBg} ring-2 ${c.ring}` : `${c.bg} hover:brightness-95`}`}
+                >
+                  <div className={`text-lg font-bold leading-none ${c.color}`}>{c.value}</div>
+                  <div className="text-[10px] text-gray-500 mt-1 whitespace-nowrap">{c.label}</div>
+                </button>
+              )
+            })}
           </div>
 
           {/* 검색 / 필터 */}
