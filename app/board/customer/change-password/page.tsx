@@ -49,7 +49,7 @@ export default function CustomerChangePasswordPage() {
       await fetch('/api/branches/complete-password-change', { method: 'POST' })
     } catch {}
 
-    window.location.href = '/board/dashboard'
+    window.location.href = '/board/login'
   }
 
   return (
