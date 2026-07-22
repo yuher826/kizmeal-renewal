@@ -132,6 +132,8 @@ export default function AdminBranchesPage() {
   const [filterBrand, setFilterBrand] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
   const [filterType, setFilterType] = useState('')
+  const [statFilter, setStatFilter] = useState<'ck' | 'catering' | 'deployedThisMonth' | 'incomplete' | null>(null)
+  const [deployedThisMonthIds, setDeployedThisMonthIds] = useState<Set<string>>(new Set())
 
   // 슬라이드 패널
   const [selectedBranch, setSelectedBranch] = useState<ExtendedBranch | null>(null)
@@ -168,7 +170,11 @@ export default function AdminBranchesPage() {
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
 
-    const [branchRes, brandRes, adminRes, selfRes, inqRes] = await Promise.all([
+    const now = new Date()
+    const thisYear = now.getFullYear()
+    const thisMonth = now.getMonth() + 1
+
+    const [branchRes, brandRes, adminRes, selfRes, inqRes, deployedRes] = await Promise.all([
       supabase.from('branches').select('*, brands(*), branch_profiles!branch_profiles_branch_id_fkey(*)').order('name', { ascending: true }),
       supabase.from('brands').select('*').order('name'),
       supabase.from('admins').select('*').eq('is_active', true).order('name'),
@@ -176,6 +182,7 @@ export default function AdminBranchesPage() {
         ? supabase.from('admins').select('*').eq('auth_id', user.id).maybeSingle()
         : Promise.resolve({ data: null }),
       supabase.from('inquiries').select('branch_id, status, created_at'),
+      supabase.from('weekly_menus').select('branch_id').eq('status', 'deployed').eq('year', thisYear).eq('month', thisMonth),
     ])
 
     if (selfRes.data) setCurrentAdmin(selfRes.data as Admin)
@@ -191,6 +198,21 @@ export default function AdminBranchesPage() {
         return { ...b, inquiry_count: bi.length, pending_count: pending, last_inquiry_at: last?.created_at } as ExtendedBranch
       })
       setBranches(enriched)
+
+      // weekly_menus.branch_id = branch_profiles.id → branches.id 역매핑
+      if (deployedRes.data) {
+        const profileIdToBranchId: Record<string, string> = {}
+        for (const b of branchRes.data) {
+          const bp = Array.isArray(b.branch_profiles) ? b.branch_profiles[0] : b.branch_profiles
+          if (bp?.id) profileIdToBranchId[bp.id] = b.id
+        }
+        const ids = new Set<string>()
+        for (const d of deployedRes.data) {
+          const branchId = profileIdToBranchId[d.branch_id]
+          if (branchId) ids.add(branchId)
+        }
+        setDeployedThisMonthIds(ids)
+      }
     }
     setLoading(false)
   }, [])
@@ -199,6 +221,12 @@ export default function AdminBranchesPage() {
 
   // ── 필터링 ───────────────────────────────────────────────────
   const filtered = branches.filter(b => {
+    // 통계 카드 필터
+    if (statFilter === 'ck' && b.branch_profiles?.diet_plan_type === 'CONSIGNMENT') return false
+    if (statFilter === 'catering' && b.branch_profiles?.diet_plan_type !== 'CONSIGNMENT') return false
+    if (statFilter === 'deployedThisMonth' && !deployedThisMonthIds.has(b.id)) return false
+    if (statFilter === 'incomplete' && b.branch_profiles?.file_format) return false
+    // 기존 필터
     if (filterBrand && b.brand_id !== filterBrand) return false
     if (filterStatus && b.status !== filterStatus) return false
     if (filterType && b.branch_type !== filterType) return false
@@ -217,6 +245,14 @@ export default function AdminBranchesPage() {
     const d = daysUntil(b.contract_end)
     return d !== null && d >= 0 && d <= 30
   })
+
+  const branchStats = {
+    total: branches.length,
+    ck: branches.filter(b => b.branch_profiles?.diet_plan_type !== 'CONSIGNMENT').length,
+    catering: branches.filter(b => b.branch_profiles?.diet_plan_type === 'CONSIGNMENT').length,
+    deployedThisMonth: branches.filter(b => deployedThisMonthIds.has(b.id)).length,
+    incomplete: branches.filter(b => !b.branch_profiles?.file_format).length,
+  }
 
   // ── 새 지점 생성 ─────────────────────────────────────────────
   async function handleCreateBranch() {
@@ -464,6 +500,32 @@ export default function AdminBranchesPage() {
         {activeTab === 'branches' && (
           <div className="flex gap-4">
             <div className="flex-1 min-w-0 space-y-4">
+              {/* 통계 카드 */}
+              <div className="grid grid-cols-5 gap-2">
+                {[
+                  { key: null              as null,                 label: '총 원수',      value: branchStats.total,             color: 'text-gray-700',   bg: 'bg-gray-50',    activeBg: 'bg-gray-200',   ring: 'ring-gray-400' },
+                  { key: 'ck'              as const,                label: 'CK',           value: branchStats.ck,                color: 'text-blue-600',   bg: 'bg-blue-50',    activeBg: 'bg-blue-100',   ring: 'ring-blue-400' },
+                  { key: 'catering'        as const,                label: '위탁',          value: branchStats.catering,          color: 'text-purple-600', bg: 'bg-purple-50',  activeBg: 'bg-purple-100', ring: 'ring-purple-400' },
+                  { key: 'deployedThisMonth' as const,              label: '이번달 배포완료', value: branchStats.deployedThisMonth, color: 'text-green-600',  bg: 'bg-green-50',   activeBg: 'bg-green-100',  ring: 'ring-green-400' },
+                  { key: 'incomplete'      as const,                label: 'PPTX 미설정',  value: branchStats.incomplete,        color: 'text-red-600',    bg: 'bg-red-50',     activeBg: 'bg-red-100',    ring: 'ring-red-400' },
+                ].map(c => {
+                  const isActive = c.key === null ? statFilter === null : statFilter === c.key
+                  return (
+                    <button
+                      key={c.label}
+                      type="button"
+                      onClick={() => {
+                        if (c.key === null) { setStatFilter(null); return }
+                        setStatFilter(prev => prev === c.key ? null : c.key)
+                      }}
+                      className={`rounded-xl px-2.5 py-2 text-left w-full transition-all ${isActive ? `${c.activeBg} ring-2 ${c.ring}` : `${c.bg} hover:brightness-95`}`}
+                    >
+                      <div className={`text-lg font-bold leading-none ${c.color}`}>{c.value}</div>
+                      <div className="text-[10px] text-gray-500 mt-1 whitespace-nowrap">{c.label}</div>
+                    </button>
+                  )
+                })}
+              </div>
               {/* 계약만료 배너 */}
               {urgentBranches.length > 0 && (
                 <div className="bg-orange-50 border border-orange-200 rounded-2xl px-4 py-3 flex items-start gap-3">
