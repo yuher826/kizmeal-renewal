@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
+import { KIZMEAL_LOGO_PATH } from '@/lib/brand'
 
 const SAVE_EMAIL_KEY = 'board_saved_email'
 
@@ -106,9 +107,8 @@ export default function BoardLoginPage() {
         style={{ background: 'linear-gradient(135deg, #1B4332 0%, #2D6A4F 100%)' }}
       >
         <div>
-          <div className="w-14 h-14 rounded-2xl bg-white/15 flex items-center justify-center text-white font-bold text-2xl font-serif mb-10">
-            K
-          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={KIZMEAL_LOGO_PATH} alt="키즈밀 로고" className="h-10 w-auto object-contain mb-10" />
           <h1 className="text-[28px] font-bold text-white leading-tight mb-2">
             키즈밀 포털
           </h1>
@@ -141,12 +141,8 @@ export default function BoardLoginPage() {
         <div className="w-full max-w-sm">
           {/* 모바일 전용 로고 */}
           <div className="lg:hidden flex justify-center mb-10">
-            <div
-              className="w-16 h-16 rounded-2xl flex items-center justify-center text-white font-bold text-2xl font-serif"
-              style={{ background: 'linear-gradient(135deg, #1B4332, #2D6A4F)' }}
-            >
-              K
-            </div>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={KIZMEAL_LOGO_PATH} alt="키즈밀 로고" className="h-12 w-auto object-contain" />
           </div>
 
           <h2 className="text-2xl font-bold text-[#1C2B1E] mb-1">안녕하세요 👋</h2>

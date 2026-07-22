@@ -55,7 +55,7 @@ export default function CustomerChangePasswordPage() {
 
   return (
     <div className="min-h-screen bg-[#F6FAF6] flex items-center justify-center px-4">
-      <div className="w-full max-w-sm">
+      <div className="w-full">
         <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-8">
           <div className="text-center mb-8">
             {/* eslint-disable-next-line @next/next/no-img-element */}
