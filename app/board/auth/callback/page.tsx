@@ -18,7 +18,7 @@ export default function AuthCallbackPage() {
       const refresh_token = hashParams.get('refresh_token') || ''
       if (access_token) {
         supabase.auth.setSession({ access_token, refresh_token }).then(({ error }) => {
-          if (!error) router.push('/board/customer/change-password')
+          if (!error) router.push('/board/change-password-customer')
           else router.push('/board/login?error=invite_failed')
         })
         return
@@ -29,7 +29,7 @@ export default function AuthCallbackPage() {
     const code = new URLSearchParams(window.location.search).get('code')
     if (code) {
       supabase.auth.exchangeCodeForSession(code).then(({ error }) => {
-        if (!error) router.push('/board/customer/change-password')
+        if (!error) router.push('/board/change-password-customer')
         else router.push('/board/login?error=invite_failed')
       })
       return
@@ -37,14 +37,14 @@ export default function AuthCallbackPage() {
 
     // STEP 2. 기존 세션 체크
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) router.push('/board/customer/change-password')
+      if (session) router.push('/board/change-password-customer')
     })
 
     // STEP 3. hash 방식 이벤트 감지
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
         if ((event === 'SIGNED_IN' || event === 'PASSWORD_RECOVERY') && session) {
-          router.push('/board/customer/change-password')
+          router.push('/board/change-password-customer')
         }
       }
     )
