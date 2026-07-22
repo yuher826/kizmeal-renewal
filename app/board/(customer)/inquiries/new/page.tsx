@@ -32,6 +32,7 @@ const CAT_CONFIG: Record<string, CatConfig> = {
   MENU: {
     showDate: true, dateLabel: '해당 날짜',
     showContent: true, contentLabel: '구체적 요청사항',
+    showFile: true, fileHint: '관련 사진이나 파일을 첨부하면 더 빠르게 처리됩니다',
   },
   STAFF_MEAL: {
     showDate: true, dateLabel: '해당 날짜',
@@ -51,9 +52,11 @@ const CAT_CONFIG: Record<string, CatConfig> = {
   },
   CONTRACT: {
     showContent: true, contentLabel: '문의 내용',
+    showFile: true, fileHint: '계약 관련 서류를 첨부해 주세요',
   },
   OTHER: {
     showContent: true, contentLabel: '문의 내용',
+    showFile: true, fileHint: '관련 사진이나 파일을 첨부하면 더 빠르게 처리됩니다',
   },
 }
 
@@ -252,7 +255,7 @@ export default function NewInquiryPage() {
         <h1 className="font-bold text-[#1C2B1E]">새 문의 작성</h1>
       </header>
 
-      <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6">
+      <div className="px-4 sm:px-6 py-6">
         <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-gray-100 p-6 space-y-5">
           {/* 지점명 (read-only) */}
           {branchName && (
