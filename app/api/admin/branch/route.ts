@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { createClient as createServerClient } from '@/lib/supabase-server'
 import { sendBranchAccountEmail, sendBranchPasswordResetEmail } from '@/lib/email'
 
 function getAdminClient() {
@@ -15,6 +16,23 @@ function getAdminClient() {
 
 export async function POST(request: Request) {
   try {
+    // ── 인증 검사: 로그인 세션 + admins 등록 여부 확인 ─────────
+    const authClient = createServerClient()
+    const { data: { user } } = await authClient.auth.getUser()
+    if (!user) {
+      return NextResponse.json({ error: '인증이 필요합니다' }, { status: 401 })
+    }
+
+    const { data: requesterAdmin } = await authClient
+      .from('admins')
+      .select('id')
+      .eq('auth_id', user.id)
+      .maybeSingle()
+
+    if (!requesterAdmin) {
+      return NextResponse.json({ error: '접근 권한이 없습니다' }, { status: 403 })
+    }
+
     const body = await request.json()
     const { action } = body
     const adminClient = getAdminClient()
