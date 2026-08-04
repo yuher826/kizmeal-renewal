@@ -27,10 +27,15 @@ export default function ErpLoginForm({ next, message }: Props) {
         const uid = data.session.user.id
         const { data: adminRow } = await supabase
           .from('admins')
-          .select('id')
+          .select('id, access_scope')
           .eq('auth_id', uid)
           .maybeSingle()
         if (adminRow) {
+          // 홈페이지관리 전용 계정 → 홈페이지관리로 이동
+          if (adminRow.access_scope === 'board_only') {
+            router.push('/board/admin')
+            return
+          }
           router.push(next || '/erp/diet')
           return
         }
@@ -62,7 +67,7 @@ export default function ErpLoginForm({ next, message }: Props) {
 
     const { data: adminData } = await supabase
       .from('admins')
-      .select('id')
+      .select('id, access_scope')
       .eq('auth_id', user.id)
       .maybeSingle()
 
@@ -70,6 +75,12 @@ export default function ErpLoginForm({ next, message }: Props) {
       await supabase.auth.signOut()
       setError('ERP 접근 권한이 없는 계정입니다')
       setLoading(false)
+      return
+    }
+
+    // 홈페이지관리 전용 계정 → 세션 유지한 채 홈페이지관리로 이동
+    if (adminData.access_scope === 'board_only') {
+      router.push('/board/admin')
       return
     }
 

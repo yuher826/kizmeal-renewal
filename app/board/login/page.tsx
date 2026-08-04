@@ -25,8 +25,9 @@ export default function BoardLoginPage() {
     supabase.auth.getSession().then(async ({ data }) => {
       if (!data.session) return
       const uid = data.session.user.id
-      const { data: adminRow } = await supabase.from('admins').select('id').eq('auth_id', uid).maybeSingle()
-      if (adminRow) { router.replace('/board/admin'); return }
+      const { data: adminRow } = await supabase.from('admins').select('id, access_scope').eq('auth_id', uid).maybeSingle()
+      // ERP 전용 계정은 ERP로, 그 외는 홈페이지관리로
+      if (adminRow) { router.replace(adminRow.access_scope === 'erp_only' ? '/erp/diet' : '/board/admin'); return }
       const { data: branchRow } = await supabase.from('branches').select('id').eq('auth_id', uid).maybeSingle()
       if (branchRow) { router.replace('/board/dashboard'); return }
       const { data: memberRow } = await supabase.from('branch_members').select('id, role').eq('auth_id', uid).maybeSingle()
@@ -75,8 +76,9 @@ export default function BoardLoginPage() {
         return
       }
 
-      const { data: adminData } = await supabase.from('admins').select('id').eq('auth_id', data.user.id).maybeSingle()
-      if (adminData) { router.push('/board/admin'); router.refresh(); return }
+      const { data: adminData } = await supabase.from('admins').select('id, access_scope').eq('auth_id', data.user.id).maybeSingle()
+      // ERP 전용 계정은 ERP로, 그 외는 홈페이지관리로
+      if (adminData) { router.push(adminData.access_scope === 'erp_only' ? '/erp/diet' : '/board/admin'); router.refresh(); return }
 
       const { data: branchData } = await supabase.from('branches').select('id').eq('auth_id', data.user.id).maybeSingle()
       if (branchData) {

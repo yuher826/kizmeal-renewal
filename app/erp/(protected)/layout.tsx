@@ -13,11 +13,17 @@ export default async function ErpProtectedLayout({ children }: { children: React
 
   const { data: adminData } = await supabase
     .from('admins')
-    .select('id, name, email, role')
+    .select('id, name, email, role, access_scope, is_active')
     .eq('auth_id', user.id)
     .maybeSingle()
 
   if (!adminData) redirect('/erp/login')
+
+  // 비활성 계정 차단
+  if (adminData.is_active === false) redirect('/erp/login')
+
+  // 홈페이지관리 전용 계정은 ERP 접근 불가 → 홈페이지관리로 이동
+  if (adminData.access_scope === 'board_only') redirect('/board/admin')
 
   const erpUser: ErpUser = {
     id: adminData.id,
