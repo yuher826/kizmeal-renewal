@@ -27,7 +27,7 @@ export async function GET() {
       .from('branch_profiles')
       .select(
         'id, branch_id, short_code, display_name, branch_full_name, ' +
-        'group_tag, contract_status, diet_type, file_format, ' +
+        'group_tag, contract_status, contract_type, diet_type, file_format, ' +
         'slide_count, distribution_emails, review_required, ' +
         'contract_start_date, contract_renew_date, updated_at, sort_order'
       )
@@ -61,6 +61,7 @@ export async function GET() {
       branch_full_name:    p.branch_full_name,
       group_tag:           p.group_tag,
       contract_status:     p.contract_status,
+      contract_type:       p.contract_type,
       diet_type:           p.diet_type,
       file_format:         p.file_format,
       slide_count:         p.slide_count,
@@ -107,6 +108,10 @@ export async function POST(request: Request) {
       display_name:        body.display_name ?? null,
       branch_full_name:    body.branch_full_name ?? null,
       group_tag:           body.group_tag ?? null,
+      brand_id:            body.brand_id ?? null,
+      owner_name:          body.owner_name ?? null,
+      kos_id:              body.kos_id ?? null,
+      contract_type:       body.contract_type ?? null,
       diet_type:           body.diet_type ?? null,
       contract_status:     body.contract_status ?? 'active',
       contract_start_date: body.contract_start_date ?? null,

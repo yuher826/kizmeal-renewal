@@ -91,15 +91,16 @@ const STATUS_BADGE: Record<string, { cls: string; label: string }> = {
 
 function BranchAccountSection({
   profileId,
+  profile,
   showToast,
 }: {
   profileId: string
+  profile: BranchProfileDetail
   showToast: (msg: string, type: 'success' | 'error') => void
 }) {
   const [info, setInfo] = useState<BranchAccountInfo | null>(null)
   const [loading, setLoading] = useState(true)
   const [inviteEmail, setInviteEmail] = useState('')
-  const [inviteKosId, setInviteKosId] = useState('')
   const [isInviting, setIsInviting] = useState(false)
   const [emailEditMode, setEmailEditMode] = useState(false)
   const [pendingNewEmail, setPendingNewEmail] = useState('')
@@ -117,23 +118,33 @@ function BranchAccountSection({
 
   useEffect(() => { fetchAccount() }, [profileId]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // 기본정보(브랜드/대표자명/원코드/원 전체명) 미입력 시 초대 자체를 차단 (서버 검증과 이중)
+  const missingBasicInfo: string[] = []
+  if (!profile.brand_id) missingBasicInfo.push('브랜드')
+  if (!profile.owner_name?.trim()) missingBasicInfo.push('대표자명')
+  if (!profile.kos_id?.trim()) missingBasicInfo.push('원코드')
+  if (!profile.branch_full_name?.trim()) missingBasicInfo.push('원 전체명')
+
   async function handleInvite() {
-    if (!inviteEmail.trim()) return
+    if (!inviteEmail.trim() || missingBasicInfo.length > 0) return
     setIsInviting(true)
     try {
       const res = await fetch(`/api/branch-profiles/${profileId}/account`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: inviteEmail.trim(), kos_id: inviteKosId.trim() || undefined }),
+        body: JSON.stringify({ email: inviteEmail.trim() }),
       })
       if (!res.ok) {
         const err = await res.json()
         showToast(err.error ?? '초대 발송에 실패했습니다', 'error')
         return
       }
-      showToast('초대 이메일이 발송됐습니다', 'success')
+      const data = await res.json()
+      showToast(
+        data.mode === 'relinked' ? '기존 계정을 재연결하고 비밀번호 재설정 메일을 발송했습니다' : '초대 이메일이 발송됐습니다',
+        'success'
+      )
       setInviteEmail('')
-      setInviteKosId('')
       fetchAccount()
     } catch {
       showToast('서버 오류가 발생했습니다', 'error')
@@ -248,30 +259,31 @@ function BranchAccountSection({
         /* ── 계정 없음 ── */
         <div className="bg-slate-50 rounded-lg p-4">
           <p className="text-sm text-slate-400 text-center mb-3">등록된 포털 계정이 없습니다</p>
-          <input
-            type="email"
-            value={inviteEmail}
-            onChange={e => setInviteEmail(e.target.value)}
-            className="w-full border border-slate-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
-            placeholder="이메일 (KOS 아이디와 동일 권장)"
-          />
-          <input
-            type="text"
-            value={inviteKosId}
-            onChange={e => setInviteKosId(e.target.value)}
-            className="w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm text-slate-400 mt-2 focus:outline-none focus:border-emerald-500"
-            placeholder="KOS ID (선택 — 향후 자동 연동용)"
-          />
-          <p className="text-xs text-slate-400 mt-1">
-            💡 KOS 마스터 아이디와 동일한 이메일 사용을 권장합니다
-          </p>
-          <button
-            onClick={handleInvite}
-            disabled={isInviting || !inviteEmail.trim()}
-            className="mt-3 w-full bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-4 py-2.5 text-sm font-medium transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
-          >
-            {isInviting ? <><Loader2 size={15} className="animate-spin" />발송 중...</> : '초대 이메일 발송'}
-          </button>
+          {missingBasicInfo.length > 0 ? (
+            <div className="bg-amber-50 border border-amber-200 text-amber-700 text-xs rounded-lg px-3 py-2.5">
+              ⚠️ 기본정보를 먼저 입력하세요 (누락: {missingBasicInfo.join(', ')})
+            </div>
+          ) : (
+            <>
+              <input
+                type="email"
+                value={inviteEmail}
+                onChange={e => setInviteEmail(e.target.value)}
+                className="w-full border border-slate-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                placeholder="이메일 (KOS 아이디와 동일 권장)"
+              />
+              <p className="text-xs text-slate-400 mt-1">
+                💡 원코드({profile.kos_id})는 기본정보에서 자동으로 사용됩니다
+              </p>
+              <button
+                onClick={handleInvite}
+                disabled={isInviting || !inviteEmail.trim()}
+                className="mt-3 w-full bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-4 py-2.5 text-sm font-medium transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
+              >
+                {isInviting ? <><Loader2 size={15} className="animate-spin" />발송 중...</> : '초대 이메일 발송'}
+              </button>
+            </>
+          )}
         </div>
       ) : (
         /* ── 계정 있음 ── */
@@ -585,7 +597,7 @@ export default function BranchProfileDetailClient({ id, isSuperAdmin }: Props) {
         </div>
 
         {/* 담당자 계정 */}
-        <BranchAccountSection profileId={id} showToast={showToast} />
+        <BranchAccountSection profileId={id} profile={profile} showToast={showToast} />
       </div>
     </main>
   )

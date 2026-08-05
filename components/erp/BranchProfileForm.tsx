@@ -2,10 +2,12 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { createClient } from '@/lib/supabase'
 import {
   Building2, FileText, Coffee, Mail, Settings2, FileEdit, Loader2,
 } from 'lucide-react'
 import type { BranchProfileDetail } from '@/types/branch-profile'
+import type { Brand } from '@/lib/types'
 
 // ── 공유 타입 ────────────────────────────────────────────────────────
 interface FormState {
@@ -13,6 +15,10 @@ interface FormState {
   display_name: string
   short_code: string
   group_tag: string
+  brand_id: string
+  owner_name: string
+  kos_id: string
+  contract_type: string
   diet_type: string
   contract_status: string
   contract_start_date: string
@@ -149,6 +155,10 @@ function buildInitial(d?: BranchProfileDetail): FormState {
     display_name:        d?.display_name        ?? '',
     short_code:          d?.short_code          ?? '',
     group_tag:           d?.group_tag           ?? '',
+    brand_id:            d?.brand_id            ?? '',
+    owner_name:          d?.owner_name          ?? '',
+    kos_id:              d?.kos_id              ?? '',
+    contract_type:       d?.contract_type       ?? '',
     diet_type:           d?.diet_type           ?? '',
     contract_status:     d?.contract_status     ?? 'active',
     contract_start_date: d?.contract_start_date ?? '',
@@ -196,10 +206,18 @@ export default function BranchProfileForm({
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({})
   const [emailInput, setEmailInput] = useState('')
   const [emailError, setEmailError] = useState('')
+  const [brands, setBrands] = useState<Brand[]>([])
 
   useEffect(() => {
     setForm(buildInitial(initialData))
   }, [initialData?.id])
+
+  // 브랜드 목록 로드 (계열 선택용)
+  useEffect(() => {
+    createClient().from('brands').select('*').order('name').then(({ data }) => {
+      if (data) setBrands(data as Brand[])
+    })
+  }, [])
 
   function set<K extends keyof FormState>(k: K, v: FormState[K]) {
     setForm(prev => ({ ...prev, [k]: v }))
@@ -258,10 +276,15 @@ export default function BranchProfileForm({
       newErrors.branch_full_name = '원 전체명은 필수입니다'
     if (!form.short_code.trim())
       newErrors.short_code = '약칭은 필수입니다 (PPTX 파일명에 사용)'
-    if (!form.file_format)
-      newErrors.file_format = '파일형식을 선택해주세요 (PPTX 생성 필수)'
-    if (form.distribution_emails.length === 0)
-      newErrors.distribution_emails = '배포 이메일을 1개 이상 입력해주세요 (PPTX 생성 필수)'
+    if (!form.contract_type)
+      newErrors.contract_type = '계약유형을 선택해주세요'
+    // 임시(temporary) 계약은 기본정보만 다루므로 PPTX 필수 항목 검증을 건너뜀
+    if (form.contract_type !== 'temporary') {
+      if (!form.file_format)
+        newErrors.file_format = '파일형식을 선택해주세요 (PPTX 생성 필수)'
+      if (form.distribution_emails.length === 0)
+        newErrors.distribution_emails = '배포 이메일을 1개 이상 입력해주세요 (PPTX 생성 필수)'
+    }
     setErrors(newErrors)
     if (Object.keys(newErrors).length > 0) {
       const firstKey = Object.keys(newErrors)[0]
@@ -352,6 +375,67 @@ export default function BranchProfileForm({
               ))}
             </select>
           </div>
+          {/* 계약유형 (필수, 기본값 없음 — 임시 선택 시 PPTX 설정 숨김) */}
+          <div id="field-contract_type">
+            <FieldLabel required htmlFor="contract_type">계약유형</FieldLabel>
+            <select
+              id="contract_type"
+              value={form.contract_type}
+              onChange={e => set('contract_type', e.target.value)}
+              className={selectCls(!!errors.contract_type)}
+            >
+              <option value="" disabled>선택하세요</option>
+              <option value="permanent">장기</option>
+              <option value="temporary">임시</option>
+            </select>
+            {errors.contract_type && (
+              <p className="text-red-500 text-xs mt-1">{errors.contract_type}</p>
+            )}
+            {!isNew && initialData?.contract_type === 'temporary' && form.contract_type === 'permanent' && (
+              <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs rounded-lg px-3 py-2 mt-2">
+                ✅ 장기 계약으로 전환되면 식단 자동화 파이프라인에 정식 편입됩니다. 아래 &apos;식단 파일 설정&apos;을 입력해주세요.
+              </div>
+            )}
+          </div>
+          {/* 브랜드 (계열) */}
+          <div>
+            <FieldLabel htmlFor="brand_id">브랜드</FieldLabel>
+            <select
+              id="brand_id"
+              value={form.brand_id}
+              onChange={e => set('brand_id', e.target.value)}
+              className={selectCls()}
+            >
+              <option value="">선택 안함</option>
+              {brands.map(b => (
+                <option key={b.id} value={b.id}>{b.name}</option>
+              ))}
+            </select>
+          </div>
+          {/* 대표자명 */}
+          <div>
+            <FieldLabel htmlFor="owner_name">대표자명</FieldLabel>
+            <input
+              id="owner_name"
+              type="text"
+              value={form.owner_name}
+              onChange={e => set('owner_name', e.target.value)}
+              className={inputCls()}
+              placeholder="대표자 성함"
+            />
+          </div>
+          {/* 원코드 (KOS ID) */}
+          <div>
+            <FieldLabel htmlFor="kos_id">원코드</FieldLabel>
+            <input
+              id="kos_id"
+              type="text"
+              value={form.kos_id}
+              onChange={e => set('kos_id', e.target.value)}
+              className={inputCls()}
+              placeholder="예: KZM-001"
+            />
+          </div>
           {/* 식단 타입 */}
           <div>
             <FieldLabel htmlFor="diet_type">식단 타입</FieldLabel>
@@ -404,7 +488,8 @@ export default function BranchProfileForm({
         </div>
       </div>
 
-      {/* ── 섹션 2: 식단 파일 설정 ───────────────────────────── */}
+      {/* ── 섹션 2: 식단 파일 설정 (임시 계약은 기본정보만 다루므로 숨김) ── */}
+      {form.contract_type !== 'temporary' && (
       <div className="bg-white border border-slate-200 rounded-xl p-6 mb-4">
         <SectionHeader icon={<FileText size={18} />} title="식단 파일 설정" />
         <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-2.5 mb-5 text-xs text-blue-700">
@@ -527,6 +612,7 @@ export default function BranchProfileForm({
           </div>
         )}
       </div>
+      )}
 
       {/* ── 섹션 3: 간식/특식 설정 ──────────────────────────── */}
       <div className="bg-white border border-slate-200 rounded-xl p-6 mb-4">

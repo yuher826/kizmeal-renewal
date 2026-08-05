@@ -6,6 +6,7 @@ export interface BranchProfileRow {
   branch_full_name: string | null
   group_tag: string | null
   contract_status: string | null
+  contract_type: string | null
   diet_type: string | null
   file_format: string | null
   slide_count: number | null
@@ -30,6 +31,9 @@ export interface RecentMenu {
 
 export interface BranchProfileDetail extends BranchProfileRow {
   diet_plan_type: string | null
+  brand_id: string | null
+  owner_name: string | null
+  kos_id: string | null
   snack_morning: boolean | null
   snack_afternoon: boolean | null
   snack_afterschool: boolean | null

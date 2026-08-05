@@ -84,6 +84,21 @@ function ContractBadge({ status }: { status: string | null }) {
   )
 }
 
+function ContractTypeBadge({ type }: { type: string | null }) {
+  if (type === 'temporary') {
+    return (
+      <span className="inline-flex items-center text-xs font-medium bg-amber-100 text-amber-700 rounded px-2 py-0.5">
+        임시
+      </span>
+    )
+  }
+  return (
+    <span className="inline-flex items-center text-xs font-medium bg-slate-100 text-slate-600 rounded px-2 py-0.5">
+      장기
+    </span>
+  )
+}
+
 function DietBadge({ type }: { type: string | null }) {
   if (type === 'ck') {
     return (
@@ -110,7 +125,7 @@ function DietBadge({ type }: { type: string | null }) {
 function SkeletonRow() {
   return (
     <tr>
-      {[32, 120, 56, 72, 56, 72, 40, 40, 32, 32].map((w, i) => (
+      {[32, 120, 56, 72, 56, 56, 72, 40, 40, 32, 32].map((w, i) => (
         <td key={i} className="px-4 py-3">
           <div className="animate-pulse bg-slate-100 rounded h-4" style={{ width: w }} />
         </td>
@@ -562,7 +577,7 @@ export default function BranchesPage() {
                       <table className="w-full">
                         <thead>
                           <tr className="bg-slate-50 border-b border-slate-200">
-                            {['#', '원명', '그룹', '계약상태', '식단타입', '파일형식', '슬라이드', '이메일수', '이번달', '설정'].map(h => (
+                            {['#', '원명', '그룹', '계약상태', '계약유형', '식단타입', '파일형식', '슬라이드', '이메일수', '이번달', '설정'].map(h => (
                               <th
                                 key={h}
                                 className={`px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wider whitespace-nowrap ${
@@ -577,7 +592,7 @@ export default function BranchesPage() {
                         <tbody>
                           {displayed.length === 0 ? (
                             <tr>
-                              <td colSpan={10} className="text-center py-8 text-slate-400 text-sm">
+                              <td colSpan={11} className="text-center py-8 text-slate-400 text-sm">
                                 검색 결과가 없습니다
                               </td>
                             </tr>
@@ -605,6 +620,9 @@ export default function BranchesPage() {
                                 </td>
                                 <td className="px-4 py-3">
                                   <ContractBadge status={row.contract_status} />
+                                </td>
+                                <td className="px-4 py-3">
+                                  <ContractTypeBadge type={row.contract_type} />
                                 </td>
                                 <td className="px-4 py-3">
                                   <DietBadge type={row.diet_type} />
