@@ -14,7 +14,8 @@ export type ErpRole =
   | 'super_admin'
   | 'manager'
   | 'director'
-  | 'nutritionist'
+  | 'nutritionist_ck'
+  | 'nutritionist_consignment'
   | 'admin'
 
 export interface ErpUser {

@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { KIZMEAL_LOGO_PATH } from '@/lib/brand'
 import { createClient } from '@/lib/supabase'
 import type { Branch, Brand, Admin, BranchStatus } from '@/lib/types'
+import { isNutritionist, ROLE_LABEL } from '@/lib/roles'
 
 // ── 확장 타입 ──────────────────────────────────────────────────
 interface ExtendedBranch extends Branch {
@@ -153,7 +154,8 @@ export default function AdminBranchesPage() {
 
   // 새 관리자 모달
   const [showNewAdmin, setShowNewAdmin] = useState(false)
-  const [adminForm, setAdminForm] = useState({ name: '', email: '', role: 'general', temp_password: generateTempPassword() })
+  // role은 반드시 명시적으로 선택해야 함 (기본값 없음)
+  const [adminForm, setAdminForm] = useState({ name: '', email: '', role: '', temp_password: generateTempPassword() })
   const [creatingAdmin, setCreatingAdmin] = useState(false)
   const [adminMsg, setAdminMsg] = useState('')
 
@@ -918,7 +920,7 @@ export default function AdminBranchesPage() {
             <div className="flex justify-between items-center">
               <h2 className="font-bold text-[#1C2B1E]">관리자 계정</h2>
               <button
-                onClick={() => { setShowNewAdmin(true); setAdminMsg(''); setAdminForm({ name: '', email: '', role: 'general', temp_password: generateTempPassword() }) }}
+                onClick={() => { setShowNewAdmin(true); setAdminMsg(''); setAdminForm({ name: '', email: '', role: '', temp_password: generateTempPassword() }) }}
                 className="px-4 py-2 bg-[#2D6A4F] hover:bg-[#1B4332] text-white text-sm font-semibold rounded-xl transition-colors"
               >
                 + 새 관리자
@@ -945,8 +947,8 @@ export default function AdminBranchesPage() {
                         <td className="px-5 py-4 text-sm font-semibold text-[#1C2B1E]">{a.name}</td>
                         <td className="px-5 py-4 text-sm text-gray-500">{a.email}</td>
                         <td className="px-5 py-4">
-                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${a.role === 'super' ? 'bg-purple-100 text-purple-700' : a.role === 'nutritionist' ? 'bg-teal-100 text-teal-700' : 'bg-blue-100 text-blue-700'}`}>
-                            {a.role === 'super' ? 'Super' : a.role === 'nutritionist' ? '영양사' : '일반'}
+                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${a.role === 'super_admin' ? 'bg-purple-100 text-purple-700' : isNutritionist(a.role) ? 'bg-teal-100 text-teal-700' : 'bg-blue-100 text-blue-700'}`}>
+                            {ROLE_LABEL[a.role] ?? '일반'}
                           </span>
                         </td>
                         <td className="px-5 py-4">
@@ -1254,9 +1256,12 @@ export default function AdminBranchesPage() {
               <label className="block text-xs font-semibold text-gray-600 mb-1.5">역할</label>
               <select value={adminForm.role} onChange={e => setAdminForm(f => ({ ...f, role: e.target.value }))}
                 className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#2D6A4F]">
-                <option value="general">일반 관리자</option>
-                <option value="super">Super 관리자</option>
-                <option value="nutritionist">영양사</option>
+                <option value="" disabled>역할을 선택하세요</option>
+                <option value="manager">매니저</option>
+                <option value="super_admin">슈퍼관리자</option>
+                <option value="director">이사</option>
+                <option value="nutritionist_ck">영양사 (직영)</option>
+                <option value="nutritionist_consignment">영양사 (위탁)</option>
               </select>
             </div>
             <div>
@@ -1271,7 +1276,7 @@ export default function AdminBranchesPage() {
             )}
             <button
               onClick={handleCreateAdmin}
-              disabled={creatingAdmin || !adminForm.name.trim() || !adminForm.email.trim()}
+              disabled={creatingAdmin || !adminForm.name.trim() || !adminForm.email.trim() || !adminForm.role}
               className="w-full py-3 rounded-xl bg-[#2D6A4F] hover:bg-[#1B4332] disabled:opacity-40 text-white text-sm font-semibold transition-colors"
             >
               {creatingAdmin ? '생성 중...' : '관리자 계정 생성'}

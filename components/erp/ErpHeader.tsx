@@ -24,7 +24,8 @@ const ROLE_BADGE: Record<string, { bg: string; text: string; label: string }> = 
   admin:        { bg: 'bg-blue-100',   text: 'text-blue-700',   label: '관리자' },
   manager:      { bg: 'bg-blue-100',   text: 'text-blue-700',   label: '매니저' },
   director:     { bg: 'bg-orange-100', text: 'text-orange-700', label: '디렉터' },
-  nutritionist: { bg: 'bg-green-100',  text: 'text-green-700',  label: '영양사' },
+  nutritionist_ck:          { bg: 'bg-green-100', text: 'text-green-700', label: '영양사 (직영)' },
+  nutritionist_consignment: { bg: 'bg-green-100', text: 'text-green-700', label: '영양사 (위탁)' },
 }
 
 interface Props {
