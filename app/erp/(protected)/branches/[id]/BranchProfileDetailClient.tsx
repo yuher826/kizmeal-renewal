@@ -455,6 +455,7 @@ export default function BranchProfileDetailClient({ id, isSuperAdmin }: Props) {
   const [notFound, setNotFound] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   useEffect(() => {
     fetch(`/api/branch-profiles/${id}`)
@@ -474,6 +475,7 @@ export default function BranchProfileDetailClient({ id, isSuperAdmin }: Props) {
 
   async function handleSave(data: Partial<BranchProfileDetail>) {
     setIsSaving(true)
+    setSaveError(null)
     try {
       const res = await fetch(`/api/branch-profiles/${id}`, {
         method: 'PUT',
@@ -482,11 +484,13 @@ export default function BranchProfileDetailClient({ id, isSuperAdmin }: Props) {
       })
       if (res.status === 409) {
         showToast('이미 사용 중인 약칭입니다', 'error')
+        setSaveError('이미 사용 중인 약칭입니다')
         return
       }
       if (!res.ok) {
         const err = await res.json()
         showToast(err.error ?? '저장에 실패했습니다', 'error')
+        setSaveError(err.error ?? '저장에 실패했습니다')
         return
       }
       const updated = await res.json()
@@ -494,6 +498,7 @@ export default function BranchProfileDetailClient({ id, isSuperAdmin }: Props) {
       showToast('저장되었습니다', 'success')
     } catch {
       showToast('서버 오류가 발생했습니다', 'error')
+      setSaveError('서버 오류가 발생했습니다')
     } finally {
       setIsSaving(false)
     }
@@ -583,6 +588,7 @@ export default function BranchProfileDetailClient({ id, isSuperAdmin }: Props) {
           onSave={handleSave}
           isSaving={isSaving}
           isNew={false}
+          submitError={saveError}
         />
 
         {/* 식단 배포 현황 */}

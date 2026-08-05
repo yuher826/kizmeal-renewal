@@ -12,6 +12,22 @@ function calcComplete(p: any): boolean {
   )
 }
 
+// 빈 문자열은 null로 변환 (date/uuid/숫자 컬럼에 ''가 들어가면 DB 에러 발생)
+function emptyToNull(v: unknown) {
+  return v === '' ? null : v
+}
+
+// DB에 NOT NULL + 기본값이 있는 컬럼 — null을 명시적으로 넣으면 기본값이 무시되고
+// NOT NULL 위반이 발생하므로, 값이 없을 땐 키 자체를 지워 DB 기본값이 적용되게 함
+// (PUT에서는 키를 지우면 SET 절에서 빠져 기존 값이 그대로 유지됨)
+const DB_DEFAULT_COLUMNS = ['slide_count', 'diet_plan_type', 'contract_status'] as const
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function stripEmptyDefaultColumns(data: Record<string, any>) {
+  for (const key of DB_DEFAULT_COLUMNS) {
+    if (data[key] === null) delete data[key]
+  }
+}
+
 export async function GET(
   _request: NextRequest,
   { params }: { params: { id: string } }
@@ -189,26 +205,26 @@ export async function PUT(
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const updateData: any = {
-      short_code:          body.short_code ?? null,
-      display_name:        body.display_name ?? null,
-      branch_full_name:    body.branch_full_name ?? null,
-      group_tag:           body.group_tag ?? null,
-      brand_id:            body.brand_id ?? null,
-      owner_name:          body.owner_name ?? null,
-      kos_id:              body.kos_id ?? null,
-      contract_type:       body.contract_type ?? null,
-      diet_type:           body.diet_type ?? null,
-      contract_status:     body.contract_status ?? 'active',
-      contract_start_date: body.contract_start_date ?? null,
-      contract_renew_date: body.renew_date ?? null,
-      diet_plan_type:      body.diet_plan_type ?? null,
-      file_format:         body.file_format ?? null,
-      slide_count:         body.slide_count ?? null,
-      slide_type:          body.slide_type ?? null,
+      short_code:          emptyToNull(body.short_code),
+      display_name:        emptyToNull(body.display_name),
+      branch_full_name:    emptyToNull(body.branch_full_name),
+      group_tag:           emptyToNull(body.group_tag),
+      brand_id:            emptyToNull(body.brand_id),
+      owner_name:          emptyToNull(body.owner_name),
+      kos_id:              emptyToNull(body.kos_id),
+      contract_type:       emptyToNull(body.contract_type),
+      diet_type:           emptyToNull(body.diet_type),
+      contract_status:     emptyToNull(body.contract_status),
+      contract_start_date: emptyToNull(body.contract_start_date),
+      contract_renew_date: emptyToNull(body.renew_date),
+      diet_plan_type:      emptyToNull(body.diet_plan_type),
+      file_format:         emptyToNull(body.file_format),
+      slide_count:         emptyToNull(body.slide_count),
+      slide_type:          emptyToNull(body.slide_type),
       needs_english:       body.needs_english ?? false,
-      english_name:        body.english_name ?? null,
-      english_code:        body.english_code ?? null,
-      pptx_template_id:    body.pptx_template_id ?? null,
+      english_name:        emptyToNull(body.english_name),
+      english_code:        emptyToNull(body.english_code),
+      pptx_template_id:    emptyToNull(body.pptx_template_id),
       snack_morning:       body.snack_morning ?? false,
       snack_afternoon:     body.snack_afternoon ?? false,
       snack_afterschool:   body.snack_afterschool ?? false,
@@ -218,19 +234,20 @@ export async function PUT(
       has_birthday_snack:  body.has_birthday_snack ?? false,
       has_health_booklet:  body.has_health_booklet ?? false,
       has_yonder:          body.has_yonder ?? false,
-      yonder_name:         body.yonder_name ?? null,
+      yonder_name:         emptyToNull(body.yonder_name),
       distribution_emails: body.distribution_emails ?? [],
       review_required:     body.review_required ?? false,
       is_elan:             body.is_elan ?? false,
       is_ingpa:            body.is_ingpa ?? false,
       is_table_15row:      body.is_table_15row ?? false,
       direct_delivery:     body.direct_delivery ?? false,
-      special_note:        body.special_notes ?? null,
-      memo:                body.memo ?? null,
-      nutritionist_name:   body.nutritionist_name ?? null,
-      nutritionist_email:  body.nutritionist_email ?? null,
+      special_note:        emptyToNull(body.special_notes),
+      memo:                emptyToNull(body.memo),
+      nutritionist_name:   emptyToNull(body.nutritionist_name),
+      nutritionist_email:  emptyToNull(body.nutritionist_email),
       updated_at:          new Date().toISOString(),
     }
+    stripEmptyDefaultColumns(updateData)
 
     const { data: updated, error: updateError } = await supabase
       .from('branch_profiles')
@@ -241,7 +258,10 @@ export async function PUT(
 
     if (updateError) {
       console.error('[branch-profiles/[id] PUT] 오류:', updateError)
-      return NextResponse.json({ error: '저장 중 오류가 발생했습니다' }, { status: 500 })
+      return NextResponse.json(
+        { error: `저장 중 오류가 발생했습니다 (${updateError.code}: ${updateError.message})` },
+        { status: 500 }
+      )
     }
 
     return NextResponse.json(updated)

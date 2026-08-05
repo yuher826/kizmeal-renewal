@@ -63,6 +63,7 @@ export default function BranchProfileNewPage() {
         onSave={handleSave}
         isSaving={isSaving}
         isNew
+        submitError={error}
       />
     </main>
   )
