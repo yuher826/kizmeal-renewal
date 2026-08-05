@@ -444,7 +444,7 @@ export default function AdminBranchesPage() {
       <div className="bg-white border-b border-gray-100 px-4 sm:px-6">
         <div className="flex gap-1">
           {([['branches', '지점'], ['brands', '브랜드'], ['admins', '관리자계정']] as const).map(([t, label]) => (
-            currentAdmin?.role === 'super' || t !== 'admins' ? (
+            currentAdmin?.role === 'super_admin' || t !== 'admins' ? (
               <button
                 key={t}
                 onClick={() => setActiveTab(t)}
@@ -915,7 +915,7 @@ export default function AdminBranchesPage() {
         )}
 
         {/* ── 관리자계정 탭 ──────────────────────────────────── */}
-        {activeTab === 'admins' && currentAdmin?.role === 'super' && (
+        {activeTab === 'admins' && currentAdmin?.role === 'super_admin' && (
           <div className="space-y-4">
             <div className="flex justify-between items-center">
               <h2 className="font-bold text-[#1C2B1E]">관리자 계정</h2>
@@ -969,8 +969,8 @@ export default function AdminBranchesPage() {
                       <p className="font-semibold text-[#1C2B1E] text-sm">{a.name}</p>
                       <p className="text-xs text-gray-400">{a.email}</p>
                     </div>
-                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${a.role === 'super' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
-                      {a.role === 'super' ? 'Super' : '일반'}
+                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${a.role === 'super_admin' ? 'bg-purple-100 text-purple-700' : isNutritionist(a.role) ? 'bg-teal-100 text-teal-700' : 'bg-blue-100 text-blue-700'}`}>
+                      {ROLE_LABEL[a.role] ?? '일반'}
                     </span>
                   </div>
                 ))}
