@@ -7,6 +7,7 @@ import {
   MessageSquare,
   Mail,
   BarChart2,
+  UserCog,
 } from 'lucide-react'
 import type { ErpNavGroup } from '@/types/erp'
 
@@ -37,6 +38,12 @@ export const ERP_NAV_GROUPS: ErpNavGroup[] = [
     title: '분석',
     items: [
       { label: '통계', href: '/erp/stats', icon: BarChart2, disabled: true },
+    ],
+  },
+  {
+    title: '시스템 관리',
+    items: [
+      { label: '관리자 관리', href: '/erp/admins', icon: UserCog, allowedRoles: ['super_admin'] },
     ],
   },
 ]

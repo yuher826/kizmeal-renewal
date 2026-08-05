@@ -105,6 +105,37 @@ export async function sendBranchAccountEmail(
   })
 }
 
+// 관리자 계정 생성 안내 (보안상 임시 비밀번호는 메일에 포함하지 않음 — 담당자가 직접 전달)
+export async function sendAdminAccountEmail(adminEmail: string, adminName: string) {
+  return getResend().emails.send({
+    from: FROM_EMAIL,
+    to: resolveRecipient(adminEmail),
+    subject: '[키즈밀] ERP 관리자 계정이 생성되었습니다',
+    html: `
+<div style="font-family:'Apple SD Gothic Neo',sans-serif;max-width:480px;margin:0 auto;background:#F6FAF6;padding:24px 16px;">
+  <div style="background:white;border-radius:24px;padding:40px 32px;text-align:center;">
+    <div style="width:64px;height:64px;background:linear-gradient(135deg,#2D6A4F,#52B788);border-radius:18px;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;">
+      <span style="color:white;font-size:28px;font-weight:bold;">K</span>
+    </div>
+    <h1 style="color:#1C2B1E;font-size:20px;font-weight:bold;margin:0 0 8px;">ERP 관리자 계정이 생성되었습니다</h1>
+    <p style="color:#6B7280;font-size:14px;line-height:1.6;margin:0 0 16px;">
+      안녕하세요, <strong>${adminName}</strong>님!<br>
+      키즈밀 ERP 관리자 계정이 생성되었습니다.
+    </p>
+    <div style="background:#F0F7F4;border-radius:12px;padding:16px;text-align:left;margin-bottom:24px;">
+      <p style="margin:0;font-size:14px;color:#1C2B1E;"><strong>아이디(이메일):</strong> ${adminEmail}</p>
+    </div>
+    <p style="color:#6B7280;font-size:13px;margin:0 0 8px;">임시 비밀번호는 담당자에게 별도로 전달받으세요.</p>
+    <p style="color:#EF4444;font-size:13px;margin:0 0 16px;">첫 로그인 후 반드시 비밀번호를 변경해 주세요.</p>
+    <a href="${BASE_URL}/erp/login" style="display:inline-block;background:#2D6A4F;color:white;text-decoration:none;font-size:15px;font-weight:bold;padding:14px 40px;border-radius:14px;">
+      ERP 로그인
+    </a>
+  </div>
+  <p style="text-align:center;color:#9CA3AF;font-size:11px;margin-top:16px;">키즈밀 · 건강한 급식 솔루션</p>
+</div>`,
+  })
+}
+
 export async function sendBranchPasswordResetEmail(
   branchEmail: string,
   branchName: string,

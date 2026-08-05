@@ -1,7 +1,35 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase-server'
-import { sendBranchAccountEmail, sendBranchPasswordResetEmail } from '@/lib/email'
+import { sendBranchAccountEmail, sendBranchPasswordResetEmail, sendAdminAccountEmail } from '@/lib/email'
+import { ROLES } from '@/lib/roles'
+import { randomInt } from 'crypto'
+
+// 유효한 관리자 역할/접근범위 목록 (lib/roles.ts 상수 재사용)
+const VALID_ADMIN_ROLES = Object.values(ROLES) as string[]
+const VALID_SCOPES = ['erp_only', 'board_only', 'both']
+
+// 임시 비밀번호 서버 생성 (crypto 기반 16자, 대문자·소문자·숫자·특수문자 각 1자 이상 보장)
+function generateTempPassword(): string {
+  const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ'   // 혼동 문자(I,O) 제외
+  const lower = 'abcdefghijkmnpqrstuvwxyz'   // 혼동 문자(l) 제외
+  const digits = '23456789'                  // 혼동 문자(0,1) 제외
+  const special = '!@#$%^&*'
+  const all = upper + lower + digits + special
+  const chars = [
+    upper[randomInt(upper.length)],
+    lower[randomInt(lower.length)],
+    digits[randomInt(digits.length)],
+    special[randomInt(special.length)],
+  ]
+  for (let i = chars.length; i < 16; i++) chars.push(all[randomInt(all.length)])
+  // Fisher-Yates 셔플 (crypto randomInt)
+  for (let i = chars.length - 1; i > 0; i--) {
+    const j = randomInt(i + 1)
+    ;[chars[i], chars[j]] = [chars[j], chars[i]]
+  }
+  return chars.join('')
+}
 
 function getAdminClient() {
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -25,12 +53,17 @@ export async function POST(request: Request) {
 
     const { data: requesterAdmin } = await authClient
       .from('admins')
-      .select('id')
+      .select('id, name, role, is_active')
       .eq('auth_id', user.id)
       .maybeSingle()
 
     if (!requesterAdmin) {
       return NextResponse.json({ error: '접근 권한이 없습니다' }, { status: 403 })
+    }
+
+    // 비활성 관리자 차단
+    if (requesterAdmin.is_active === false) {
+      return NextResponse.json({ error: '비활성화된 계정입니다' }, { status: 403 })
     }
 
     const body = await request.json()
@@ -193,31 +226,165 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: true })
     }
 
-    // ── 관리자 계정 생성 ───────────────────────────────────────
+    // ── 관리자 계정 생성 (super_admin 전용) ───────────────────
     if (action === 'create-admin') {
-      const { name, email, role, tempPassword } = body
-
+      if (requesterAdmin.role !== 'super_admin') {
+        return NextResponse.json({ error: '슈퍼관리자만 관리자 계정을 생성할 수 있습니다' }, { status: 403 })
+      }
       if (!adminClient) {
         return NextResponse.json({ error: 'SUPABASE_SERVICE_ROLE_KEY 필요' }, { status: 400 })
       }
 
+      const { name, email, role, department, phone, access_scope } = body
+      if (!name?.trim() || !email?.trim() || !role) {
+        return NextResponse.json({ error: '이름·이메일·역할은 필수입니다' }, { status: 400 })
+      }
+      if (!VALID_ADMIN_ROLES.includes(role)) {
+        return NextResponse.json({ error: '유효하지 않은 역할입니다' }, { status: 400 })
+      }
+      const scope = access_scope || 'both'
+      if (!VALID_SCOPES.includes(scope)) {
+        return NextResponse.json({ error: '유효하지 않은 접근범위입니다' }, { status: 400 })
+      }
+
+      // 이메일 중복 사전 체크
+      const { data: dup } = await adminClient
+        .from('admins').select('id').eq('email', email.trim()).maybeSingle()
+      if (dup) {
+        return NextResponse.json({ error: '이미 등록된 이메일입니다' }, { status: 409 })
+      }
+
+      // 임시 비밀번호는 서버에서만 생성 (클라이언트 전달값 무시)
+      const tempPassword = generateTempPassword()
+
+      // 순서: Auth 먼저 → admins. Auth 실패 시 admins 미생성으로 안전
       const { data: authUser, error: authError } = await adminClient.auth.admin.createUser({
-        email,
+        email: email.trim(),
         password: tempPassword,
         email_confirm: true,
       })
-      if (authError) return NextResponse.json({ error: authError.message }, { status: 400 })
+      if (authError) {
+        return NextResponse.json({ error: `Auth 계정 생성 실패: ${authError.message}` }, { status: 400 })
+      }
 
-      const { error: adminError } = await adminClient.from('admins').insert({
+      const { data: newAdmin, error: adminError } = await adminClient.from('admins').insert({
         auth_id: authUser.user.id,
-        name,
-        email,
+        name: name.trim(),
+        email: email.trim(),
         role,
+        department: department?.trim() || null,
+        phone: phone?.trim() || null,
+        access_scope: scope,
         is_active: true,
-      })
-      if (adminError) return NextResponse.json({ error: adminError.message }, { status: 400 })
+      }).select().single()
 
-      return NextResponse.json({ success: true })
+      if (adminError) {
+        // 반쪽 상태 방지: admins INSERT 실패 시 방금 만든 Auth 계정 롤백
+        await adminClient.auth.admin.deleteUser(authUser.user.id)
+        return NextResponse.json({ error: `관리자 등록 실패: ${adminError.message}` }, { status: 400 })
+      }
+
+      // audit 기록 (기존 deactivate 패턴 재사용)
+      try {
+        await adminClient.from('audit_logs').insert({
+          actor_id: requesterAdmin.id,
+          actor_type: 'admin',
+          actor_name: requesterAdmin.name,
+          action: 'admin_created',
+          target_type: 'admin',
+          target_id: newAdmin.id,
+          detail: { email: email.trim(), role, access_scope: scope },
+        })
+      } catch { /* audit 실패는 무시 */ }
+
+      // 계정 안내 메일 (임시 비밀번호 미포함 — 화면 1회 표시분을 직접 전달)
+      let emailSent = false
+      try {
+        await sendAdminAccountEmail(email.trim(), name.trim())
+        emailSent = true
+      } catch (e) {
+        console.error('[branch/route] 관리자 안내 메일 발송 실패:', e)
+      }
+
+      return NextResponse.json({ success: true, admin: newAdmin, tempPassword, emailSent })
+    }
+
+    // ── 관리자 정보 수정 (super_admin 전용) ───────────────────
+    if (action === 'update-admin') {
+      if (requesterAdmin.role !== 'super_admin') {
+        return NextResponse.json({ error: '슈퍼관리자만 관리자 정보를 수정할 수 있습니다' }, { status: 403 })
+      }
+      if (!adminClient) {
+        return NextResponse.json({ error: 'SUPABASE_SERVICE_ROLE_KEY 필요' }, { status: 400 })
+      }
+
+      const { adminId, updates } = body
+      if (!adminId || !updates || typeof updates !== 'object') {
+        return NextResponse.json({ error: 'adminId와 updates가 필요합니다' }, { status: 400 })
+      }
+
+      // 수정 허용 필드 화이트리스트 — email은 명시적 제외 (Auth와 어긋남 방지)
+      const ALLOWED_FIELDS = ['name', 'role', 'access_scope', 'department', 'phone', 'is_active']
+      const filtered: Record<string, unknown> = {}
+      for (const f of ALLOWED_FIELDS) if (f in updates) filtered[f] = updates[f]
+      if (Object.keys(filtered).length === 0) {
+        return NextResponse.json({ error: '수정할 필드가 없습니다' }, { status: 400 })
+      }
+      if ('role' in filtered && !VALID_ADMIN_ROLES.includes(filtered.role as string)) {
+        return NextResponse.json({ error: '유효하지 않은 역할입니다' }, { status: 400 })
+      }
+      if ('access_scope' in filtered && !VALID_SCOPES.includes(filtered.access_scope as string)) {
+        return NextResponse.json({ error: '유효하지 않은 접근범위입니다' }, { status: 400 })
+      }
+
+      const { data: target } = await adminClient
+        .from('admins').select('*').eq('id', adminId).maybeSingle()
+      if (!target) {
+        return NextResponse.json({ error: '대상 관리자를 찾을 수 없습니다' }, { status: 404 })
+      }
+
+      // 자기 자신 비활성화 차단
+      if (filtered.is_active === false && target.auth_id === user.id) {
+        return NextResponse.json({ error: '자기 자신은 비활성화할 수 없습니다' }, { status: 400 })
+      }
+
+      // 최후의 super_admin 보호: 활성 super_admin이 1명뿐이면 역할 변경·비활성화 차단
+      const demoting = 'role' in filtered && filtered.role !== 'super_admin'
+      const deactivatingTarget = filtered.is_active === false
+      if (target.role === 'super_admin' && target.is_active && (demoting || deactivatingTarget)) {
+        const { count } = await adminClient
+          .from('admins')
+          .select('id', { count: 'exact', head: true })
+          .eq('role', 'super_admin')
+          .eq('is_active', true)
+        if ((count ?? 0) <= 1) {
+          return NextResponse.json({ error: '마지막 슈퍼관리자는 변경할 수 없습니다' }, { status: 400 })
+        }
+      }
+
+      const { data: updated, error: updateError } = await adminClient
+        .from('admins').update(filtered).eq('id', adminId).select().single()
+      if (updateError) {
+        return NextResponse.json({ error: updateError.message }, { status: 400 })
+      }
+
+      // audit 기록 — 변경된 필드의 전/후 값
+      try {
+        const before: Record<string, unknown> = {}
+        const after: Record<string, unknown> = {}
+        for (const f of Object.keys(filtered)) { before[f] = target[f]; after[f] = updated[f] }
+        await adminClient.from('audit_logs').insert({
+          actor_id: requesterAdmin.id,
+          actor_type: 'admin',
+          actor_name: requesterAdmin.name,
+          action: 'admin_updated',
+          target_type: 'admin',
+          target_id: adminId,
+          detail: { before, after },
+        })
+      } catch { /* audit 실패는 무시 */ }
+
+      return NextResponse.json({ success: true, admin: updated })
     }
 
     return NextResponse.json({ error: '알 수 없는 action' }, { status: 400 })
