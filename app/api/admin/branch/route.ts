@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase-server'
-import { sendBranchAccountEmail, sendBranchPasswordResetEmail, sendAdminAccountEmail } from '@/lib/email'
+import { sendAdminAccountEmail } from '@/lib/email'
 import { ROLES } from '@/lib/roles'
 import { randomInt } from 'crypto'
 
@@ -70,109 +70,15 @@ export async function POST(request: Request) {
     const { action } = body
     const adminClient = getAdminClient()
 
-    // ── 지점 생성 ──────────────────────────────────────────────
-    if (action === 'create') {
-      const { branchData, email, tempPassword, managerName } = body
-
-      let authId: string | null = null
-
-      if (adminClient) {
-        const { data: authUser, error: authError } = await adminClient.auth.admin.createUser({
-          email,
-          password: tempPassword,
-          email_confirm: true,
-        })
-        if (authError) return NextResponse.json({ error: authError.message }, { status: 400 })
-        authId = authUser.user.id
-      }
-
-      const supabase = adminClient || createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    // ── [종료된 기능] 지점 생성 / 비밀번호 초기화 ──────────────
+    // 평문 임시 비밀번호를 이메일 본문에 넣어 보내던 레거시 경로 — 보안상 제거됨.
+    // 대체 경로: /erp/branches/new (프로파일 등록) → 원 상세 "담당자 계정"의
+    // 초대 이메일(inviteUserByEmail) / 비밀번호 초기화(resetPasswordForEmail).
+    if (action === 'create' || action === 'reset-password') {
+      return NextResponse.json(
+        { error: '이 기능은 종료되었습니다. 원 프로파일 → 담당자 계정에서 초대 이메일·비밀번호 초기화를 사용하세요.' },
+        { status: 410 }
       )
-
-      const defaultMealConfig = {
-        간식: { 오전: false, 오후: true, 방과후: false, 돌봄: false, 기타: [] },
-        특이사항: '',
-        pptx슬라이드: 1,
-        알레르기아이: [],
-        식단확인: { 마지막확인: null, 확인횟수: 0 },
-      }
-
-      const { data: branch, error: branchError } = await supabase
-        .from('branches')
-        .insert({
-          ...branchData,
-          email,
-          auth_id: authId,
-          must_change_password: true,
-          is_active: true,
-          status: 'new',
-          meal_config: branchData.meal_config ?? defaultMealConfig,
-        })
-        .select()
-        .single()
-
-      if (branchError) return NextResponse.json({ error: branchError.message }, { status: 400 })
-
-      await supabase.from('branch_profiles').upsert({
-        branch_id: branch.id,
-        diet_plan_type: branchData.diet_type === 'catering' ? 'CONSIGNMENT' : 'CK',
-        snack_morning: branchData.meal_config?.['오전'] || false,
-        snack_afternoon: branchData.meal_config?.['오후'] || false,
-        snack_afterschool: branchData.meal_config?.['방과후'] || false,
-        snack_childcare: branchData.meal_config?.['돌봄'] || false,
-        snack_teacher_extra: false,
-        custom_snack_slots: [],
-        nutritionist_name: '',
-        nutritionist_email: '',
-        distribution_email: '',
-        special_notes: '',
-        allergy_children: [],
-      }, { onConflict: 'branch_id' })
-
-      let emailSent = false
-      try {
-        await sendBranchAccountEmail(email, branchData.name, managerName, tempPassword)
-        emailSent = true
-      } catch (e) {
-        console.error('[branch/route] 이메일 발송 실패:', e)
-      }
-
-      return NextResponse.json({ success: true, branch, emailSent })
-    }
-
-    // ── 비밀번호 초기화 ────────────────────────────────────────
-    if (action === 'reset-password') {
-      const { branchId, authId, email, branchName, newPassword } = body
-
-      if (adminClient && authId) {
-        const { error } = await adminClient.auth.admin.updateUserById(authId, {
-          password: newPassword,
-        })
-        if (error) return NextResponse.json({ error: error.message }, { status: 400 })
-      } else if (!adminClient) {
-        console.warn('[branch/route] service role 없음 — Auth 비밀번호 변경 스킵')
-      }
-
-      const supabase = adminClient || createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-      )
-      await supabase
-        .from('branches')
-        .update({ must_change_password: true })
-        .eq('id', branchId)
-
-      let emailSent = false
-      try {
-        await sendBranchPasswordResetEmail(email, branchName, newPassword)
-        emailSent = true
-      } catch (e) {
-        console.error('[branch/route] 이메일 발송 실패:', e)
-      }
-
-      return NextResponse.json({ success: true, emailSent })
     }
 
     // ── 지점 비활성화 ──────────────────────────────────────────

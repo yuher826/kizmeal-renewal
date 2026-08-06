@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase-server'
+import { getSupabaseAdmin } from '@/lib/supabase-admin'
 
 async function getAdmin(supabase: ReturnType<typeof createClient>) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
-  const { data } = await supabase.from('admins').select('id').eq('auth_id', user.id).maybeSingle()
+  const { data } = await supabase.from('admins').select('id, name').eq('auth_id', user.id).maybeSingle()
   return data
 }
 
@@ -55,6 +56,20 @@ export async function POST(
       console.error('[account/reset POST] 오류:', error)
       return NextResponse.json({ error: '초기화 이메일 발송에 실패했습니다' }, { status: 500 })
     }
+
+    // audit 기록 (account POST의 branch_invited 패턴과 동일)
+    try {
+      const supabaseAdmin = getSupabaseAdmin()
+      await supabaseAdmin.from('audit_logs').insert({
+        actor_id:    admin.id,
+        actor_type:  'admin',
+        actor_name:  admin.name ?? '관리자',
+        action:      'branch_password_reset',
+        target_type: 'branch_profile',
+        target_id:   params.id,
+        detail:      { email: branch.email },
+      })
+    } catch { /* audit 실패는 무시 */ }
 
     return NextResponse.json({ success: true, email: branch.email })
   } catch (err) {
