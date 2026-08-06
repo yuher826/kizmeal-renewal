@@ -400,7 +400,7 @@ export default function AdminDashboard() {
                         <td className="px-5 py-4 text-sm text-gray-600">{item.mealCount}명</td>
                         <td className="px-5 py-4">
                           <Link
-                            href={`/board/admin/branches?highlight=${item.id}`}
+                            href="/erp/branches"
                             className="text-xs bg-[#2D6A4F] hover:bg-[#1B4332] text-white font-medium px-3 py-1.5 rounded-lg transition-colors"
                           >
                             상세 보기
