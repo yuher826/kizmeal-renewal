@@ -2,17 +2,23 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { KIZMEAL_LOGO_PATH } from '@/lib/brand'
+import { ROUTES } from '@/lib/routes'
 import type { Inquiry, Branch, Notification, SlaRule } from '@/lib/types'
 import InquiryCard from '@/components/board/InquiryCard'
+import AccountMismatchNotice from '@/components/board/AccountMismatchNotice'
 
 export default function CustomerDashboardPage() {
+  const router = useRouter()
   const [branch, setBranch] = useState<Branch | null>(null)
   const [inquiries, setInquiries] = useState<Inquiry[]>([])
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [slaRules, setSlaRules] = useState<Record<string, SlaRule>>({})
   const [loading, setLoading] = useState(true)
+  const [noBranch, setNoBranch] = useState(false)
+  const [userEmail, setUserEmail] = useState<string | null>(null)
   const [hasDietThisMonth, setHasDietThisMonth] = useState<boolean | null>(null)
   const [logoError, setLogoError] = useState(false) // 로고 로드 실패 시 원 이름 텍스트로 폴백
 
@@ -21,85 +27,91 @@ export default function CustomerDashboardPage() {
 
     async function load() {
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+      if (!user) { router.replace(ROUTES.BOARD_LOGIN); return }
+      setUserEmail(user.email ?? null)
 
-      // Get branch info (master or member)
-      const { data: branchRow } = await supabase
-        .from('branches')
-        .select('*, brands(*)')
-        .eq('auth_id', user.id)
-        .maybeSingle()
-
-      let branchId = branchRow?.id
-      if (!branchRow) {
-        const { data: memberRow } = await supabase
-          .from('branch_members')
-          .select('branch_id, branches(*, brands(*))')
+      try {
+        // Get branch info (master or member)
+        const { data: branchRow } = await supabase
+          .from('branches')
+          .select('*, brands(*)')
           .eq('auth_id', user.id)
           .maybeSingle()
-        if (memberRow) {
-          branchId = memberRow.branch_id
-          setBranch(memberRow.branches as unknown as Branch)
+
+        let branchId = branchRow?.id
+        if (!branchRow) {
+          const { data: memberRow } = await supabase
+            .from('branch_members')
+            .select('branch_id, branches(*, brands(*))')
+            .eq('auth_id', user.id)
+            .maybeSingle()
+          if (memberRow) {
+            branchId = memberRow.branch_id
+            setBranch(memberRow.branches as unknown as Branch)
+          }
+        } else {
+          setBranch(branchRow as Branch)
         }
-      } else {
-        setBranch(branchRow as Branch)
+
+        // ★branchId(실제 연결 여부)로만 판정 — memberRow.branches 조인이 null이어도
+        // branchId 자체는 유효할 수 있어 branch 객체 유무로 판정하면 오안내 위험이 있음
+        if (!branchId) { setNoBranch(true); return }
+
+        // Load SLA rules
+        const { data: rules } = await supabase.from('sla_rules').select('*')
+        if (rules) {
+          const rulesMap: Record<string, SlaRule> = {}
+          rules.forEach(r => { rulesMap[r.category] = r })
+          setSlaRules(rulesMap)
+        }
+
+        // Load recent inquiries (last 5)
+        const { data: inq } = await supabase
+          .from('inquiries')
+          .select('*, messages(content, sender_type, created_at, is_internal)')
+          .eq('branch_id', branchId)
+          .order('last_message_at', { ascending: false, nullsFirst: false })
+          .order('created_at', { ascending: false })
+          .limit(5)
+
+        if (inq) setInquiries(inq as unknown as Inquiry[])
+
+        // Load unread notifications
+        const { data: notifs } = await supabase
+          .from('notifications')
+          .select('*')
+          .eq('recipient_auth_id', user.id)
+          .eq('is_read', false)
+          .order('created_at', { ascending: false })
+          .limit(10)
+
+        if (notifs) setNotifications(notifs as Notification[])
+
+        // 이번달 식단표 확인
+        const nowYear  = new Date().getFullYear()
+        const nowMonth = new Date().getMonth() + 1
+        const { data: dietCheck } = await supabase
+          .from('weekly_menus')
+          .select('id')
+          .eq('branch_id', branchId)
+          .in('status', ['generation_complete', 'review_requested', 'approved', 'deployed'])
+          .eq('year', nowYear)
+          .eq('month', nowMonth)
+          .limit(1)
+        setHasDietThisMonth((dietCheck?.length ?? 0) > 0)
+      } finally {
+        // branch 없음 / 도중 오류, 어떤 경로로 빠져나가든 로딩은 반드시 종료
+        setLoading(false)
       }
-
-      if (!branchId) return
-
-      // Load SLA rules
-      const { data: rules } = await supabase.from('sla_rules').select('*')
-      if (rules) {
-        const rulesMap: Record<string, SlaRule> = {}
-        rules.forEach(r => { rulesMap[r.category] = r })
-        setSlaRules(rulesMap)
-      }
-
-      // Load recent inquiries (last 5)
-      const { data: inq } = await supabase
-        .from('inquiries')
-        .select('*, messages(content, sender_type, created_at, is_internal)')
-        .eq('branch_id', branchId)
-        .order('last_message_at', { ascending: false, nullsFirst: false })
-        .order('created_at', { ascending: false })
-        .limit(5)
-
-      if (inq) setInquiries(inq as unknown as Inquiry[])
-
-      // Load unread notifications
-      const { data: notifs } = await supabase
-        .from('notifications')
-        .select('*')
-        .eq('recipient_auth_id', user.id)
-        .eq('is_read', false)
-        .order('created_at', { ascending: false })
-        .limit(10)
-
-      if (notifs) setNotifications(notifs as Notification[])
-
-      // 이번달 식단표 확인
-      const nowYear  = new Date().getFullYear()
-      const nowMonth = new Date().getMonth() + 1
-      const { data: dietCheck } = await supabase
-        .from('weekly_menus')
-        .select('id')
-        .eq('branch_id', branchId)
-        .in('status', ['generation_complete', 'review_requested', 'approved', 'deployed'])
-        .eq('year', nowYear)
-        .eq('month', nowMonth)
-        .limit(1)
-      setHasDietThisMonth((dietCheck?.length ?? 0) > 0)
-
-      setLoading(false)
     }
 
     load()
-  }, [])
+  }, [router])
 
   async function handleLogout() {
     const supabase = createClient()
     await supabase.auth.signOut()
-    window.location.href = '/board/login'
+    window.location.href = ROUTES.BOARD_LOGIN
   }
 
   const stats = {
@@ -149,6 +161,10 @@ export default function CustomerDashboardPage() {
       </header>
 
       <div className="w-full px-4 sm:px-6 py-6 space-y-6">
+        {!loading && noBranch ? (
+          <AccountMismatchNotice email={userEmail} />
+        ) : (
+        <>
         {/* 환영 메시지 */}
         <div className="bg-gradient-to-r from-[#2D6A4F] to-[#52B788] rounded-2xl px-6 py-5 text-white">
           {/* 원 로고 칩 (logo_url 있고 로드 성공 시에만 — NULL/로드실패면 렌더 안 하고 아래 원 이름 텍스트로 폴백)
@@ -256,6 +272,8 @@ export default function CustomerDashboardPage() {
             )}
           </div>
         </div>
+        </>
+        )}
       </div>
 
       <div className="h-14 sm:hidden" />

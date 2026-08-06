@@ -2,42 +2,54 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
+import { ROUTES } from '@/lib/routes'
 import type { BranchMember } from '@/lib/types'
+import AccountMismatchNotice from '@/components/board/AccountMismatchNotice'
 
 export default function CustomerMembersPage() {
+  const router = useRouter()
   const [members, setMembers] = useState<BranchMember[]>([])
   const [branchId, setBranchId] = useState<string | null>(null)
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviting, setInviting] = useState(false)
   const [inviteMsg, setInviteMsg] = useState('')
   const [loading, setLoading] = useState(true)
+  const [userEmail, setUserEmail] = useState<string | null>(null)
 
   useEffect(() => { load() }, [])
 
   async function load() {
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+    if (!user) { router.replace(ROUTES.BOARD_LOGIN); return }
+    setUserEmail(user.email ?? null)
 
-    const { data: branchRow } = await supabase
-      .from('branches')
-      .select('id')
-      .eq('auth_id', user.id)
-      .maybeSingle()
+    try {
+      const { data: branchRow } = await supabase
+        .from('branches')
+        .select('id')
+        .eq('auth_id', user.id)
+        .maybeSingle()
 
-    if (!branchRow) return
-    setBranchId(branchRow.id)
+      // ★branch_members(직원) fallback은 의도적으로 추가하지 않음 —
+      // 이 화면(직원 초대/해제)이 마스터 전용인지, 직원도 접근 가능해야 하는지는
+      // 비즈니스 판단이 필요해 이번 범위에서 제외(별건으로 결정 필요).
+      if (!branchRow) return
+      setBranchId(branchRow.id)
 
-    const { data: memberRows } = await supabase
-      .from('branch_members')
-      .select('*')
-      .eq('branch_id', branchRow.id)
-      .eq('is_active', true)
-      .order('created_at', { ascending: false })
+      const { data: memberRows } = await supabase
+        .from('branch_members')
+        .select('*')
+        .eq('branch_id', branchRow.id)
+        .eq('is_active', true)
+        .order('created_at', { ascending: false })
 
-    if (memberRows) setMembers(memberRows as BranchMember[])
-    setLoading(false)
+      if (memberRows) setMembers(memberRows as BranchMember[])
+    } finally {
+      setLoading(false)
+    }
   }
 
   async function handleInvite(e: React.FormEvent) {
@@ -89,6 +101,14 @@ export default function CustomerMembersPage() {
       </header>
 
       <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6 space-y-4">
+        {!loading && !branchId ? (
+          <AccountMismatchNotice
+            email={userEmail}
+            title="직원 관리 화면을 이용할 수 없습니다"
+            message="이 화면은 원 마스터 계정에서만 이용할 수 있습니다. 마스터 계정이 아니거나 계정 연결에 문제가 있을 수 있으니, 다른 계정으로 로그인하셨다면 로그아웃 후 다시 확인해 주세요."
+          />
+        ) : (
+        <>
         {/* 초대 폼 */}
         <form onSubmit={handleInvite} className="bg-white rounded-2xl border border-gray-100 p-6">
           <h2 className="font-bold text-[#1C2B1E] mb-4">직원 초대</h2>
@@ -151,6 +171,8 @@ export default function CustomerMembersPage() {
             </ul>
           )}
         </div>
+        </>
+        )}
       </div>
     </div>
   )

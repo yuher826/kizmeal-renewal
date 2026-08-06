@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
+import { ROUTES } from '@/lib/routes'
 
 interface Notif {
   id: string
@@ -46,17 +47,20 @@ export default function NotificationsPage() {
 
     async function load() {
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+      if (!user) { router.replace(ROUTES.BOARD_LOGIN); return }
 
-      const { data } = await supabase
-        .from('notifications')
-        .select('*')
-        .eq('recipient_auth_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(50)
+      try {
+        const { data } = await supabase
+          .from('notifications')
+          .select('*')
+          .eq('recipient_auth_id', user.id)
+          .order('created_at', { ascending: false })
+          .limit(50)
 
-      if (data) setNotifs(data as Notif[])
-      setLoading(false)
+        if (data) setNotifs(data as Notif[])
+      } finally {
+        setLoading(false)
+      }
     }
 
     load()

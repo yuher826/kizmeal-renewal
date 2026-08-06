@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { KIZMEAL_LOGO_PATH } from '@/lib/brand'
+import { ROUTES } from '@/lib/routes'
 
 const SAVE_EMAIL_KEY = 'board_saved_email'
 
@@ -27,12 +28,12 @@ export default function BoardLoginPage() {
       const uid = data.session.user.id
       const { data: adminRow } = await supabase.from('admins').select('id, access_scope').eq('auth_id', uid).maybeSingle()
       // ERP 전용 계정은 ERP로, 그 외는 홈페이지관리로
-      if (adminRow) { router.replace(adminRow.access_scope === 'erp_only' ? '/erp/diet' : '/board/admin'); return }
+      if (adminRow) { router.replace(adminRow.access_scope === 'erp_only' ? '/erp/diet' : ROUTES.BOARD_ADMIN_HOME); return }
       const { data: branchRow } = await supabase.from('branches').select('id').eq('auth_id', uid).maybeSingle()
-      if (branchRow) { router.replace('/board/dashboard'); return }
+      if (branchRow) { router.replace(ROUTES.BOARD_CUSTOMER_HOME); return }
       const { data: memberRow } = await supabase.from('branch_members').select('id, role').eq('auth_id', uid).maybeSingle()
       if (memberRow) {
-        router.replace(memberRow.role === 'nutritionist' ? '/nutritionist/dashboard' : '/board/dashboard')
+        router.replace(memberRow.role === 'nutritionist' ? ROUTES.NUTRITIONIST_HOME : ROUTES.BOARD_CUSTOMER_HOME)
         return
       }
       await supabase.auth.signOut()
@@ -78,17 +79,17 @@ export default function BoardLoginPage() {
 
       const { data: adminData } = await supabase.from('admins').select('id, access_scope').eq('auth_id', data.user.id).maybeSingle()
       // ERP 전용 계정은 ERP로, 그 외는 홈페이지관리로
-      if (adminData) { router.push(adminData.access_scope === 'erp_only' ? '/erp/diet' : '/board/admin'); router.refresh(); return }
+      if (adminData) { router.push(adminData.access_scope === 'erp_only' ? '/erp/diet' : ROUTES.BOARD_ADMIN_HOME); router.refresh(); return }
 
       const { data: branchData } = await supabase.from('branches').select('id').eq('auth_id', data.user.id).maybeSingle()
       if (branchData) {
         await supabase.from('branches').update({ last_login_at: new Date().toISOString() }).eq('id', branchData.id)
-        router.push('/board/dashboard'); router.refresh(); return
+        router.push(ROUTES.BOARD_CUSTOMER_HOME); router.refresh(); return
       }
 
       const { data: memberData } = await supabase.from('branch_members').select('id, role').eq('auth_id', data.user.id).maybeSingle()
       if (memberData) {
-        router.push(memberData.role === 'nutritionist' ? '/nutritionist/dashboard' : '/board/dashboard')
+        router.push(memberData.role === 'nutritionist' ? ROUTES.NUTRITIONIST_HOME : ROUTES.BOARD_CUSTOMER_HOME)
         router.refresh()
         return
       }

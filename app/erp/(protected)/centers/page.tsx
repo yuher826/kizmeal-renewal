@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import { KIZMEAL_LOGO_PATH } from '@/lib/brand'
 import { createClient } from '@/lib/supabase'
+import { ROUTES } from '@/lib/routes'
 import type { Branch, Brand, Admin, BranchStatus } from '@/lib/types'
 import { isNutritionist, ROLE_LABEL } from '@/lib/roles'
 
@@ -448,7 +449,8 @@ export default function AdminBranchesPage() {
 
   function handleLogout() {
     const s = createClient()
-    s.auth.signOut().then(() => { window.location.href = '/board/login' })
+    // ERP 페이지인데 board/login으로 보내던 기존 오류 수정 — ERP 로그아웃은 erp/login으로
+    s.auth.signOut().then(() => { window.location.href = ROUTES.ERP_LOGIN })
   }
 
   // ── 렌더 ─────────────────────────────────────────────────────

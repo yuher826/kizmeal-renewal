@@ -1,10 +1,13 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
+import { ROUTES } from '@/lib/routes'
 import type { Branch } from '@/lib/types'
 
 export default function CustomerProfilePage() {
+  const router = useRouter()
   const [branch, setBranch] = useState<Branch | null>(null)
   const [contactName, setContactName] = useState('')
   const [loading, setLoading] = useState(true)
@@ -19,32 +22,35 @@ export default function CustomerProfilePage() {
     const supabase = createClient()
     async function load() {
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+      if (!user) { router.replace(ROUTES.BOARD_LOGIN); return }
 
-      const { data: branchRow } = await supabase
-        .from('branches')
-        .select('*, brands(*)')
-        .eq('auth_id', user.id)
-        .maybeSingle()
-
-      if (branchRow) {
-        setBranch(branchRow as Branch)
-        setContactName(branchRow.owner_name || '')
-      } else {
-        const { data: memberRow } = await supabase
-          .from('branch_members')
-          .select('name, branches(*, brands(*))')
+      try {
+        const { data: branchRow } = await supabase
+          .from('branches')
+          .select('*, brands(*)')
           .eq('auth_id', user.id)
           .maybeSingle()
-        if (memberRow) {
-          setBranch(memberRow.branches as unknown as Branch)
-          setContactName(memberRow.name || '')
+
+        if (branchRow) {
+          setBranch(branchRow as Branch)
+          setContactName(branchRow.owner_name || '')
+        } else {
+          const { data: memberRow } = await supabase
+            .from('branch_members')
+            .select('name, branches(*, brands(*))')
+            .eq('auth_id', user.id)
+            .maybeSingle()
+          if (memberRow) {
+            setBranch(memberRow.branches as unknown as Branch)
+            setContactName(memberRow.name || '')
+          }
         }
+      } finally {
+        setLoading(false)
       }
-      setLoading(false)
     }
     load()
-  }, [])
+  }, [router])
 
   async function handleChangePassword(e: React.FormEvent) {
     e.preventDefault()

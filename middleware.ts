@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { ROUTES } from '@/lib/routes'
 
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
@@ -98,7 +99,7 @@ export async function middleware(request: NextRequest) {
       .maybeSingle()
 
     const url = request.nextUrl.clone()
-    url.pathname = adminData ? '/board/admin' : '/board/customer'
+    url.pathname = adminData ? ROUTES.BOARD_ADMIN_HOME : ROUTES.BOARD_CUSTOMER_HOME
     return NextResponse.redirect(url)
   }
 
@@ -111,7 +112,7 @@ export async function middleware(request: NextRequest) {
 
     if (!adminData) {
       const url = request.nextUrl.clone()
-      url.pathname = '/board/customer'
+      url.pathname = ROUTES.BOARD_CUSTOMER_HOME
       return NextResponse.redirect(url)
     }
   }

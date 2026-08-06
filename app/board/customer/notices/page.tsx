@@ -1,7 +1,9 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
+import { ROUTES } from '@/lib/routes'
 
 type Notice = {
   id: string
@@ -14,6 +16,7 @@ type Notice = {
 }
 
 export default function CustomerNoticesPage() {
+  const router = useRouter()
   const [notices, setNotices]     = useState<Notice[]>([])
   const [readSet, setReadSet]     = useState<Set<string>>(new Set())
   const [expanded, setExpanded]   = useState<Set<string>>(new Set())
@@ -26,7 +29,7 @@ export default function CustomerNoticesPage() {
 
     async function load() {
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { setLoading(false); return }
+      if (!user) { router.replace(ROUTES.BOARD_LOGIN); return }
       setUserId(user.id)
 
       // branch_id 확인
@@ -70,7 +73,7 @@ export default function CustomerNoticesPage() {
       setLoading(false)
     }
     load()
-  }, [])
+  }, [router])
 
   async function handleToggle(noticeId: string) {
     setExpanded(prev => {

@@ -2,10 +2,13 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
+import { ROUTES } from '@/lib/routes'
 import type { Inquiry, InquiryStatus, SlaRule } from '@/lib/types'
 import { STATUS_LABELS } from '@/lib/types'
 import InquiryCard from '@/components/board/InquiryCard'
+import AccountMismatchNotice from '@/components/board/AccountMismatchNotice'
 
 const TABS: { label: string; value: InquiryStatus | 'all' }[] = [
   { label: '전체', value: 'all' },
@@ -16,10 +19,13 @@ const TABS: { label: string; value: InquiryStatus | 'all' }[] = [
 ]
 
 export default function CustomerInquiriesPage() {
+  const router = useRouter()
   const [inquiries, setInquiries] = useState<Inquiry[]>([])
   const [slaRules, setSlaRules] = useState<Record<string, SlaRule>>({})
   const [activeTab, setActiveTab] = useState<InquiryStatus | 'all'>('all')
   const [loading, setLoading] = useState(true)
+  const [noBranch, setNoBranch] = useState(false)
+  const [userEmail, setUserEmail] = useState<string | null>(null)
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -34,45 +40,49 @@ export default function CustomerInquiriesPage() {
 
     async function load() {
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+      if (!user) { router.replace(ROUTES.BOARD_LOGIN); return }
+      setUserEmail(user.email ?? null)
 
-      let branchId: string | null = null
+      try {
+        let branchId: string | null = null
 
-      const { data: branchRow } = await supabase
-        .from('branches')
-        .select('id')
-        .eq('auth_id', user.id)
-        .maybeSingle()
-
-      if (branchRow) {
-        branchId = branchRow.id
-      } else {
-        const { data: memberRow } = await supabase
-          .from('branch_members')
-          .select('branch_id')
+        const { data: branchRow } = await supabase
+          .from('branches')
+          .select('id')
           .eq('auth_id', user.id)
           .maybeSingle()
-        if (memberRow) branchId = memberRow.branch_id
+
+        if (branchRow) {
+          branchId = branchRow.id
+        } else {
+          const { data: memberRow } = await supabase
+            .from('branch_members')
+            .select('branch_id')
+            .eq('auth_id', user.id)
+            .maybeSingle()
+          if (memberRow) branchId = memberRow.branch_id
+        }
+
+        if (!branchId) { setNoBranch(true); return }
+
+        const { data: rules } = await supabase.from('sla_rules').select('*')
+        if (rules) {
+          const map: Record<string, SlaRule> = {}
+          rules.forEach(r => { map[r.category] = r })
+          setSlaRules(map)
+        }
+
+        const { data: inq } = await supabase
+          .from('inquiries')
+          .select('*, messages(content, sender_type, created_at, is_internal)')
+          .eq('branch_id', branchId)
+          .order('last_message_at', { ascending: false, nullsFirst: false })
+          .order('created_at', { ascending: false })
+
+        if (inq) setInquiries(inq as unknown as Inquiry[])
+      } finally {
+        setLoading(false)
       }
-
-      if (!branchId) return
-
-      const { data: rules } = await supabase.from('sla_rules').select('*')
-      if (rules) {
-        const map: Record<string, SlaRule> = {}
-        rules.forEach(r => { map[r.category] = r })
-        setSlaRules(map)
-      }
-
-      const { data: inq } = await supabase
-        .from('inquiries')
-        .select('*, messages(content, sender_type, created_at, is_internal)')
-        .eq('branch_id', branchId)
-        .order('last_message_at', { ascending: false, nullsFirst: false })
-        .order('created_at', { ascending: false })
-
-      if (inq) setInquiries(inq as unknown as Inquiry[])
-      setLoading(false)
     }
 
     load()
@@ -138,6 +148,8 @@ export default function CustomerInquiriesPage() {
             Array.from({ length: 4 }).map((_, i) => (
               <div key={i} className="bg-white rounded-2xl h-24 animate-pulse border border-gray-100" />
             ))
+          ) : noBranch ? (
+            <AccountMismatchNotice email={userEmail} />
           ) : filtered.length === 0 ? (
             <div className="bg-white rounded-2xl border border-gray-100 px-6 py-10 text-center">
               <p className="text-gray-400 text-sm">

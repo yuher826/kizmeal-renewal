@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
+import { ROUTES } from '@/lib/routes'
 
 type MenuRow = {
   id: string
@@ -32,6 +34,7 @@ const STATUS_COLORS: Record<string, string> = {
 }
 
 export default function CustomerDietPage() {
+  const router = useRouter()
   const [menus, setMenus]           = useState<MenuRow[]>([])
   const [fileFormat, setFileFormat] = useState<FileFormat>('pdf')
   const [branchName, setBranchName] = useState<string | null>(null)
@@ -42,7 +45,7 @@ export default function CustomerDietPage() {
 
     async function load() {
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { setLoading(false); return }
+      if (!user) { router.replace(ROUTES.BOARD_LOGIN); return }
 
       // branch_id 확인 (master → member 순)
       let branchId: string | null = null
@@ -110,7 +113,7 @@ export default function CustomerDietPage() {
       setLoading(false)
     }
     load()
-  }, [])
+  }, [router])
 
   function isFormatActive(fmt: string): boolean {
     if (fileFormat === 'pdf+jpg') return fmt === 'pdf' || fmt === 'jpg'

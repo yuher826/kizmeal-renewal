@@ -2,36 +2,48 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
+import { ROUTES } from '@/lib/routes'
 import type { Branch } from '@/lib/types'
+import AccountMismatchNotice from '@/components/board/AccountMismatchNotice'
 
 export default function CustomerSettingsPage() {
+  const router = useRouter()
   const [branch, setBranch] = useState<Branch | null>(null)
   const [phone, setPhone] = useState('')
   const [address, setAddress] = useState('')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [userEmail, setUserEmail] = useState<string | null>(null)
 
   useEffect(() => {
     const supabase = createClient()
     async function load() {
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+      if (!user) { router.replace(ROUTES.BOARD_LOGIN); return }
+      setUserEmail(user.email ?? null)
 
-      const { data: branchRow } = await supabase
-        .from('branches')
-        .select('*, brands(*)')
-        .eq('auth_id', user.id)
-        .maybeSingle()
+      try {
+        const { data: branchRow } = await supabase
+          .from('branches')
+          .select('*, brands(*)')
+          .eq('auth_id', user.id)
+          .maybeSingle()
 
-      if (branchRow) {
-        setBranch(branchRow as Branch)
-        setPhone(branchRow.phone || '')
-        setAddress(branchRow.address || '')
+        // ★branch_members(직원) fallback은 settings/members와 동일 사유로 이번엔 제외
+        if (branchRow) {
+          setBranch(branchRow as Branch)
+          setPhone(branchRow.phone || '')
+          setAddress(branchRow.address || '')
+        }
+      } finally {
+        setLoading(false)
       }
     }
     load()
-  }, [])
+  }, [router])
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault()
@@ -50,7 +62,7 @@ export default function CustomerSettingsPage() {
   async function handleLogout() {
     const supabase = createClient()
     await supabase.auth.signOut()
-    window.location.href = '/board/login'
+    window.location.href = ROUTES.BOARD_LOGIN
   }
 
   return (
@@ -65,6 +77,14 @@ export default function CustomerSettingsPage() {
       </header>
 
       <div className="px-4 sm:px-6 py-6 space-y-4">
+        {!loading && !branch ? (
+          <AccountMismatchNotice
+            email={userEmail}
+            title="원 정보 수정 화면을 이용할 수 없습니다"
+            message="이 화면은 원 마스터 계정에서만 이용할 수 있습니다. 마스터 계정이 아니거나 계정 연결에 문제가 있을 수 있으니, 다른 계정으로 로그인하셨다면 로그아웃 후 다시 확인해 주세요."
+          />
+        ) : (
+        <>
         {/* 지점 정보 */}
         <form onSubmit={handleSave} className="bg-white rounded-2xl border border-gray-100 p-6">
           <h2 className="font-bold text-[#1C2B1E] mb-4">지점 정보</h2>
@@ -139,6 +159,8 @@ export default function CustomerSettingsPage() {
             로그아웃
           </button>
         </div>
+        </>
+        )}
       </div>
     </div>
   )

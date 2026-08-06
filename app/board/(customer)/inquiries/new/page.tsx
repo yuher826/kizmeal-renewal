@@ -4,8 +4,10 @@ import { useState, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
+import { ROUTES } from '@/lib/routes'
 import { CATEGORY_ICONS, CATEGORY_LABELS, type InquiryCategory } from '@/lib/types'
 import FileUpload from '@/components/board/FileUpload'
+import AccountMismatchNotice from '@/components/board/AccountMismatchNotice'
 
 const FORM_CATEGORIES: InquiryCategory[] = [
   'DELIVERY', 'MENU', 'STAFF_MEAL', 'HYGIENE', 'COMPLAINT', 'CONTRACT', 'OTHER',
@@ -70,30 +72,42 @@ export default function NewInquiryPage() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [toast, setToast] = useState('')
+  const [checking, setChecking] = useState(true)
+  const [noBranch, setNoBranch] = useState(false)
+  const [submitNoBranch, setSubmitNoBranch] = useState(false)
+  const [userEmail, setUserEmail] = useState<string | null>(null)
 
   useEffect(() => {
     const supabase = createClient()
     async function fetchBranch() {
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-      const { data: branchRow } = await supabase
-        .from('branches')
-        .select('name')
-        .eq('auth_id', user.id)
-        .maybeSingle()
-      if (branchRow?.name) { setBranchName(branchRow.name); return }
-      const { data: memberRow } = await supabase
-        .from('branch_members')
-        .select('branches(name)')
-        .eq('auth_id', user.id)
-        .maybeSingle()
-      if (memberRow?.branches) {
-        const b = memberRow.branches as unknown as { name: string }
-        setBranchName(b.name)
+      if (!user) { router.replace(ROUTES.BOARD_LOGIN); return }
+      setUserEmail(user.email ?? null)
+
+      try {
+        const { data: branchRow } = await supabase
+          .from('branches')
+          .select('name')
+          .eq('auth_id', user.id)
+          .maybeSingle()
+        if (branchRow?.name) { setBranchName(branchRow.name); return }
+        const { data: memberRow } = await supabase
+          .from('branch_members')
+          .select('branches(name)')
+          .eq('auth_id', user.id)
+          .maybeSingle()
+        if (memberRow?.branches) {
+          const b = memberRow.branches as unknown as { name: string }
+          setBranchName(b.name)
+        } else {
+          setNoBranch(true)
+        }
+      } finally {
+        setChecking(false)
       }
     }
     fetchBranch()
-  }, [])
+  }, [router])
 
   const handleFieldChange = useCallback((key: string, value: string) => {
     setFormData(prev => ({ ...prev, [key]: value }))
@@ -113,12 +127,13 @@ export default function NewInquiryPage() {
     if (!canSubmit || !category) return
     setSubmitting(true)
     setError('')
+    setSubmitNoBranch(false)
 
     const supabase = createClient()
 
     try {
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('로그인이 필요합니다.')
+      if (!user) { router.replace(ROUTES.BOARD_LOGIN); return }
 
       let branchId: string | null = null
       let brandId: string | null = null
@@ -144,7 +159,13 @@ export default function NewInquiryPage() {
         }
       }
 
-      if (!branchId) throw new Error('지점 정보를 찾을 수 없습니다. 관리자에게 문의하세요.')
+      if (!branchId) {
+        // ★폼 내용을 지우지 않는다 — throw로 catch에 보내는 대신
+        // 여기서 바로 상태만 세팅하고 폼(입력값·첨부파일)은 그대로 유지한다.
+        setSubmitNoBranch(true)
+        setSubmitting(false)
+        return
+      }
 
       if (!brandId) {
         const { data: b } = await supabase
@@ -256,6 +277,9 @@ export default function NewInquiryPage() {
       </header>
 
       <div className="px-4 sm:px-6 py-6">
+        {checking ? null : noBranch ? (
+          <AccountMismatchNotice email={userEmail} />
+        ) : (
         <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-gray-100 p-6 space-y-5">
           {/* 지점명 (read-only) */}
           {branchName && (
@@ -387,6 +411,10 @@ export default function NewInquiryPage() {
             )}
           </div>
 
+          {submitNoBranch && (
+            <AccountMismatchNotice email={userEmail} title="지점 정보를 찾을 수 없습니다" />
+          )}
+
           {error && (
             <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700">
               {error}
@@ -406,6 +434,7 @@ export default function NewInquiryPage() {
             ) : '문의 제출'}
           </button>
         </form>
+        )}
       </div>
     </div>
   )
