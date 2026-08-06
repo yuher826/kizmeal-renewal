@@ -45,17 +45,17 @@ export async function middleware(request: NextRequest) {
   const isErpProtected = pathname.startsWith('/erp') && !isErpLogin
 
   // Parent portal routes
-  const isParentPortal = pathname.startsWith('/parent/dashboard') ||
-    pathname.startsWith('/parent/menu') ||
-    pathname.startsWith('/parent/photos') ||
-    pathname.startsWith('/parent/recipes') ||
-    pathname.startsWith('/parent/mypage')
   const isParentLogin = pathname === '/parent/login'
   const isParentPublic = pathname.startsWith('/parent/pending') ||
     pathname.startsWith('/parent/rejected') ||
     pathname.startsWith('/parent/forgot-password') ||
     pathname.startsWith('/parent/reset-password') ||
     pathname.startsWith('/parent/register')
+  // 열거식 금지 — 공개 경로(위 5개 + 로그인)만 명시적으로 제외하고,
+  // 그 외 /parent/* 전부를 기본적으로 "보호 대상"으로 취급한다.
+  // (portal) 그룹 아래 새 페이지가 추가돼도 자동으로 보호되어 이번 같은 누락이 재발하지 않는다.
+  const isParentPortal =
+    pathname.startsWith('/parent/') && !isParentLogin && !isParentPublic
 
   // Nutritionist routes
   const isNutritionistRoute = pathname.startsWith('/nutritionist/dashboard') ||
@@ -157,8 +157,7 @@ export const config = {
   matcher: [
     '/board/(.*)',
     '/erp/(.*)',
-    '/parent/login',
-    '/parent/(dashboard|menu|photos|recipes|mypage)(.*)',
+    '/parent/(.*)',
     '/nutritionist/(.*)',
     '/api/check-contract-expiry',
   ],
