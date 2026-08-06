@@ -452,9 +452,9 @@ export default function BranchProfileForm({
               <option value="consignment">위탁</option>
             </select>
           </div>
-          {/* 계약 상태 */}
+          {/* 식단 계약 상태 (원 운영 상태(branches.status)와는 별개 — 원 상세 하단 "원 운영 상태" 섹션 참고) */}
           <div>
-            <FieldLabel htmlFor="contract_status">계약 상태</FieldLabel>
+            <FieldLabel htmlFor="contract_status">식단 계약 상태</FieldLabel>
             <select
               id="contract_status"
               value={form.contract_status}

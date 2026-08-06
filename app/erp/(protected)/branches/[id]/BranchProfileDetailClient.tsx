@@ -3,12 +3,13 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import {
-  ArrowLeft, CheckCircle2, AlertTriangle, Clock, KeyRound, Loader2,
+  ArrowLeft, CheckCircle2, AlertTriangle, Clock, KeyRound, Power, Loader2,
 } from 'lucide-react'
 import BranchProfileForm from '@/components/erp/BranchProfileForm'
 import ContractStatusButton from '@/components/erp/ContractStatusButton'
 import type { BranchProfileDetail, RecentMenu } from '@/types/branch-profile'
 import type { BranchAccountInfo } from '@/types/erp'
+import type { BranchStatus } from '@/lib/types'
 
 // ── 토스트 ──────────────────────────────────────────────────────────
 function Toast({ msg, type }: { msg: string; type: 'success' | 'error' }) {
@@ -443,6 +444,176 @@ function BranchAccountSection({
   )
 }
 
+// ── 원 운영 상태 섹션 ────────────────────────────────────────────────
+// ★branches.status / branches.is_active 전용 — branch_profiles.contract_status("식단 계약 상태")와는
+// 완전히 다른 컬럼이다. 매일 도는 check-contract-expiry cron이 이 값을 읽고 만료 시 'expired'로 갱신한다.
+const OPERATION_STATUS_CFG: Record<BranchStatus, { label: string; cls: string }> = {
+  new:      { label: '신규',   cls: 'bg-blue-100 text-blue-700' },
+  active:   { label: '활성',   cls: 'bg-green-100 text-green-700' },
+  vacation: { label: '방학',   cls: 'bg-yellow-100 text-yellow-800' },
+  expired:  { label: '만료',   cls: 'bg-orange-100 text-orange-700' },
+  inactive: { label: '비활성', cls: 'bg-gray-100 text-gray-600' },
+}
+
+function BranchOperationStatusSection({
+  profileId,
+  branchName,
+  showToast,
+}: {
+  profileId: string
+  branchName: string
+  showToast: (msg: string, type: 'success' | 'error') => void
+}) {
+  const [status, setStatus] = useState<BranchStatus | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [confirmDeactivate, setConfirmDeactivate] = useState(false)
+
+  function fetchStatus() {
+    setLoading(true)
+    fetch(`/api/branch-profiles/${profileId}/account/branch-status`)
+      .then(r => r.json())
+      .then(data => setStatus((data.status as BranchStatus) ?? null))
+      .catch(() => setStatus(null))
+      .finally(() => setLoading(false))
+  }
+
+  useEffect(() => { fetchStatus() }, [profileId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function updateStatus(newStatus: BranchStatus) {
+    setSaving(true)
+    try {
+      const res = await fetch(`/api/branch-profiles/${profileId}/account/branch-status`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'update-status', status: newStatus }),
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        showToast(err.error ?? '상태 변경에 실패했습니다', 'error')
+        return
+      }
+      setStatus(newStatus)
+      showToast('원 운영 상태가 변경됐습니다', 'success')
+    } catch {
+      showToast('서버 오류가 발생했습니다', 'error')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleDeactivate() {
+    setSaving(true)
+    setConfirmDeactivate(false)
+    try {
+      const res = await fetch(`/api/branch-profiles/${profileId}/account/branch-status`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'deactivate' }),
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        showToast(err.error ?? '비활성화에 실패했습니다', 'error')
+        return
+      }
+      setStatus('inactive')
+      showToast('원 계정이 비활성화되고 로그인이 차단됐습니다', 'success')
+    } catch {
+      showToast('서버 오류가 발생했습니다', 'error')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="bg-white border border-slate-200 rounded-xl p-6 mt-4">
+        <div className="animate-pulse bg-slate-100 rounded h-4 w-1/3" />
+      </div>
+    )
+  }
+
+  // 상태를 읽지 못한 예외 상황(원 정보 없음 등)에서는 섹션 자체를 숨김
+  if (!status) return null
+
+  const cfg = OPERATION_STATUS_CFG[status] ?? OPERATION_STATUS_CFG.active
+
+  return (
+    <div className="bg-white border border-slate-200 rounded-xl p-6 mt-4">
+      <div className="flex items-center gap-2 mb-1">
+        <Power size={18} className="text-emerald-600" />
+        <h2 className="text-base font-semibold text-slate-800">원 운영 상태</h2>
+      </div>
+      <p className="text-xs text-slate-400 mb-4">
+        매일 자동 점검(계약만료 배치)이 이 상태를 읽습니다. 위의 &quot;식단 계약 상태&quot;와는 별개 항목입니다.
+      </p>
+
+      <div className="flex items-center gap-2 flex-wrap mb-3">
+        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${cfg.cls}`}>{cfg.label}</span>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <select
+          value={status}
+          onChange={e => updateStatus(e.target.value as BranchStatus)}
+          disabled={saving}
+          className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500 disabled:opacity-60"
+        >
+          <option value="new">신규</option>
+          <option value="active">활성</option>
+          <option value="vacation">방학</option>
+          <option value="expired">만료</option>
+          <option value="inactive">비활성</option>
+        </select>
+
+        {status !== 'inactive' && (
+          <button
+            onClick={() => setConfirmDeactivate(true)}
+            disabled={saving}
+            className="border border-red-200 text-red-500 hover:bg-red-50 text-sm rounded-lg px-3 py-2 transition-colors disabled:opacity-60"
+          >
+            비활성화
+          </button>
+        )}
+      </div>
+
+      {/* 비활성화 확인 모달 */}
+      {confirmDeactivate && (
+        <div
+          className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
+          onClick={() => setConfirmDeactivate(false)}
+        >
+          <div
+            className="bg-white rounded-xl p-6 max-w-sm w-full shadow-xl"
+            onClick={e => e.stopPropagation()}
+          >
+            <h3 className="text-base font-semibold text-slate-800 mb-2">원 운영 상태 비활성화</h3>
+            <p className="text-sm text-slate-500 mb-4">
+              {branchName}을(를) 비활성화합니다.<br />
+              로그인 계정도 함께 차단됩니다. 계속하시겠습니까?
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setConfirmDeactivate(false)}
+                className="border border-slate-200 text-slate-600 text-sm px-4 py-2 rounded-lg hover:bg-slate-50"
+              >
+                취소
+              </button>
+              <button
+                onClick={handleDeactivate}
+                disabled={saving}
+                className="bg-red-500 text-white text-sm px-4 py-2 rounded-lg hover:bg-red-600 disabled:opacity-60"
+              >
+                비활성화
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── 메인 ────────────────────────────────────────────────────────────
 interface Props {
   id: string
@@ -604,6 +775,15 @@ export default function BranchProfileDetailClient({ id, isSuperAdmin }: Props) {
 
         {/* 담당자 계정 */}
         <BranchAccountSection profileId={id} profile={profile} showToast={showToast} />
+
+        {/* 원 운영 상태 — 계정이 연결(branch_id 존재)된 원만 표시 */}
+        {profile.branch_id && (
+          <BranchOperationStatusSection
+            profileId={id}
+            branchName={profile.branch_full_name ?? profile.display_name ?? titleName}
+            showToast={showToast}
+          />
+        )}
       </div>
     </main>
   )
