@@ -406,6 +406,7 @@ def _get_branch_cfgs_from_db():
     pptx_generator.generate()에 전달할 cfg 리스트 반환.
     """
     from read_excel import determine_type
+    from branch_filters import filter_eligible_branches
     try:
         from supabase_uploader import get_supabase_client
         client = get_supabase_client()
@@ -413,13 +414,17 @@ def _get_branch_cfgs_from_db():
             'branch_profiles',
             'id,short_code,display_name,distribution_email,distribution_emails,'
             'slide_count,snack_morning,snack_afternoon,snack_childcare,'
-            'needs_english,has_yonder,has_dessert_fruit,file_format,'
+            'needs_english,has_yonder,has_dessert_fruit,file_format,contract_type,'
             'snack_label,morning_snack_fixed,morning_snack_fixed_menu',
             filters={'contract_status': 'active'},
         )
     except Exception as exc:
         print(f'[branch_profiles 조회 오류] {exc}')
         return []
+
+    # 임시원(contract_type='temporary') 코드 레벨 제외. try 밖이므로 0개면 RuntimeError가
+    # 엔드포인트 바깥 except(app.py 하단 /generate-from-json)로 전파 → HTTP 500 + 한글 메시지
+    profiles = filter_eligible_branches(profiles)
 
     cfgs = []
     for p in profiles:

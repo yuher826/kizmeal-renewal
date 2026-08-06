@@ -26,6 +26,7 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _HERE)
 
 from bracket_parser import wants_fruit
+from branch_filters import filter_eligible_branches
 from pptx_generator import generate as gen_pptx
 from read_excel import _embed_brackets, _inject_exception_to_banchan, determine_type
 from supabase_uploader import SupabaseREST
@@ -172,10 +173,12 @@ def fetch_branch_cfgs():
         'branch_profiles',
         'id,branch_id,short_code,display_name,branch_full_name,distribution_email,distribution_emails,'
         'slide_count,snack_morning,snack_afternoon,snack_childcare,'
-        'needs_english,has_yonder,has_dessert_fruit,file_format,'
+        'needs_english,has_yonder,has_dessert_fruit,file_format,contract_type,'
         'snack_label,morning_snack_fixed,morning_snack_fixed_menu',
         filters={'contract_status': 'active'},
     )
+    # 임시원(contract_type='temporary') 코드 레벨 제외. 0개면 예외 → GH Actions 실패(의도된 안전장치)
+    profiles = filter_eligible_branches(profiles)
     cfgs = []
     for p in profiles:
         short_code = (p.get('short_code') or '').strip()
