@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase-server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { Resend } from 'resend'
 import { DEPLOY_ROLES, EMERGENCY_DEPLOY_ROLES } from '@/lib/roles'
+import { filterEligibleBranches } from '@/lib/pptx-eligibility'
 
 export const maxDuration = 60
 
@@ -21,6 +22,7 @@ type BranchProfile = {
   review_required:     boolean | null
   file_format:         string | null
   direct_delivery:     boolean | null
+  contract_type:       string | null
 }
 
 type ReviewItemRow = {
@@ -140,16 +142,40 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: '배포할 항목이 없습니다.' }, { status: 400 })
   }
 
-  // branch_profiles 조회 (file_format 포함)
+  // branch_profiles 조회 (file_format, contract_type 포함)
   const branchIds = allItems.map(i => i.branch_id).filter(Boolean) as string[]
   const { data: profiles } = await db
     .from('branch_profiles')
-    .select('id, short_code, display_name, distribution_email, distribution_emails, diet_type, review_required, file_format, direct_delivery')
+    .select('id, short_code, display_name, distribution_email, distribution_emails, diet_type, review_required, file_format, direct_delivery, contract_type')
     .in('id', branchIds)
+
+  // 임시원(contract_type='temporary') 코드 레벨 제외.
+  // filterEligibleBranches 는 자격 0개면 throw 하는데, 이 라우트엔 최상위 try/catch 가
+  // 없어(throw 시 프로덕션에서 "Internal Server Error"만 노출) 여기서 직접 잡아
+  // 한글 400 으로 변환한다. 배포는 선택 배포라 대상이 정상적으로 0개일 수 있으므로
+  // 500 이 아니라 400 이 맞다.
+  let excludedIds: Set<string>
+  try {
+    const eligible    = filterEligibleBranches(profiles ?? [])
+    const eligibleIds = new Set(eligible.map(p => p.id))
+    excludedIds = new Set(
+      (profiles ?? []).filter(p => !eligibleIds.has(p.id)).map(p => p.id),
+    )
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    console.warn('[deploy] 배포 자격 필터:', msg)
+    return NextResponse.json(
+      { error: '배포 가능한 원이 없습니다. (임시 계약 원만 선택되었을 수 있습니다)' },
+      { status: 400 },
+    )
+  }
 
   const profileMap = new Map<string, BranchProfile>(
     (profiles ?? []).map((p: BranchProfile) => [p.id, p])
   )
+
+  // 임시원에 해당하는 배포 항목을 배포 대상에서 제외
+  const deployItems = allItems.filter(it => !(it.branch_id && excludedIds.has(it.branch_id)))
 
   const resend = new Resend(process.env.RESEND_API_KEY)
   const now    = new Date().toISOString()
@@ -158,8 +184,8 @@ export async function POST(req: NextRequest) {
   const failed:  string[] = []
   const skipped: string[] = []
 
-  for (let i = 0; i < allItems.length; i += DEPLOY_CHUNK_SIZE) {
-    const chunk = allItems.slice(i, i + DEPLOY_CHUNK_SIZE)
+  for (let i = 0; i < deployItems.length; i += DEPLOY_CHUNK_SIZE) {
+    const chunk = deployItems.slice(i, i + DEPLOY_CHUNK_SIZE)
     await Promise.all(chunk.map(async (item) => {
       const profile = item.branch_id ? profileMap.get(item.branch_id) : undefined
 
@@ -270,7 +296,7 @@ export async function POST(req: NextRequest) {
         failed.push(item.branch_name)
       }
     }))
-    if (i + DEPLOY_CHUNK_SIZE < allItems.length) {
+    if (i + DEPLOY_CHUNK_SIZE < deployItems.length) {
       await new Promise<void>(r => setTimeout(r, DEPLOY_CHUNK_DELAY_MS))
     }
   }
