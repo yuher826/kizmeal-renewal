@@ -6,6 +6,7 @@ import {
   ArrowLeft, CheckCircle2, AlertTriangle, Clock, KeyRound, Power, Loader2,
 } from 'lucide-react'
 import BranchProfileForm from '@/components/erp/BranchProfileForm'
+import BranchDietUploadCard from '@/components/erp/BranchDietUploadCard'
 import ContractStatusButton from '@/components/erp/ContractStatusButton'
 import type { BranchProfileDetail, RecentMenu } from '@/types/branch-profile'
 import type { BranchAccountInfo } from '@/types/erp'
@@ -628,7 +629,7 @@ export default function BranchProfileDetailClient({ id, isSuperAdmin }: Props) {
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
 
-  useEffect(() => {
+  function loadProfile() {
     fetch(`/api/branch-profiles/${id}`)
       .then(async r => {
         if (r.status === 404) { setNotFound(true); return }
@@ -637,7 +638,11 @@ export default function BranchProfileDetailClient({ id, isSuperAdmin }: Props) {
       })
       .catch(() => setNotFound(true))
       .finally(() => setLoading(false))
-  }, [id])
+  }
+
+  useEffect(() => {
+    loadProfile()
+  }, [id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function showToast(msg: string, type: 'success' | 'error') {
     setToast({ msg, type })
@@ -761,6 +766,15 @@ export default function BranchProfileDetailClient({ id, isSuperAdmin }: Props) {
           isNew={false}
           submitError={saveError}
         />
+
+        {/* 식단표 직접 업로드 — 임시원(temporary) 전용 */}
+        {profile.contract_type === 'temporary' && (
+          <BranchDietUploadCard
+            profileId={id}
+            showToast={showToast}
+            onUploaded={loadProfile}
+          />
+        )}
 
         {/* 식단 배포 현황 */}
         <div className="bg-white border border-slate-200 rounded-xl mt-6 overflow-hidden">
