@@ -113,9 +113,9 @@ export default function BoardLoginPage() {
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={KIZMEAL_LOGO_PATH} alt="키즈밀 로고" className="h-10 w-auto object-contain mb-10" />
           <h1 className="text-[28px] font-bold text-white leading-tight mb-2">
-            키즈밀 고객사·학부모 포털
+            키즈밀 고객사 포털
           </h1>
-          <p className="text-white/70 text-base mt-2">원 운영자와 학부모를 위한 식단표·공지·소통 서비스</p>
+          <p className="text-white/70 text-base mt-2">원 운영자를 위한 식단표·공지·소통 서비스</p>
 
           <div className="mt-12 pt-10 border-t border-white/20 space-y-4">
             <p className="text-white text-2xl font-bold leading-snug">&ldquo;새벽 3시의 약속&rdquo;</p>
