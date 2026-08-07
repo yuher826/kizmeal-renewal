@@ -66,7 +66,8 @@ export default function ParentMenuPage() {
         .eq('year', y)
         .eq('month', m)
         .neq('status', 'error')
-        .not('pptx_url', 'is', null)
+        // pptx/pdf/jpg 중 하나라도 있으면 노출 (직접 업로드된 PDF-only 식단표 포함)
+        .or('pptx_url.not.is.null,pdf_url.not.is.null,jpg_url.not.is.null')
         .maybeSingle()
 
       setMenu(data as WeeklyMenu | null)
