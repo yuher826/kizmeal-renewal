@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { sendAdminAccountEmail } from '@/lib/email'
-import { ROLES } from '@/lib/roles'
+import { ROLES, ADMIN_CREATE_ROLES, MANAGER_CREATABLE_ROLES, MANAGER_FORCED_SCOPE } from '@/lib/roles'
 import { randomInt } from 'crypto'
 
 // 유효한 관리자 역할/접근범위 목록 (lib/roles.ts 상수 재사용)
@@ -132,10 +132,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: true })
     }
 
-    // ── 관리자 계정 생성 (super_admin 전용) ───────────────────
+    // ── 관리자 계정 생성 (super_admin + manager) ───────────────
     if (action === 'create-admin') {
-      if (requesterAdmin.role !== 'super_admin') {
-        return NextResponse.json({ error: '슈퍼관리자만 관리자 계정을 생성할 수 있습니다' }, { status: 403 })
+      if (!ADMIN_CREATE_ROLES.includes(requesterAdmin.role)) {
+        return NextResponse.json({ error: '관리자 계정을 생성할 권한이 없습니다' }, { status: 403 })
       }
       if (!adminClient) {
         return NextResponse.json({ error: 'SUPABASE_SERVICE_ROLE_KEY 필요' }, { status: 400 })
@@ -148,7 +148,14 @@ export async function POST(request: Request) {
       if (!VALID_ADMIN_ROLES.includes(role)) {
         return NextResponse.json({ error: '유효하지 않은 역할입니다' }, { status: 400 })
       }
-      const scope = access_scope || 'both'
+
+      // 매니저 제약: 하위 역할(super_admin·manager 제외)만 생성 가능 + 접근범위 erp_only 강제
+      // (요청자 role 기준 서버 강제 — 클라이언트 전달값에 의존하지 않음)
+      const isManagerRequester = requesterAdmin.role === ROLES.MANAGER
+      if (isManagerRequester && !MANAGER_CREATABLE_ROLES.includes(role)) {
+        return NextResponse.json({ error: '매니저는 상위 역할(슈퍼관리자·매니저) 계정을 생성할 수 없습니다' }, { status: 403 })
+      }
+      const scope = isManagerRequester ? MANAGER_FORCED_SCOPE : (access_scope || 'both')
       if (!VALID_SCOPES.includes(scope)) {
         return NextResponse.json({ error: '유효하지 않은 접근범위입니다' }, { status: 400 })
       }

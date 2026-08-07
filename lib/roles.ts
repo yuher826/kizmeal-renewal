@@ -42,6 +42,20 @@ export const RESUBMIT_ROLES: string[] = [
   ...NUTRITIONIST_ROLES,
 ]
 
+/** 관리자 계정 "생성" 가능 역할 (요청자 기준) */
+export const ADMIN_CREATE_ROLES: string[] = [
+  ROLES.SUPER_ADMIN,
+  ROLES.MANAGER,
+]
+
+/** 매니저가 생성할 수 있는 하위 역할 (super_admin·manager 제외한 나머지 전부) */
+export const MANAGER_CREATABLE_ROLES: string[] = Object.values(ROLES).filter(
+  r => r !== ROLES.SUPER_ADMIN && r !== ROLES.MANAGER
+)
+
+/** 매니저가 생성하는 계정에 강제되는 접근범위 */
+export const MANAGER_FORCED_SCOPE = 'erp_only'
+
 /** 영양사 여부 체크 */
 export const isNutritionist = (role: string): boolean =>
   NUTRITIONIST_ROLES.includes(role)

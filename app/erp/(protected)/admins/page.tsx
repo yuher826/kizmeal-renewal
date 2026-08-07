@@ -5,7 +5,7 @@ import {
   Users, UserCheck, UserX, Plus, Copy, Check, Pencil, ShieldAlert, Loader2, X,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
-import { ROLES, ROLE_LABEL, isNutritionist } from '@/lib/roles'
+import { ROLES, ROLE_LABEL, isNutritionist, ADMIN_CREATE_ROLES, MANAGER_CREATABLE_ROLES, MANAGER_FORCED_SCOPE } from '@/lib/roles'
 import type { Admin } from '@/lib/types'
 
 // access_scope 포함 확장 타입 (lib/types의 Admin에는 아직 없는 컬럼)
@@ -33,6 +33,13 @@ const SCOPE_SUGGESTION: Record<string, string> = {
 
 // 역할 셀렉트 옵션 (lib/roles.ts 상수에서 파생 — 하드코딩 금지)
 const ROLE_OPTIONS = Object.values(ROLES).map(r => ({ value: r, label: ROLE_LABEL[r] ?? r }))
+
+// 접근범위 셀렉트 옵션
+const SCOPE_OPTIONS = [
+  { value: 'both',       label: '전체 (ERP + 홈페이지관리)' },
+  { value: 'erp_only',   label: 'ERP 전용' },
+  { value: 'board_only', label: '홈페이지 전용' },
+]
 
 // 역할 배지 색상
 function roleBadgeClass(role: string): string {
@@ -121,6 +128,15 @@ export default function AdminsPage() {
   const [saving, setSaving] = useState(false)
   const [editMsg, setEditMsg] = useState('')
 
+  // ── 권한 파생값 (super_admin: 전체 / manager: 하위 role·erp_only 생성만) ──
+  const isSuperAdmin = currentAdmin?.role === ROLES.SUPER_ADMIN
+  const availableRoleOptions = isSuperAdmin
+    ? ROLE_OPTIONS
+    : ROLE_OPTIONS.filter(o => MANAGER_CREATABLE_ROLES.includes(o.value))
+  const availableScopeOptions = isSuperAdmin
+    ? SCOPE_OPTIONS
+    : SCOPE_OPTIONS.filter(o => o.value === MANAGER_FORCED_SCOPE)
+
   // ── 데이터 로드 (centers 탭의 검증된 직접 쿼리 방식, 비활성 포함) ──
   const load = useCallback(async () => {
     const supabase = createClient()
@@ -155,14 +171,14 @@ export default function AdminsPage() {
 
   // ── 신규 생성 ──
   function openNewModal() {
-    setNewForm({ name: '', email: '', department: '', phone: '', role: '', access_scope: 'both' })
+    setNewForm({ name: '', email: '', department: '', phone: '', role: '', access_scope: isSuperAdmin ? 'both' : MANAGER_FORCED_SCOPE })
     setCreateMsg('')
     setShowNew(true)
   }
 
-  // 역할 변경 시 접근범위 자동 제안 (이후 수동 변경 가능)
+  // 역할 변경 시 접근범위 자동 제안 (super_admin만 수동 변경 가능 / manager는 erp_only 고정)
   function handleRoleChange(role: string) {
-    setNewForm(f => ({ ...f, role, access_scope: SCOPE_SUGGESTION[role] ?? 'both' }))
+    setNewForm(f => ({ ...f, role, access_scope: isSuperAdmin ? (SCOPE_SUGGESTION[role] ?? 'both') : MANAGER_FORCED_SCOPE }))
   }
 
   async function handleCreate() {
@@ -263,12 +279,12 @@ export default function AdminsPage() {
     )
   }
 
-  // ── super_admin 외 접근 차단 ──
-  if (!currentAdmin || currentAdmin.role !== 'super_admin') {
+  // ── 접근 차단 (super_admin·manager만 — manager는 하위 계정 생성만 가능) ──
+  if (!currentAdmin || !ADMIN_CREATE_ROLES.includes(currentAdmin.role)) {
     return (
       <div className="flex flex-col items-center justify-center py-24 text-center">
         <ShieldAlert size={40} className="text-slate-300 mb-4" />
-        <p className="text-slate-600 font-semibold">슈퍼관리자만 접근할 수 있는 페이지입니다</p>
+        <p className="text-slate-600 font-semibold">이 페이지에 접근할 권한이 없습니다</p>
         <p className="text-sm text-slate-400 mt-1">권한이 필요하면 슈퍼관리자에게 문의해주세요.</p>
       </div>
     )
@@ -317,7 +333,7 @@ export default function AdminsPage() {
           <table className="w-full">
             <thead>
               <tr className="bg-slate-50">
-                {['이름', '이메일', '역할', '접근범위', '상태', '관리'].map(h => (
+                {['이름', '이메일', '역할', '접근범위', '상태', ...(isSuperAdmin ? ['관리'] : [])].map(h => (
                   <th key={h} className="text-left px-4 py-3 text-xs font-bold text-slate-400">{h}</th>
                 ))}
               </tr>
@@ -333,18 +349,20 @@ export default function AdminsPage() {
                   <td className="px-4 py-3.5"><RoleBadge role={a.role} /></td>
                   <td className="px-4 py-3.5"><ScopeBadge scope={a.access_scope} /></td>
                   <td className="px-4 py-3.5"><ActiveBadge active={a.is_active} /></td>
-                  <td className="px-4 py-3.5">
-                    <button
-                      onClick={() => openEditModal(a)}
-                      className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-emerald-700 border border-slate-200 hover:border-emerald-300 rounded-lg px-2.5 py-1.5 transition-colors"
-                    >
-                      <Pencil size={12} /> 수정
-                    </button>
-                  </td>
+                  {isSuperAdmin && (
+                    <td className="px-4 py-3.5">
+                      <button
+                        onClick={() => openEditModal(a)}
+                        className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-emerald-700 border border-slate-200 hover:border-emerald-300 rounded-lg px-2.5 py-1.5 transition-colors"
+                      >
+                        <Pencil size={12} /> 수정
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))}
               {filtered.length === 0 && (
-                <tr><td colSpan={6} className="px-4 py-10 text-center text-sm text-slate-400">표시할 관리자가 없습니다</td></tr>
+                <tr><td colSpan={isSuperAdmin ? 6 : 5} className="px-4 py-10 text-center text-sm text-slate-400">표시할 관리자가 없습니다</td></tr>
               )}
             </tbody>
           </table>
@@ -362,12 +380,14 @@ export default function AdminsPage() {
                   </p>
                   <p className="text-xs text-slate-400">{a.email}</p>
                 </div>
-                <button
-                  onClick={() => openEditModal(a)}
-                  className="text-xs font-semibold text-slate-500 border border-slate-200 rounded-lg px-2.5 py-1.5"
-                >
-                  수정
-                </button>
+                {isSuperAdmin && (
+                  <button
+                    onClick={() => openEditModal(a)}
+                    className="text-xs font-semibold text-slate-500 border border-slate-200 rounded-lg px-2.5 py-1.5"
+                  >
+                    수정
+                  </button>
+                )}
               </div>
               <div className="flex flex-wrap gap-1.5 mt-2">
                 <RoleBadge role={a.role} />
@@ -413,20 +433,21 @@ export default function AdminsPage() {
                 className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
               >
                 <option value="" disabled>역할을 선택하세요</option>
-                {ROLE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                {availableRoleOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-500 mb-1.5">접근범위 (역할 선택 시 자동 제안)</label>
+              <label className="block text-xs font-semibold text-slate-500 mb-1.5">
+                {isSuperAdmin ? '접근범위 (역할 선택 시 자동 제안)' : '접근범위 (ERP 전용 고정)'}
+              </label>
               <select
                 value={newForm.access_scope}
                 onChange={e => setNewForm(f => ({ ...f, access_scope: e.target.value }))}
-                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                disabled={!isSuperAdmin}
+                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:bg-slate-50 disabled:text-slate-400"
               >
-                <option value="both">전체 (ERP + 홈페이지관리)</option>
-                <option value="erp_only">ERP 전용</option>
-                <option value="board_only">홈페이지 전용</option>
+                {availableScopeOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
             </div>
 
