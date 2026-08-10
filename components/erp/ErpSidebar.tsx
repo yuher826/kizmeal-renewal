@@ -23,8 +23,23 @@ interface Props {
   setOpen: (v: boolean) => void
 }
 
+// 전체 메뉴 경로 중 현재 경로와 일치하거나 상위 경로인 것을 모아
+// 가장 긴(가장 구체적인) 경로 하나만 활성 메뉴로 판정한다.
+const ALL_NAV_HREFS = ERP_NAV_GROUPS.flatMap(group =>
+  group.items.filter(item => !item.disabled).map(item => item.href)
+)
+
+function getActiveHref(pathname: string): string | undefined {
+  const matched = ALL_NAV_HREFS.filter(
+    href => pathname === href || pathname.startsWith(`${href}/`)
+  )
+  if (matched.length === 0) return undefined
+  return matched.reduce((longest, href) => (href.length > longest.length ? href : longest))
+}
+
 export default function ErpSidebar({ user, open, setOpen }: Props) {
   const pathname = usePathname()
+  const activeHref = getActiveHref(pathname)
 
   useEffect(() => { setOpen(false) }, [pathname])
 
@@ -69,7 +84,7 @@ export default function ErpSidebar({ user, open, setOpen }: Props) {
               <div className="space-y-0.5">
                 {visibleItems.map(item => {
                   const Icon = item.icon
-                  const active = !item.disabled && pathname.startsWith(item.href)
+                  const active = !item.disabled && item.href === activeHref
                   if (item.disabled) {
                     return (
                       <div
