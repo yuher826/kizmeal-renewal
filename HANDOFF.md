@@ -3,7 +3,7 @@
 > 이 파일은 항상 **"지금 상태"만** 담는다. 매 세션 끝에 최신 상태로 덮어쓴다.
 > 과거 이력은 `git log HANDOFF.md`로 본다.
 
-**최종 갱신:** 2026-08-11 (솔아 세션, 로컬 커밋만 — push는 사무실/집 PC에서 필요)
+**최종 갱신:** 2026-08-11 (로컬 PC 세션 — board/erp 중복본 정리 patch 적용·build·라우트 검증·push 완료)
 
 ---
 
@@ -123,33 +123,31 @@
 
 ---
 
-## board/erp 중복본 정리 — ✅ 완료 (2026-08-11, 로컬 커밋만 / push 대기)
+## board/erp 중복본 정리 — ✅ 완료 (2026-08-11, push까지 완료)
 
-**⚠️ 이 컨테이너(솔아 세션)는 GitHub push 인증정보가 없어 로컬 커밋만 하고
-패치 파일로 전달함. 사무실/집 PC에서 아래 적용 후 `npm run build` 최종 확인 → push 필요.**
+로컬 PC(.env.local 보유)에서 솔아 세션이 전달한 패치(`kizmeal-board-erp-cleanup.patch`)를
+`git am`으로 적용 → 최종 검증 → push까지 마무리함. 패치 파일은 적용 후 삭제.
 
-- 커밋 `2cb1d7d`: 선행작업①) erp→board 역참조 11곳 → erp 경로로 교체
+- 커밋 `d57a59b`(구 `2cb1d7d`): 선행작업①) erp→board 역참조 11곳 → erp 경로로 교체
   (`diet/page.tsx` 2곳, `history/page.tsx` 3곳, `review/page.tsx` 2곳, `upload/page.tsx` 4곳)
-- 커밋 `1c6a05e`: 선행작업②③④ 확인 완료 후 실제 삭제
+- 커밋 `cb5d21c`(구 `1c6a05e`): 선행작업②③④ 확인 완료 후 실제 삭제
   - ② `next.config.mjs` redirect 4줄 — 변경 없이 그대로 존치 확인
   - ③ `branch-profile/[branchId]/page.tsx:356,366` 링크도 `/erp/diet`로 교체
     (redirect 홉 제거. 이 페이지 자체는 삭제 대상 아니고 계속 살아있음)
   - ④ 삭제 직전 `curl -I`로 4개 redirect 경로 실측 — 전부 307, location 헤더 정확
   - **삭제**: `app/board/admin/diet-automation/{page.tsx,history/page.tsx,review/page.tsx,upload/page.tsx}`
-- 검증: `tsc --noEmit` 삭제 전/후 2회 0 errors. `next dev`로 redirect 재실측 완료.
-  `next build`는 샌드박스에 `fonts.googleapis.com` 접근 불가라 미실행 — **로컬 PC에서 필수 확인**.
-  erp 페이지 자체 HTTP 응답은 `.env.local` 없어 500(Supabase 클라이언트 생성 실패) —
-  삭제와 무관, 로컬 PC(.env.local 있음)에서는 문제없이 렌더될 것으로 예상, **실물 확인 필요**
-
-### 적용 방법 (사무실/집 PC)
-```bash
-git pull                      # 이미 push된 상태면 pull만
-# 또는 push 전이면 솔아가 전달한 패치 적용 후 직접 push
-npm run build                 # 실물 폰트 접근 가능 환경에서 최종 빌드 검증
-# 브라우저로 /erp/diet, /erp/upload, /erp/history, /erp/review 실물 확인
-# /board/admin/diet-automation(구 URL) 접속 시 /erp/diet로 리다이렉트되는지도 재확인
-git push origin master
-```
+- 커밋 `0ed8728`(구 `ffff5c8`): HANDOFF 갱신 (솔아 세션분)
+- **로컬 PC 최종 검증 (2026-08-11)**:
+  - `npm run build` — **정상 통과**. `/erp/diet`, `/erp/upload`, `/erp/history`, `/erp/review`
+    등 전 라우트 빌드 성공, 삭제된 `/board/admin/diet-automation/*`는 산출물에서 제거 확인
+  - 브라우저 확장(Claude in Chrome) 미설치 상태라 `next dev` 기동 후 curl로 대체 검증:
+    - `/erp/diet`·`/erp/upload`·`/erp/history`·`/erp/review` → 404 없음, 미인증 시
+      `/erp/login?next=...`로 307 (보호 라우트 정상 동작)
+    - 구 URL 4종(`/board/admin/diet-automation`, `.../review`, `.../upload`, `.../history`)
+      → 각각 대응하는 `/erp/*`로 307 리다이렉트 정상 확인
+  - **⚠️ 로그인 후 화면 렌더 자체(실제 데이터 표시 등)는 브라우저 미검증** — 라우팅/빌드
+    레벨 확인만 완료. 다음에 실사용 중 이상 있으면 보고
+  - `git push origin master` 완료 (`a99c1b7..0ed8728`)
 
 ---
 
