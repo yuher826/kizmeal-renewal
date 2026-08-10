@@ -3,7 +3,7 @@
 > 이 파일은 항상 **"지금 상태"만** 담는다. 매 세션 끝에 최신 상태로 덮어쓴다.
 > 과거 이력은 `git log HANDOFF.md`로 본다.
 
-**최종 갱신:** 2026-08-10
+**최종 갱신:** 2026-08-11 (솔아 세션, 로컬 커밋만 — push는 사무실/집 PC에서 필요)
 
 ---
 
@@ -123,12 +123,37 @@
 
 ---
 
-## board/erp 중복본 정리 (조사 완료, 실행 대기)
+## board/erp 중복본 정리 — ✅ 완료 (2026-08-11, 로컬 커밋만 / push 대기)
 
-**조사 결론: 삭제 가능 (위험도 낮음). 단 선행 작업 필요.**
+**⚠️ 이 컨테이너(솔아 세션)는 GitHub push 인증정보가 없어 로컬 커밋만 하고
+패치 파일로 전달함. 사무실/집 PC에서 아래 적용 후 `npm run build` 최종 확인 → push 필요.**
 
-대상: `app/board/admin/diet-automation/` 4개 파일
-(`page.tsx`, `review/page.tsx`, `upload/page.tsx`, `history/page.tsx`)
+- 커밋 `2cb1d7d`: 선행작업①) erp→board 역참조 11곳 → erp 경로로 교체
+  (`diet/page.tsx` 2곳, `history/page.tsx` 3곳, `review/page.tsx` 2곳, `upload/page.tsx` 4곳)
+- 커밋 `1c6a05e`: 선행작업②③④ 확인 완료 후 실제 삭제
+  - ② `next.config.mjs` redirect 4줄 — 변경 없이 그대로 존치 확인
+  - ③ `branch-profile/[branchId]/page.tsx:356,366` 링크도 `/erp/diet`로 교체
+    (redirect 홉 제거. 이 페이지 자체는 삭제 대상 아니고 계속 살아있음)
+  - ④ 삭제 직전 `curl -I`로 4개 redirect 경로 실측 — 전부 307, location 헤더 정확
+  - **삭제**: `app/board/admin/diet-automation/{page.tsx,history/page.tsx,review/page.tsx,upload/page.tsx}`
+- 검증: `tsc --noEmit` 삭제 전/후 2회 0 errors. `next dev`로 redirect 재실측 완료.
+  `next build`는 샌드박스에 `fonts.googleapis.com` 접근 불가라 미실행 — **로컬 PC에서 필수 확인**.
+  erp 페이지 자체 HTTP 응답은 `.env.local` 없어 500(Supabase 클라이언트 생성 실패) —
+  삭제와 무관, 로컬 PC(.env.local 있음)에서는 문제없이 렌더될 것으로 예상, **실물 확인 필요**
+
+### 적용 방법 (사무실/집 PC)
+```bash
+git pull                      # 이미 push된 상태면 pull만
+# 또는 push 전이면 솔아가 전달한 패치 적용 후 직접 push
+npm run build                 # 실물 폰트 접근 가능 환경에서 최종 빌드 검증
+# 브라우저로 /erp/diet, /erp/upload, /erp/history, /erp/review 실물 확인
+# /board/admin/diet-automation(구 URL) 접속 시 /erp/diet로 리다이렉트되는지도 재확인
+git push origin master
+```
+
+---
+
+## (이력, 참고용) 정리 전 조사 메모
 
 ### 근거
 
