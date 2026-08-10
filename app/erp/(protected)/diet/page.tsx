@@ -663,7 +663,7 @@ function DietAutomationContent() {
     switch (idx) {
       case 0: return handleGenerateForm()
       case 1: return handleDownloadForm()
-      case 2: return router.push('/board/admin/diet-automation/upload')
+      case 2: return router.push('/erp/upload')
       case 3: return handleGenerate()
     }
   }
@@ -880,7 +880,7 @@ function DietAutomationContent() {
           {/* ── 빠른 이동 링크 (조각7-3d) ─────────────────────────────── */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-8">
             <Link
-              href="/board/admin/diet-automation/history"
+              href="/erp/history"
               className="group flex items-center gap-3 px-4 py-3 rounded-xl bg-white border border-gray-200 hover:border-[#2D6A4F] transition-colors shadow-sm"
             >
               <span className="flex items-center justify-center w-9 h-9 rounded-lg bg-[#F6FAF6] text-[#2D6A4F] shrink-0">

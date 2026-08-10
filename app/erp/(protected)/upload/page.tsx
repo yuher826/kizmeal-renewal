@@ -110,7 +110,7 @@ export default function DietUploadPage() {
         setExistingData(true)
         setToast('✅ 업로드 완료! 잠시 후 허브로 이동합니다...')
         setTimeout(() => {
-          router.push(`/board/admin/diet-automation?year=${data.year}&month=${data.month}`)
+          router.push(`/erp/diet?year=${data.year}&month=${data.month}`)
         }, 3000)
       }
     } catch (err) {
@@ -137,7 +137,7 @@ export default function DietUploadPage() {
           <p className="text-2xl mb-2">🔒</p>
           <p className="font-bold text-gray-800 mb-1">접근 권한 없음</p>
           <p className="text-sm text-gray-500 mb-4">CK 식단 입력 권한이 필요합니다</p>
-          <Link href="/board/admin/diet-automation" className="text-[#2D6A4F] text-sm underline">
+          <Link href="/erp/diet" className="text-[#2D6A4F] text-sm underline">
             돌아가기
           </Link>
         </div>
@@ -150,7 +150,7 @@ export default function DietUploadPage() {
       {/* ── 헤더 ─────────────────────────────────────────────────── */}
       <div className="mb-6">
         <Link
-          href="/board/admin/diet-automation"
+          href="/erp/diet"
           className="text-gray-400 hover:text-gray-600 text-sm inline-block mb-2"
         >
           ← 식단표 자동화
@@ -327,7 +327,7 @@ export default function DietUploadPage() {
                 {/* PPTX 생성 버튼 */}
                 <button
                   type="button"
-                  onClick={() => router.push('/board/admin/diet-automation')}
+                  onClick={() => router.push('/erp/diet')}
                   className="w-full py-3 rounded-xl bg-[#1565C0] text-white text-sm font-semibold hover:bg-[#0D47A1] transition-colors"
                 >
                   🖨️ PPTX 생성 페이지로 이동

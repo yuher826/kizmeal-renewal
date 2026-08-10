@@ -2106,7 +2106,7 @@ function DietReviewPageInner() {
     <main className="min-h-screen bg-[#F6FAF6] pb-20">
       {/* ── 헤더 ─────────────────────────────────────────────── */}
       <div className="px-4 sm:px-6 pt-6 pb-3">
-        <Link href="/board/admin/diet-automation" className="text-gray-400 hover:text-gray-600 text-sm inline-block mb-3">
+        <Link href="/erp/diet" className="text-gray-400 hover:text-gray-600 text-sm inline-block mb-3">
           ← 식단표 자동화
         </Link>
         <div className="flex items-center gap-3 flex-wrap">
@@ -2142,7 +2142,7 @@ function DietReviewPageInner() {
         {!loading && currentAdmin && items.length === 0 && (
           <div className="bg-white rounded-2xl border border-gray-100 p-10 text-center">
             <p className="text-gray-400 text-sm">{year}년 {month}월 식단 데이터가 없습니다.</p>
-            <Link href="/board/admin/diet-automation/upload" className="mt-4 inline-block text-[#2D6A4F] text-sm underline">
+            <Link href="/erp/upload" className="mt-4 inline-block text-[#2D6A4F] text-sm underline">
               엑셀 업로드하기
             </Link>
           </div>

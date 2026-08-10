@@ -69,7 +69,7 @@ export default function DietHistoryPage() {
       {/* 헤더 */}
       <div className="mb-8">
         <Link
-          href="/board/admin/diet-automation"
+          href="/erp/diet"
           className="inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-[#2D6A4F] transition-colors mb-3"
         >
           ← 식단표 자동화
@@ -96,7 +96,7 @@ export default function DietHistoryPage() {
           <p className="text-sm font-medium text-gray-600 mb-1">아직 이력이 없습니다</p>
           <p className="text-xs text-gray-400 mb-6">엑셀 업로드 후 이력이 여기 표시됩니다</p>
           <Link
-            href="/board/admin/diet-automation/upload"
+            href="/erp/upload"
             className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-[#2D6A4F] text-white text-sm font-semibold hover:bg-[#1B4332] transition-colors"
           >
             📤 엑셀 업로드
@@ -121,7 +121,7 @@ export default function DietHistoryPage() {
                   const meta      = STATUS_META[row.status] ?? { label: row.status, color: '#9E9E9E', bg: '#F5F5F5' }
                   const gen       = row.generation_results
                   const isDeployed = row.status === 'deployed'
-                  const hubHref   = `/board/admin/diet-automation?year=${row.year}&month=${row.month}`
+                  const hubHref   = `/erp/diet?year=${row.year}&month=${row.month}`
 
                   return (
                     <tr
