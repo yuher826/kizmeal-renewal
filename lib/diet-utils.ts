@@ -68,3 +68,18 @@ export function expandGroupTarget(
   if (target.includes('/')) return target.split('/').map(t => t.trim())
   return [target]
 }
+
+// 연도 드롭다운 선택지 — 작년 ~ 3년 후(총 5개)를 현재 연도 기준으로 계산.
+// 연도 배열을 하드코딩하면 범위 끝을 지난 뒤 선택지가 사라져 코드를 고쳐야 한다.
+// 작년을 남기는 건 지난 달 폼을 다시 만들 수 있어야 하기 때문.
+// current(현재 선택값)가 범위 밖이면 목록에 끼워넣는다 — URL ?year=2020 처럼
+// 범위를 벗어난 값이 들어오면 select에 일치하는 option이 없어 빈 선택으로 보이기 때문.
+export function getYearOptions(current?: number): number[] {
+  const base  = new Date().getFullYear()
+  const years = Array.from({ length: 5 }, (_, i) => base - 1 + i)
+  if (current && !years.includes(current)) {
+    years.push(current)
+    years.sort((a, b) => a - b)
+  }
+  return years
+}

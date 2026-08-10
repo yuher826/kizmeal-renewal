@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 import { UPLOAD_ROLES } from '@/lib/roles'
+import { getYearOptions } from '@/lib/diet-utils'
 
 // ── 타입 ───────────────────────────────────────────────────────────────
 type ValidationIssue = { location: string; message: string; suggestion: string }
@@ -173,7 +174,7 @@ export default function DietUploadPage() {
               onChange={e => { setYear(Number(e.target.value)); setFile(null); setResult(null) }}
               className="border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:border-[#2D6A4F]"
             >
-              {[2025, 2026, 2027].map(y => <option key={y} value={y}>{y}년</option>)}
+              {getYearOptions(year).map(y => <option key={y} value={y}>{y}년</option>)}
             </select>
             <select
               value={month}

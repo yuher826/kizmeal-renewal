@@ -14,6 +14,7 @@ import { createClient } from '@/lib/supabase'
 import DietNotificationPanel, { type DietNotification } from '@/components/board/DietNotificationPanel'
 import BranchProfileAlert from '@/components/erp/BranchProfileAlert'
 import { UPLOAD_ROLES, ROLES } from '@/lib/roles'
+import { getYearOptions } from '@/lib/diet-utils'
 
 // ── 상수 ──────────────────────────────────────────────────────────────
 const SEPARATE_CONTRACT_CODES = new Set(['로티스', '잉글리쉬파크', '잉파', 'KIS', 'KPI', '송파MB'])
@@ -791,7 +792,7 @@ function DietAutomationContent() {
                   disabled={isGenerating}
                   className="border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-gray-700 bg-white focus:outline-none focus:border-[#2D6A4F] disabled:opacity-50"
                 >
-                  {[2024,2025,2026,2027,2028,2029,2030].map(y => <option key={y} value={y}>{y}년</option>)}
+                  {getYearOptions(pptxYear).map(y => <option key={y} value={y}>{y}년</option>)}
                 </select>
                 <select
                   value={pptxMonth}
