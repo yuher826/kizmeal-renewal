@@ -353,7 +353,7 @@ export default function BranchProfilePage() {
       <header className="bg-white border-b border-gray-100 px-4 sm:px-6 h-16 flex items-center sticky top-0 z-10">
         <div className="max-w-2xl mx-auto w-full flex items-center gap-3">
           <Link
-            href="/board/admin/diet-automation"
+            href="/erp/diet"
             className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-xl bg-gray-50 hover:bg-[#E8F5E9] text-gray-500 hover:text-[#2D6A4F] transition-colors"
             aria-label="뒤로가기"
           >
@@ -363,7 +363,7 @@ export default function BranchProfilePage() {
           </Link>
           <div className="min-w-0">
             <div className="flex items-center gap-1 text-xs text-gray-400 mb-0.5">
-              <Link href="/board/admin/diet-automation" className="hover:text-[#2D6A4F] transition-colors">식단표 자동화</Link>
+              <Link href="/erp/diet" className="hover:text-[#2D6A4F] transition-colors">식단표 자동화</Link>
               <span>›</span>
               <span className="text-[#2D6A4F] font-medium">원 프로파일 설정</span>
             </div>
