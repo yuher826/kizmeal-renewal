@@ -79,6 +79,7 @@ def generate():
 
     job_id  = str(uuid4())
     tmp_dir = f'/tmp/kizmeal_output/{job_id}'
+    active_template_path = TEMPLATE_PATH  # 템플릿 결정 전 예외 시에도 finally에서 참조 가능하게
 
     try:
         output_dir = os.path.join(tmp_dir, 'output')
@@ -90,11 +91,20 @@ def generate():
         # 엑셀 파싱 + 개별 원 생성
         from read_excel import load_excel
         from pptx_generator import generate as gen_pptx
+        from supabase_uploader import get_supabase_client
+        from template_resolver import resolve_template_path
 
         menu_data, branches, date_map = load_excel(excel_path)
 
         branch_id_map  = _get_branch_id_map()
         uuid8_to_short = {v[:8]: k for k, v in branch_id_map.items()}
+
+        # 업로드 템플릿 우선 사용 (발견① — app_actions.py와 동일 로직, template_resolver 공용)
+        print(f'[템플릿] {year}년 {month}월 사용할 템플릿 결정...')
+        active_template_path, tpl_source = resolve_template_path(
+            get_supabase_client(), TEMPLATE_PATH, year, month,
+        )
+        print(f'  최종 사용 템플릿: {tpl_source}')
 
         _BATCH = 5
         raw_results = []
@@ -104,7 +114,7 @@ def generate():
                 branch_uuid8 = (branch_id_map.get(branch_full_name) or '')[:8] or branch_full_name
                 out_pptx = os.path.join(output_dir, f'{branch_uuid8}_{year}{month:02d}.pptx')
                 try:
-                    gen_pptx(cfg, menu_data, TEMPLATE_PATH, out_pptx, date_map=date_map)
+                    gen_pptx(cfg, menu_data, active_template_path, out_pptx, date_map=date_map)
                     raw_results.append({
                         'branch_full_name': branch_full_name,
                         'pptx_path':   out_pptx,
@@ -160,6 +170,8 @@ def generate():
 
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
+        from template_resolver import cleanup_template_path
+        cleanup_template_path(active_template_path, TEMPLATE_PATH)
         _generate_lock.release()
 
 
@@ -515,6 +527,7 @@ def generate_from_json():
 
     job_id  = str(uuid4())
     tmp_dir = f'/tmp/kizmeal_output/{job_id}'
+    active_template_path = TEMPLATE_PATH  # 템플릿 결정 전 예외 시에도 finally에서 참조 가능하게
 
     try:
         output_dir = os.path.join(tmp_dir, 'output')
@@ -532,6 +545,15 @@ def generate_from_json():
         uuid8_to_short = {cfg['branch_uuid'][:8]: cfg['name'] for cfg in branch_cfgs}
 
         from pptx_generator import generate as gen_pptx
+        from supabase_uploader import get_supabase_client
+        from template_resolver import resolve_template_path
+
+        # 업로드 템플릿 우선 사용 (발견① — app_actions.py와 동일 로직, template_resolver 공용)
+        print(f'[템플릿] {year}년 {month}월 사용할 템플릿 결정...')
+        active_template_path, tpl_source = resolve_template_path(
+            get_supabase_client(), TEMPLATE_PATH, year, month,
+        )
+        print(f'  최종 사용 템플릿: {tpl_source}')
 
         _BATCH = 5
         raw_results = []
@@ -541,7 +563,7 @@ def generate_from_json():
                 branch_uuid8 = cfg['branch_uuid'][:8]
                 out_pptx = os.path.join(output_dir, f'{branch_uuid8}_{year}{month:02d}.pptx')
                 try:
-                    gen_pptx(cfg, adapted_menu, TEMPLATE_PATH, out_pptx, date_map=date_map)
+                    gen_pptx(cfg, adapted_menu, active_template_path, out_pptx, date_map=date_map)
                     raw_results.append({
                         'branch_full_name': branch_full_name,
                         'pptx_path':   out_pptx,
@@ -598,6 +620,8 @@ def generate_from_json():
 
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
+        from template_resolver import cleanup_template_path
+        cleanup_template_path(active_template_path, TEMPLATE_PATH)
         _generate_lock.release()
 
 
