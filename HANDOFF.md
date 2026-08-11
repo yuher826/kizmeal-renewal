@@ -3,7 +3,7 @@
 > 이 파일은 항상 **"지금 상태"만** 담는다. 매 세션 끝에 최신 상태로 덮어쓴다.
 > 과거 이력은 `git log HANDOFF.md`로 본다.
 
-**최종 갱신:** 2026-08-11 (로컬 PC 세션 — 이름표 자동부여 단계1~3 진행 중, app.py 이식 승인 대기)
+**최종 갱신:** 2026-08-11 (로컬 PC 세션 — 이름표 자동부여 단계1~3 완료, 단계4는 착수 시점에 재정의)
 
 ---
 
@@ -439,7 +439,7 @@ slide3: '그림 228' / 'TextBox 170' / 'TextBox 171'
     진짜 공휴일 셀이 방학 그림과 겹치면 똑같이 지워질 수 있음. **아래 "④ 원별 방학
     양식(O/X) 선택" 작업 때 `VACATION_IMG` 이름표를 부여하고, `remove_holiday_cover_pics`
     제거 대상에서 `sh.name == 'VACATION_IMG'`인 경우 제외하도록 반영 필요.**
-- **단계3 진행 중** — `app_actions.py`(GitHub Actions 경로) 완료(커밋 `b14b329`),
+- **단계3 완료** — `app_actions.py`(GitHub Actions)와 `app.py`(Render) 둘 다 연결.
   `_resolve_template_path()`에 이름표 자동 부여를 다운로드 직후·검증 직전에 연결.
   사전 검토 중 발견해 함께 반영한 5가지:
   1. **연/월 매칭 추가** — `diet_templates.is_active`는 테이블 전체 1개만 허용되는
@@ -447,22 +447,29 @@ slide3: '그림 228' / 'TextBox 170' / 'TextBox 171'
      상황을 그대로 썼음. `filters={..., year, month}` 추가로 해결.
   2. **active 다중 시 순서 보장** — `supabase_uploader.SupabaseREST.select()`에
      `order`/`limit` 파라미터 신설, `created_at.desc`로 최신 것만 사용.
-  3. **임시 템플릿 파일 정리** — `main()` 종료 시 `finally`에서 정리(GH Actions는
-     프로세스 단위라 원래 안전했지만 app.py 이식용으로 패턴 확립).
+  3. **임시 템플릿 파일 정리** — `main()`/요청 종료 시 `finally`에서 정리.
+     GH Actions는 프로세스 단위라 원래 안전했지만, **app.py는 Render gunicorn
+     워커가 장기 실행되므로 정리 안 하면 요청마다 임시파일이 실제로 누적됨**
+     — Flask test_client로 요청 종료 후 파일이 실제 삭제되는지까지 확인함.
   4. **이름표 부여 결과 로그 출력** — 슬라이드별 부여/누락/경고를 그대로 출력.
   5. **폴백 시 `template_logs` 기록** — 다운로드 실패/이름표 부여 예외/검증 실패
      3가지를 `template_id` + `detail`(JSONB)로 구분 기록. 업로드 자체가 없는
      정상 상황은 기록 안 함. (신규 마이그레이션 불필요 — `template_logs.action`
      CHECK에 `'validate_fail'`이 2026-06-23 마이그레이션에 이미 있었음)
-  - 검증: client(select/download_file/insert) 몽키패치로 6개 시나리오(정상 사용/
-    연월불일치/다중active/파싱실패/다운로드실패/컬럼불일치) 전부 통과, "최종 사용
-    템플릿"이 업로드본으로 정확히 찍히는 것 확인.
-  - **다음: `app.py`(Render, `/generate-from-json` — ERP "재시도" 버튼 경로)도
-    이식 필요, 사용자 승인 대기 중.** 사전 검토에서 발견: `app.py`는 `app_actions.py`와
-    달리 `_resolve_template_path()` 자체가 없고 **로컬 6월 양식을 무조건 고정 사용**함
-    — `apply_template_names()` 호출 하나 추가하는 수준이 아니라 DB 조회+검증+폴백
-    로직 자체를 새로 이식해야 함. 안 하면 배치생성은 고쳐지고 개별 "재시도"만
-    계속 옛날 양식으로 남는 반쪽짜리 수정이 됨.
+  - **공용화**: 로직을 `app_actions.py`/`app.py` 양쪽에 복붙하면 나중에 한쪽만
+    고치는 사고가 난다(board/erp 중복본 정리 때 겪은 것과 동일 패턴) →
+    `pptx-server/template_resolver.py`로 추출, 양쪽 다 이 모듈만 호출.
+    (`resolve_template_path`/`log_validate_fail`/`cleanup_template_path`)
+  - 검증: `app_actions.py`는 client(select/download_file/insert) 몽키패치로 6개
+    시나리오(정상 사용/연월불일치/다중active/파싱실패/다운로드실패/컬럼불일치) 전부
+    통과. `app.py`는 Flask test_client로 `/generate-from-json` 실제 호출 —
+    "최종 사용 템플릿"이 업로드본으로 찍히는 것 + **요청 종료 후 임시 템플릿
+    파일이 실제로 삭제되는 것**(장기 실행 프로세스 핵심 요구사항)까지 확인.
+  - 커밋: `b14b329`(app_actions.py 최초 연결) → `67a5211`(공용 모듈 분리) →
+    `79692d2`(app.py 이식, `/generate`·`/generate-from-json` 둘 다)
+  - ⚠️ **`diet_templates.is_active`가 전역 1개 플래그라는 제약이 다음 항목(④ 원별
+    방학 O/X 선택)의 전제를 깬다** — 자세한 내용은 아래 "④ 원별 방학 양식(O/X)
+    선택" 항목 참고.
 - **단계4(선택, 마지막)** — 업로드 시점 거부. `app/api/board/diet/templates/route.ts`
   POST가 **이미 부분 구현되어 있음**(JSZip으로 cNvPr name 4개 확인, `validation_result`
   DB 저장) 발견. 다만 (a) 실패해도 업로드는 그냥 진행(거부 없음), (b) 텍스트가 아니라
@@ -477,13 +484,22 @@ slide3: '그림 228' / 'TextBox 170' / 'TextBox 171'
 
 ## 다음 세션 최우선 작업
 
-1. **이름표 자동부여 단계3 — app.py(Render) 이식** (위 섹션 참고, 사용자 승인 대기)
-2. **`_fix_allergy_only` 박스 이동 로직 제거** — 단계3(app.py 포함) 완료 후, 디자이너
-   양식이 실제로 쓰이게 된 뒤. 위치: `pptx_generator.py:1187`. 제거 전후 PowerPoint
-   실물 대조 필수
+1. **이름표 자동부여 단계4(선택) 착수 여부 결정** — `app/api/board/diet/templates/route.ts`
+   POST에 이미 부분 구현된 검증 로직을 "업로드 거부 + 텍스트 기준 검사"로 업그레이드할지
+   (위 "이름표 자동부여" 섹션 참고)
+2. **`_fix_allergy_only` 박스 이동 로직 제거** — 단계3(app.py 포함) 완료했으니 착수 가능.
+   위치: `pptx_generator.py:1187`. 제거 전후 PowerPoint 실물 대조 필수
 3. **원별 방학 양식(O/X) 선택** — 업로드 시 사람이 용도 지정(파일명 의존 금지),
-   원별로 O/X 지정, 방학 없는 달엔 UI 자체가 안 나타나게. **+ 위 VACATION_IMG
-   발견사항 함께 반영**(이름표 부여 + `remove_holiday_cover_pics` 예외 처리)
+   원별로 O/X 지정, 방학 없는 달엔 UI 자체가 안 나타나게.
+   - **+ VACATION_IMG 발견사항 함께 반영**(이름표 부여 + `remove_holiday_cover_pics`
+     제거 대상에서 예외 처리 — 위 "이름표 자동부여" 섹션 참고)
+   - **⚠️ 착수 전 확인 필요 — `diet_templates.is_active` 제약이 이 작업의 전제를 깬다**:
+     `is_active`는 (트리거로) 테이블 전체에서 **1개만** 허용되는 전역 플래그. 그런데
+     "같은 달에 방학O/방학X 두 템플릿이 동시에 active"여야 원별로 골라 쓸 수 있음 —
+     지금 구조로는 둘 중 하나만 active가 될 수 있어서 불가능. 착수 시 스키마부터
+     바꿔야 함(예: `is_active`를 연/월 단위 유일 제약으로 바꾸거나, `variant`
+     컬럼(`vacation_o`/`vacation_x`/`none`)을 추가해 `(year, month, variant)`
+     조합별로 active 허용하도록 트리거 재설계).
 4. **위탁업장 `contract_type` 신설** (독립 작업, 작음) — 위탁 5곳 **등록 전**에 하면
    SQL 한 줄. `branch_filters.py`/`pptx-eligibility.ts`를 "temporary만 제외"에서
    **"permanent만 포함"으로 뒤집을 것** (새 유형 추가 시 자동 제외되는 방향이 안전)
