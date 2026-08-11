@@ -64,14 +64,20 @@ class SupabaseREST:
             detail = exc.read().decode(errors='replace')
             raise RuntimeError(f'HTTP {exc.code} {exc.reason}: {detail}') from exc
 
-    def select(self, table, columns='*', filters=None):
-        """SELECT — filters: {col: value} (value=None → IS NULL)"""
+    def select(self, table, columns='*', filters=None, order=None, limit=None):
+        """SELECT — filters: {col: value} (value=None → IS NULL)
+        order: PostgREST 문법 'col.desc' / 'col.asc' — 지정 시 서버에서 정렬해서 반환
+        limit: 최대 행 수"""
         params = urllib.parse.urlencode({'select': columns})
         for col, val in (filters or {}).items():
             if val is None:
                 params += f'&{col}=is.null'
             else:
                 params += f'&{col}=eq.{urllib.parse.quote(str(val), safe="")}'
+        if order:
+            params += f'&order={urllib.parse.quote(order, safe=".,")}'
+        if limit is not None:
+            params += f'&limit={int(limit)}'
         url = f'{self._url}/rest/v1/{table}?{params}'
         return self._call('GET', url, extra_headers={
             'Content-Type': 'application/json',
