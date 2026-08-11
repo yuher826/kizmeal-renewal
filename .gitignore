@@ -49,3 +49,7 @@ pptx-server/원본_*.pdf
 pptx-server/_check_templates.py
 pptx-server/find_15row.py
 pptx-server/verify_fix.py
+
+# 이름표 자동부여 단계2 검증용 — 디자이너 원본·산출물 (프로젝트 루트, 절대 커밋 금지)
+/*.pptx
+/_verify_output/
