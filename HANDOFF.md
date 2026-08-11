@@ -3,7 +3,7 @@
 > 이 파일은 항상 **"지금 상태"만** 담는다. 매 세션 끝에 최신 상태로 덮어쓴다.
 > 과거 이력은 `git log HANDOFF.md`로 본다.
 
-**최종 갱신:** 2026-08-11 (로컬 PC 세션 — board/erp 중복본 정리 patch 적용·build·라우트 검증·push 완료)
+**최종 갱신:** 2026-08-11 (로컬 PC 세션 — 이름표 자동부여 단계1~3 진행 중, app.py 이식 승인 대기)
 
 ---
 
@@ -420,33 +420,73 @@ slide3: '그림 228' / 'TextBox 170' / 'TextBox 171'
 
 ---
 
+## 이름표 자동부여 (발견① 해결) — 단계1~3 진행 중 (2026-08-11)
+
+`프롬프트_이름표_자동부여.md` 지시대로 단계별 진행. 각 단계 사용자 승인 후 다음 단계.
+
+- **단계1 완료** — `pptx-server/template_namer.py` 신설(커밋 `4e841c4`). 텍스트 기준(도형
+  이름 아님)으로 4개 도형 탐색. python-pptx(lxml) 기반 — ElementTree 재작성 방식
+  (`_apply_template_names.py`)은 네임스페이스 훼손 확인되어 이식 안 함.
+  저장소 templates/*.pptx 48개 검증: 47/48 통과(유일 실패는 목동POLY의 메뉴와 무관한
+  부록 슬라이드 — 정상 동작), 콘텐츠 바이트 손실 없음(미디어 SHA-256 일치 확인).
+- **단계2 완료** — 실제 디자이너 8월(방학O) 원본으로 이름표 부여 + 강동ECC 생성까지
+  실물 PowerPoint 확인 완료(레이아웃 정상). ⚠️ **디자이너 원본 파일 자체와 산출물은
+  커밋 금지** — `.gitignore`에 `/*.pptx`, `/_verify_output/` 추가해둠(커밋 `2c4b641`).
+  - **발견(신규, 미해결)**: 생성 중 `remove_holiday_cover_pics()`(공휴일 셀을 가리는
+    장식 그림 자동 제거 로직, `pptx_generator.py:788`)가 방학 그림("그림 26", 발견③의
+    `VACATION_IMG` 후보)까지 함께 지울 수 있음이 확인됨. 테스트에 쓴 6월 픽스처
+    데이터의 공휴일 셀 좌표가 우연히 방학 그림과 겹쳐서 걸린 것 — 실제 8월 운영에서도
+    진짜 공휴일 셀이 방학 그림과 겹치면 똑같이 지워질 수 있음. **아래 "④ 원별 방학
+    양식(O/X) 선택" 작업 때 `VACATION_IMG` 이름표를 부여하고, `remove_holiday_cover_pics`
+    제거 대상에서 `sh.name == 'VACATION_IMG'`인 경우 제외하도록 반영 필요.**
+- **단계3 진행 중** — `app_actions.py`(GitHub Actions 경로) 완료(커밋 `b14b329`),
+  `_resolve_template_path()`에 이름표 자동 부여를 다운로드 직후·검증 직전에 연결.
+  사전 검토 중 발견해 함께 반영한 5가지:
+  1. **연/월 매칭 추가** — `diet_templates.is_active`는 테이블 전체 1개만 허용되는
+     전역 플래그라, 필터 없이 `rows[0]`을 쓰면 "8월 생성인데 7월 템플릿이 active"
+     상황을 그대로 썼음. `filters={..., year, month}` 추가로 해결.
+  2. **active 다중 시 순서 보장** — `supabase_uploader.SupabaseREST.select()`에
+     `order`/`limit` 파라미터 신설, `created_at.desc`로 최신 것만 사용.
+  3. **임시 템플릿 파일 정리** — `main()` 종료 시 `finally`에서 정리(GH Actions는
+     프로세스 단위라 원래 안전했지만 app.py 이식용으로 패턴 확립).
+  4. **이름표 부여 결과 로그 출력** — 슬라이드별 부여/누락/경고를 그대로 출력.
+  5. **폴백 시 `template_logs` 기록** — 다운로드 실패/이름표 부여 예외/검증 실패
+     3가지를 `template_id` + `detail`(JSONB)로 구분 기록. 업로드 자체가 없는
+     정상 상황은 기록 안 함. (신규 마이그레이션 불필요 — `template_logs.action`
+     CHECK에 `'validate_fail'`이 2026-06-23 마이그레이션에 이미 있었음)
+  - 검증: client(select/download_file/insert) 몽키패치로 6개 시나리오(정상 사용/
+    연월불일치/다중active/파싱실패/다운로드실패/컬럼불일치) 전부 통과, "최종 사용
+    템플릿"이 업로드본으로 정확히 찍히는 것 확인.
+  - **다음: `app.py`(Render, `/generate-from-json` — ERP "재시도" 버튼 경로)도
+    이식 필요, 사용자 승인 대기 중.** 사전 검토에서 발견: `app.py`는 `app_actions.py`와
+    달리 `_resolve_template_path()` 자체가 없고 **로컬 6월 양식을 무조건 고정 사용**함
+    — `apply_template_names()` 호출 하나 추가하는 수준이 아니라 DB 조회+검증+폴백
+    로직 자체를 새로 이식해야 함. 안 하면 배치생성은 고쳐지고 개별 "재시도"만
+    계속 옛날 양식으로 남는 반쪽짜리 수정이 됨.
+- **단계4(선택, 마지막)** — 업로드 시점 거부. `app/api/board/diet/templates/route.ts`
+  POST가 **이미 부분 구현되어 있음**(JSZip으로 cNvPr name 4개 확인, `validation_result`
+  DB 저장) 발견. 다만 (a) 실패해도 업로드는 그냥 진행(거부 없음), (b) 텍스트가 아니라
+  "이미 이름이 붙어있는지"만 봐서 디자이너 원본은 지금도 무조건 "실패"로 뜸. "신설"이
+  아니라 "기존 로직 업그레이드"로 재정의 필요 — 착수 시점에 다시 결정.
+- **별도로 발견, 이번엔 손 안 댐**: 로컬 폴백 원본(`TEMPLATE_PATH`, 6월 공용 양식)
+  자체가 예전 `_apply_template_names.py`(ElementTree 방식)로 이미 한 번 손댄 이력
+  있음(`.bak` 파일 존재, 2026-06-23). 크기 차이가 -251KB로 예상보다 훨씬 큼(이미지
+  재압축 가능성 높지만 미확인). 시간 될 때 실물로 한 번 열어볼 것.
+
+---
+
 ## 다음 세션 최우선 작업
 
-> 아래는 위 "식단표 자동화 조사 → 작업 재정의 → 신설·수정해야 할 것"과 동일 내용을
-> 실행 순서로 재배치한 것. 상세 근거는 위 조사 섹션 참고.
-
-**1. 템플릿 업로드 시 이름표 자동 부착** ← 최선행
-
-- 위치: `app/api/board/diet/templates/route.ts` (POST)
-- 현재: theme.xml에서 색·폰트만 추출, PPTX 내용은 손대지 않음
-- 변경: 텍스트 기준(발견④ 표)으로 4개 도형 탐색 → `cNvPr name` 부여 → 저장
-- 참고: `pptx-server/_apply_template_names.py`에 탐색 로직 이미 존재, 이식하면 됨
-- 이유: 디자이너에게 이름표를 요구하는 방식은 **실제로 지켜지지 않음(0/9)**.
-  사람 약속이 아니라 코드가 보장하는 구조로 전환.
-- 확장: `VACATION_IMG`도 함께 부여하면 발견③ 토대 확보
-
-**2. 폴백 시 화면 경고** — 업로드 시점(1번)에 막으면 폴백 자체가 안 일어나므로 1번 완료 후
-안전판으로 유지. 위치: `pptx-server/app_actions.py:369` + ERP 템플릿 관리 화면
-
-**3. `_fix_allergy_only` 박스 이동 로직 제거** — 1번 완료 후(디자이너 양식이 실제로
-쓰이게 된 뒤). 위치: `pptx_generator.py:1187`. 제거 전후 PowerPoint 실물 대조 필수
-
-**4. 원별 방학 양식(O/X) 선택** — 업로드 시 사람이 용도 지정(파일명 의존 금지),
-원별로 O/X 지정, 방학 없는 달엔 UI 자체가 안 나타나게
-
-**5. 위탁업장 `contract_type` 신설** (독립 작업, 작음) — 위탁 5곳 **등록 전**에 하면
-SQL 한 줄. `branch_filters.py`/`pptx-eligibility.ts`를 "temporary만 제외"에서
-**"permanent만 포함"으로 뒤집을 것** (새 유형 추가 시 자동 제외되는 방향이 안전)
+1. **이름표 자동부여 단계3 — app.py(Render) 이식** (위 섹션 참고, 사용자 승인 대기)
+2. **`_fix_allergy_only` 박스 이동 로직 제거** — 단계3(app.py 포함) 완료 후, 디자이너
+   양식이 실제로 쓰이게 된 뒤. 위치: `pptx_generator.py:1187`. 제거 전후 PowerPoint
+   실물 대조 필수
+3. **원별 방학 양식(O/X) 선택** — 업로드 시 사람이 용도 지정(파일명 의존 금지),
+   원별로 O/X 지정, 방학 없는 달엔 UI 자체가 안 나타나게. **+ 위 VACATION_IMG
+   발견사항 함께 반영**(이름표 부여 + `remove_holiday_cover_pics` 예외 처리)
+4. **위탁업장 `contract_type` 신설** (독립 작업, 작음) — 위탁 5곳 **등록 전**에 하면
+   SQL 한 줄. `branch_filters.py`/`pptx-eligibility.ts`를 "temporary만 제외"에서
+   **"permanent만 포함"으로 뒤집을 것** (새 유형 추가 시 자동 제외되는 방향이 안전)
 
 ---
 
