@@ -1182,14 +1182,31 @@ def replace_material_text(slide, material_text):
 
 
 # ════════════════════════════════════════════════════════════════════
-# 9-3. 알레르기 박스 동적 배치 + 박스 겹침 감지
+# 9-3. 15행 행높이 정규화 + 텍스트 크기 보정 + 박스 겹침 감지
 # ════════════════════════════════════════════════════════════════════
 def _fix_allergy_only(prs):
-    """ALLERGY_BOX만 table_bottom 기준 동적 배치. ORIGIN/MATERIAL 위치 불변."""
+    """ORIGIN_BOX/MATERIAL_BOX/ALLERGY_BOX **위치는 손대지 않는다.**
+
+    ⚠️ 2026-08-11 변경: 예전엔 이 함수가 세 박스 위치를 하드코딩된 오프셋으로
+    강제 이동시켰다(ALLERGY_BOX는 table_bottom/슬라이드 하단 기준 재계산,
+    ORIGIN/MATERIAL은 +175,260 EMU 하향 또는 8,395,899로 고정). 로컬 6월
+    템플릿(당시 유일하게 쓰이던 템플릿)의 박스 위치가 어긋나 있던 걸 코드로
+    보정한 것이었는데, 이름표 자동부여(발견①) 이후 매달 진짜 디자이너 원본을
+    쓰게 되면서 디자이너가 그 달 빈칸 위치에 박스를 이미 배치해서 준다는 게
+    실측으로 확인됐다(HANDOFF "식단표 자동화" 조사 발견②). 실측: 8월 양식
+    ORIGIN top=8,428,017인데 이 함수는 여기서 175,260을 더 밀어 8,603,277로
+    만들고 있었음 — 실제 정답 배포본(8,450,877)과도 다른 값. 박스 위치 이동
+    로직 전부 제거, 디자이너가 준 위치를 그대로 신뢰한다.
+
+    남은 역할: (1) 15행 슬라이드 행 높이를 정답값(강동ECC 정답본 실측 기준)으로
+    재설정 + graphicFrame 크기 동기화, (2) 박스 텍스트 폰트 크기 보정(위치는
+    안 건드림), (3) 로고·클립보드 아이콘 리사이즈(크기만, 위치 이동은 제거 —
+    클립보드는 원래 ORIGIN_BOX 위치 기준으로 나란히 정렬하던 것이라 그 기준점이
+    없어져 위치 보정도 함께 뺌. 로고는 원래도 자기 자신 기준 우측/하단 정렬이라
+    영향 없음, 그대로 둠).
+    """
     ns_p = 'http://schemas.openxmlformats.org/presentationml/2006/main'
     ns_a = 'http://schemas.openxmlformats.org/drawingml/2006/main'
-    SLIDE_HEIGHT = 10680700
-    GAP = 30000
 
     for slide in prs.slides:
         slide_el = slide._element
@@ -1206,107 +1223,36 @@ def _fix_allergy_only(prs):
         tbl = table_el.find(f'.//{{{ns_a}}}tbl')
         if p_xfrm is None or tbl is None:
             continue
-        table_top = int(p_xfrm.find(f'{{{ns_a}}}off').get('y'))
         rows = tbl.findall(f'{{{ns_a}}}tr')
-        total_row_h = sum(int(tr.get('h', 0)) for tr in rows)
-        table_bottom = table_top + total_row_h
         row_count = len(rows)
 
         if row_count >= 15:
-            # 1) 행 높이를 정답값으로 재설정
+            # 행 높이를 정답값으로 재설정
             for i, tr in enumerate(rows):
                 h = _H_LUNCH_15 if i % 3 == 0 else _H_SNACK_15
                 tr.set('h', str(h))
 
-            # 2) table_bottom 재계산
+            # graphicFrame cy 갱신 (테두리 어긋남 방지)
             total_row_h = sum(int(tr.get('h', 0)) for tr in rows)
-            table_bottom = table_top + total_row_h
-
-            # 3) graphicFrame cy 갱신 (테두리 어긋남 방지)
             p_ext = p_xfrm.find(f'{{{ns_a}}}ext')
             if p_ext is not None:
                 p_ext.set('cy', str(total_row_h))
 
-            print(f"  ✅ [15행] 행높이 재설정 → table_bottom={table_bottom:,}")
-
-            # 4) ALLERGY_BOX 동적 배치 (재계산된 table_bottom 기준)
-            sp, found_by = find_shape_smart(slide_el, 'ALLERGY_BOX', fallback_keyword='알레르기 표시')
-            if sp is None:
-                continue
-            xfrm = sp.find(f'.//{{{ns_a}}}xfrm')
-            if xfrm is None:
-                continue
-            off = xfrm.find(f'{{{ns_a}}}off')
-            ext = xfrm.find(f'{{{ns_a}}}ext')
-            if off is None or ext is None:
-                continue
-            cy = int(ext.get('cy'))
-            # 정답본 강동ECC: 알레르기 bottom이 슬라이드 끝에서 약 533,000 위
-            ALLERGY_BOTTOM_MARGIN = 532946
-            new_top = SLIDE_HEIGHT - cy - ALLERGY_BOTTOM_MARGIN
-            # 테이블과 겹치지 않도록 최소 위치 보장
-            if new_top < table_bottom + GAP:
-                new_top = table_bottom + GAP
-            off.set('y', str(int(new_top)))
-            print(f"  ✅ [15행] ALLERGY_BOX: y={new_top:,} ({found_by})")
-
-            # ORIGIN/MATERIAL/클립보드: 빈 양식이 정답보다 175,260 EMU 위에 배치돼 있어 하향 보정
-            # (10행 분기와 무관 — 15행에서만 적용. ALLERGY 가드는 유지)
-            BOX_DOWN_15 = 175_260
-            for box_name in ('ORIGIN_BOX', 'MATERIAL_BOX'):
-                bsp, _ = find_shape_smart(slide_el, box_name, fallback_keyword=None)
-                if bsp is None:
-                    continue
-                bxfrm = bsp.find(f'.//{{{ns_a}}}xfrm')
-                if bxfrm is None:
-                    continue
-                boff = bxfrm.find(f'{{{ns_a}}}off')
-                if boff is not None:
-                    boff.set('y', str(int(boff.get('y')) + BOX_DOWN_15))
-                    print(f"  ✅ [15행] {box_name}: +{BOX_DOWN_15:,} 하향")
-            for pic in slide_el.findall(f'.//{{{ns_p}}}pic'):
-                c = pic.find(f'.//{{{ns_p}}}cNvPr')
-                if c is None or c.get('name') not in {'그림 3', '그림 224', '그림 193'}:
-                    continue
-                pxf = pic.find(f'.//{{{ns_a}}}xfrm')
-                if pxf is None:
-                    continue
-                poff = pxf.find(f'{{{ns_a}}}off')
-                if poff is not None:
-                    poff.set('y', str(int(poff.get('y')) + BOX_DOWN_15))
-                    print(f"  ✅ [15행] 클립보드: +{BOX_DOWN_15:,} 하향")
-                break
+            print(f"  ✅ [15행] 행높이 재설정 → 총높이={total_row_h:,}")
+            # ALLERGY_BOX/ORIGIN_BOX/MATERIAL_BOX 위치 이동, 클립보드 아이콘 위치
+            # 보정(구 BOX_DOWN_15=175,260 하향)은 전부 제거됨 — 위 함수 docstring 참고.
             continue
 
-        # 10행: 기존 코드 100% 그대로 (어제 완성본)
+        # 10행: ALLERGY_BOX 폰트만 보정(위치 이동 제거)
         sp, found_by = find_shape_smart(slide_el, 'ALLERGY_BOX', fallback_keyword='알레르기 표시')
-        if sp is None:
-            continue
-        xfrm = sp.find(f'.//{{{ns_a}}}xfrm')
-        if xfrm is None:
-            continue
-        off = xfrm.find(f'{{{ns_a}}}off')
-        ext = xfrm.find(f'{{{ns_a}}}ext')
-        if off is None or ext is None:
-            continue
+        if sp is not None:
+            for rPr in sp.findall(f'.//{{{ns_a}}}rPr'):
+                szv = rPr.get('sz')
+                if szv is None or int(szv) >= 700:
+                    rPr.set('sz', '500')
+            print(f"  ✅ ALLERGY_BOX 폰트5pt ({found_by}, 위치 불변)")
 
-        cy = int(ext.get('cy'))
-        new_top = table_bottom + GAP
-        # 슬라이드 하단 초과 방어
-        if new_top + cy > SLIDE_HEIGHT:
-            new_top = SLIDE_HEIGHT - cy - 20000
-        off.set('y', str(int(new_top)))
-
-        # 폰트 7pt → 5pt
-        for rPr in sp.findall(f'.//{{{ns_a}}}rPr'):
-            szv = rPr.get('sz')
-            if szv is None or int(szv) >= 700:
-                rPr.set('sz', '500')
-
-        print(f"  ✅ ALLERGY_BOX: y={new_top:,} ({found_by})")
-
-        # ① 원산지/원재료 본문 폰트 6.5pt 축소 (위치 안 건드림)
-        ORIGIN_Y = 8_395_899  # 원본 좌표 복원 — 클립보드 기준점도 이 값 참조
+        # 원산지/원재료 본문 폰트 크기만 보정 (위치는 손대지 않음)
         for box_name in ('ORIGIN_BOX', 'MATERIAL_BOX'):
             bsp, _ = find_shape_smart(slide_el, box_name, fallback_keyword=None)
             if bsp is None:
@@ -1321,14 +1267,7 @@ def _fix_allergy_only(prs):
                         rPr.set('sz', '850')   # 제목 8.5pt 유지
                     elif s >= 600:
                         rPr.set('sz', '550')   # 본문 5.5pt
-            # 원산지만 위치 조정 (autofit 유지, y만)
-            if box_name == 'ORIGIN_BOX':
-                bxfrm = bsp.find(f'.//{{{ns_a}}}xfrm')
-                if bxfrm is not None:
-                    boff = bxfrm.find(f'{{{ns_a}}}off')
-                    if boff is not None:
-                        boff.set('y', str(ORIGIN_Y))
-            print(f"  ✅ {box_name} 폰트5.5pt" + (" + 위치조정" if box_name == 'ORIGIN_BOX' else ""))
+            print(f"  ✅ {box_name} 폰트5.5pt (위치 불변)")
 
         # ② 키즈밀 로고 축소 + 하단 이동 (pic name='그래픽 118')
         SLIDE_H = 10680700
@@ -1356,7 +1295,9 @@ def _fix_allergy_only(prs):
             print(f"  ✅ 로고 축소80%+하단이동: y={ny:,} cy={ncy:,}")
             break
 
-        # 식단표 클립보드 아이콘을 5주 본식줄 안으로 (오전줄 침범 방지)
+        # 식단표 클립보드 아이콘 리사이즈만(위치는 그대로) — "원산지 제목과 나란히"
+        # 정렬하던 위치 보정은 ORIGIN_BOX를 더 이상 옮기지 않게 되면서 기준점을
+        # 잃어 함께 제거함(2026-08-11, 박스 이동 로직 제거).
         for pic in slide_el.findall(f'.//{{{ns_p}}}pic'):
             c = pic.find(f'.//{{{ns_p}}}cNvPr')
             if c is None or c.get('name') not in {'그림 3', '그림 224', '그림 193'}:
@@ -1372,9 +1313,7 @@ def _fix_allergy_only(prs):
             # 80% 축소
             ncx = int(ocx * 0.8); ncy = int(ocy * 0.8)
             ext.set('cx', str(ncx)); ext.set('cy', str(ncy))
-            # 클립보드를 원산지 제목과 나란히 (15행 정답 간격 26,983 적용)
-            off.set('y', str(ORIGIN_Y + 26_983))
-            print(f"  ✅ 클립보드 아이콘: y={ORIGIN_Y + 26_983:,} (ORIGIN_Y+26,983)")
+            print(f"  ✅ 클립보드 아이콘 80% 축소 (위치 불변)")
             break
 
 
