@@ -30,6 +30,7 @@ type ReviewItemRow = {
   branch_id:    string | null
   branch_name:  string
   pptx_url:     string | null
+  pdf_url:      string | null
   jpg_url:      string | null
   review_status: string
   memo_history:  unknown[]
@@ -128,7 +129,7 @@ export async function POST(req: NextRequest) {
   // diet_review_items 조회 (branch_id 직접 필터)
   let itemsQuery = db
     .from('diet_review_items')
-    .select('id, branch_id, branch_name, pptx_url, jpg_url, review_status, memo_history')
+    .select('id, branch_id, branch_name, pptx_url, pdf_url, jpg_url, review_status, memo_history')
     .in('weekly_menu_id', menuIds)
 
   if (branch_ids && branch_ids.length > 0) {
@@ -207,17 +208,27 @@ export async function POST(req: NextRequest) {
       }
 
       // 파일형식별 다운로드 버튼 구성
-      // diet_review_items에 pdf_url 컬럼 없음 → PDF 형식은 pptx_url로 대체
+      // 2026-08-14: pdf_url 컬럼 신설(app_actions.py가 LibreOffice로 변환·업로드).
+      // 과거 재생성 전 행은 pdf_url이 비어있을 수 있어, 그 경우에만 pptx_url로
+      // 폴백하되 라벨은 정직하게 PPTX로 표시(PDF라고 속이지 않음).
       const fileFormat = (profile?.file_format ?? 'PPTX').toUpperCase()
       const buttons: DownloadButton[] = []
 
       if (fileFormat === 'JPG') {
         if (item.jpg_url) buttons.push({ label: '🖼️ 식단표 JPG 다운로드', url: item.jpg_url })
       } else if (fileFormat === 'PDF') {
-        if (item.pptx_url) buttons.push({ label: '📄 식단표 PDF 다운로드', url: item.pptx_url })
+        if (item.pdf_url) {
+          buttons.push({ label: '📄 식단표 PDF 다운로드', url: item.pdf_url })
+        } else if (item.pptx_url) {
+          buttons.push({ label: '📊 식단표 PPTX 다운로드 (PDF 변환 전)', url: item.pptx_url })
+        }
       } else if (fileFormat === 'PDF+JPG') {
-        if (item.pptx_url) buttons.push({ label: '📄 식단표 PDF 다운로드', url: item.pptx_url })
-        if (item.jpg_url)  buttons.push({ label: '🖼️ 식단표 JPG 다운로드', url: item.jpg_url })
+        if (item.pdf_url) {
+          buttons.push({ label: '📄 식단표 PDF 다운로드', url: item.pdf_url })
+        } else if (item.pptx_url) {
+          buttons.push({ label: '📊 식단표 PPTX 다운로드 (PDF 변환 전)', url: item.pptx_url })
+        }
+        if (item.jpg_url) buttons.push({ label: '🖼️ 식단표 JPG 다운로드', url: item.jpg_url })
       } else {
         if (item.pptx_url) buttons.push({ label: '📊 식단표 PPTX 다운로드', url: item.pptx_url })
       }

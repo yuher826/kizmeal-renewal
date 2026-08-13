@@ -13,7 +13,7 @@ on:
 jobs:
   generate:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45  # PDF/JPG 변환(soffice 49개 원 x 최대 2개 파일) 추가로 여유 확대
 
     steps:
       - uses: actions/checkout@v4
@@ -25,6 +25,12 @@ jobs:
 
       - name: Install dependencies
         run: pip install -r pptx-server/requirements.txt
+
+      - name: Install LibreOffice (PDF/JPG 변환용)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libreoffice-impress
+          soffice --version
 
       - name: Generate PPTX
         env:

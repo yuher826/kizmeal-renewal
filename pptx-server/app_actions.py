@@ -28,7 +28,7 @@ sys.path.insert(0, _HERE)
 from bracket_parser import wants_fruit
 from branch_filters import filter_eligible_branches
 from pptx_generator import generate as gen_pptx
-from read_excel import _embed_brackets, _inject_exception_to_banchan, determine_type
+from read_excel import _embed_brackets, _inject_exception_to_banchan, convert_pptx, determine_type
 from supabase_uploader import SupabaseREST
 from template_resolver import cleanup_template_path, resolve_template_path
 
@@ -231,9 +231,18 @@ def fetch_branch_cfgs():
 # ════════════════════════════════════════════════════════════════════
 # Storage 업로드
 # ════════════════════════════════════════════════════════════════════
-def upload_pptx(local_path, storage_path):
-    """업로드 성공 시 public URL, 실패 시 '' 반환."""
-    mime = 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+_MIME_BY_EXT = {
+    '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    '.pdf':  'application/pdf',
+    '.jpg':  'image/jpeg',
+    '.jpeg': 'image/jpeg',
+}
+
+
+def upload_file(local_path, storage_path):
+    """확장자로 mime 자동 판별해 업로드. 성공 시 public URL, 실패 시 '' 반환."""
+    ext = os.path.splitext(local_path)[1].lower()
+    mime = _MIME_BY_EXT.get(ext, 'application/octet-stream')
     with open(local_path, 'rb') as f:
         data = f.read()
     for attempt in range(2):
@@ -249,20 +258,24 @@ def upload_pptx(local_path, storage_path):
     return ''
 
 
+# 하위호환: 기존 이름으로도 호출 가능
+upload_pptx = upload_file
+
+
 # ════════════════════════════════════════════════════════════════════
 # weekly_menus 업서트
 # ════════════════════════════════════════════════════════════════════
-def upsert_branch_row(branch_id, status, pptx_url):
+def upsert_branch_row(branch_id, status, pptx_url, pdf_url=None):
     # 기존 행 조회 — approved/deployed 상태이면 status 덮어쓰기 금지
     existing = client.select(
         'weekly_menus', 'id,status',
         filters={'branch_id': branch_id, 'year': YEAR, 'month': MONTH, 'diet_type': 'CK'},
     )
     if existing and existing[0].get('status') in ('approved', 'deployed'):
-        # 이미 승인/배포된 원: pptx_url만 갱신, status 보존 (학부모 포털 유지)
+        # 이미 승인/배포된 원: pptx_url/pdf_url만 갱신, status 보존 (학부모 포털 유지)
         client.update(
             'weekly_menus',
-            {'pptx_url': pptx_url or None},
+            {'pptx_url': pptx_url or None, 'pdf_url': pdf_url or None},
             filters={'id': existing[0]['id']},
         )
         return existing[0]['id']
@@ -276,6 +289,7 @@ def upsert_branch_row(branch_id, status, pptx_url):
             'diet_type': 'CK',
             'status':    status,
             'pptx_url':  pptx_url or None,
+            'pdf_url':   pdf_url or None,
         },
         on_conflict='branch_id,year,month,diet_type',
     )
@@ -298,14 +312,18 @@ def update_common_row_status(status):
         print(f'[공통 row 업데이트 오류] {exc}')
 
 
-def upsert_diet_review_item(weekly_menu_id, branch_uuid, branch_name, pptx_url):
+def upsert_diet_review_item(weekly_menu_id, branch_uuid, branch_name, pptx_url, pdf_url=None, jpg_url=None):
     existing = client.select(
         'diet_review_items', 'id,review_status',
         filters={'weekly_menu_id': weekly_menu_id, 'branch_id': branch_uuid},
     )
     if existing:
         row = existing[0]
-        update_data = {'pptx_url': pptx_url or None}
+        update_data = {
+            'pptx_url': pptx_url or None,
+            'pdf_url':  pdf_url or None,
+            'jpg_url':  jpg_url or None,
+        }
         # deployed 상태가 아닌 경우에만 review_status 를 재생성 완료로 초기화
         if row.get('review_status') != 'deployed':
             update_data['review_status'] = 'generation_complete'
@@ -322,6 +340,8 @@ def upsert_diet_review_item(weekly_menu_id, branch_uuid, branch_name, pptx_url):
                 'branch_id':      branch_uuid,
                 'branch_name':    branch_name,
                 'pptx_url':       pptx_url or None,
+                'pdf_url':        pdf_url or None,
+                'jpg_url':        jpg_url or None,
                 'review_status':  'generation_complete',
             },
         )
@@ -387,6 +407,7 @@ def main():
     tmp_dir   = tempfile.mkdtemp(prefix='kizmeal_actions_')
     succeeded = 0
     failed    = 0
+    lo_missing = False  # LibreOffice 미설치 확인되면 True — 이후 변환 시도 자체를 건너뜀
 
     try:
         for batch_start in range(0, len(branch_cfgs), _BATCH):
@@ -405,14 +426,38 @@ def main():
                         origin_text=origin_text,
                         material_text=material_text,
                     )
-                    pptx_url = upload_pptx(out_pptx, storage_path)
-                    weekly_menu_id = upsert_branch_row(branch_uuid, 'generation_complete', pptx_url)
+                    pptx_url = upload_file(out_pptx, storage_path)
+
+                    # ── PDF/JPG 변환 (file_fmt 기준) ──
+                    pdf_url = ''
+                    jpg_url = ''
+                    file_fmt = cfg.get('file_fmt', 'PDF')
+                    if not lo_missing and file_fmt.upper() != 'PPT':
+                        converted = convert_pptx(out_pptx, file_fmt)
+                        if converted is None:
+                            # soffice 자체가 없음 — 이번 실행 전체에서 변환 포기(반복 실패 방지)
+                            lo_missing = True
+                            print('  ⚠️  LibreOffice 미설치 — 이후 전체 변환 건너뜀 (PPTX는 정상 생성됨)')
+                        else:
+                            for conv_path in converted:
+                                conv_ext  = os.path.splitext(conv_path)[1]  # '.pdf' or '.jpg'
+                                conv_name = f'{branch_uuid8}_{YEAR}{MONTH:02d}{conv_ext}'
+                                conv_storage = f'{YEAR}/{MONTH:02d}/{conv_name}'
+                                url = upload_file(conv_path, conv_storage)
+                                if conv_ext == '.pdf':
+                                    pdf_url = url
+                                elif conv_ext == '.jpg':
+                                    jpg_url = url
+
+                    weekly_menu_id = upsert_branch_row(branch_uuid, 'generation_complete', pptx_url, pdf_url)
                     if weekly_menu_id:
                         upsert_diet_review_item(
                             weekly_menu_id,
                             branch_uuid,
                             cfg.get('branch_full_name') or cfg['display_name'],
                             pptx_url,
+                            pdf_url,
+                            jpg_url,
                         )
                     print(f'  ✅ {short_code}')
                     succeeded += 1

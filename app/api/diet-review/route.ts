@@ -20,6 +20,7 @@ type ReviewItemRow = {
   branch_id:       string | null
   branch_name:     string
   pptx_url:        string | null
+  pdf_url:         string | null
   jpg_url:         string | null
   review_status:   string
   memo:            string | null
