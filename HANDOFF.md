@@ -3,9 +3,9 @@
 > 이 파일은 항상 **"지금 상태"만** 담는다. 매 세션 끝에 최신 상태로 덮어쓴다.
 > 과거 이력은 `git log HANDOFF.md`로 본다.
 
-**최종 갱신:** 2026-08-14 (claude.ai 세션 — PDF/JPG 변환 완전 미구현 +
-`deploy/route.ts` pdf_url 지뢰 신규 발견, 착수 예정. 표 높이는 2026-08-12
-로컬 세션에서 이미 완료·검증됨, 아래 참고)
+**최종 갱신:** 2026-08-14 (claude.ai 세션 — PDF/JPG 변환 신설 코드 완료
+(커밋 `9e44ac3`), Supabase 마이그레이션 실행·실제 Actions 실행 검증·품질
+대조는 미완료. 표 높이는 2026-08-12 로컬 세션에서 이미 완료·검증됨)
 
 ---
 
@@ -644,50 +644,61 @@ Microsoft 365 Click-to-Run)은 표 기하·박스 위치 일치만 확인했고,
 
 ---
 
-## ⚠️ 신규 발견 — PDF/JPG 변환 완전 미구현 + `deploy/route.ts` pdf_url 지뢰 (2026-08-14, 미해결)
+## ✅ PDF/JPG 변환 신설 — 코드 완료, 검증·마이그레이션 실행 필요 (커밋 `9e44ac3`, 2026-08-14)
 
 **계기**: "실제 배포되는 PDF는 왜 완전하냐"는 질문에서 출발한 조사 (claude.ai 세션).
 위 701행 "LibreOffice 렌더링 신뢰 안 함 원칙 재검토"보다 구체적인 실무 갭.
 
-1. **PDF 변환이 프로덕션 파이프라인 어디에도 없음.**
-   - `app_actions.py`(GitHub Actions)·`app.py`(Render) 둘 다 `subprocess`/
-     `soffice` 호출 전무. PPTX만 만들고 끝남.
-   - `render.yaml`은 `env: python`(순수 Python, apt-get 불가) — Render에
-     LibreOffice 자체가 안 깔려있음.
-   - `read_excel.py`의 `convert_pptx()`(LibreOffice headless 변환)는 로컬
-     테스트 전용 스크립트라 프로덕션에서 호출 안 됨 — 죽은 코드.
-   - **지금 실제 배포되는 PDF가 완전한 이유**: 49개 파일이 아직 100%
-     수동 제작(영양사가 PowerPoint로 직접 만들어 PDF로 내보내기)이기
-     때문. 자동화가 실제로 사람 손을 대체하는 순간 이 갭이 터짐.
+**발견했던 문제 (요약)**:
+1. `app_actions.py`(GitHub Actions)·`app.py`(Render) 둘 다 PDF 변환 호출 전무.
+   `render.yaml`은 순수 Python이라 Render에 LibreOffice 자체가 안 깔림.
+   `read_excel.py`의 `convert_pptx()`는 로컬 전용 죽은 코드였음. 지금 실제
+   배포되는 PDF가 완전한 이유는 49개 파일이 아직 100% 수동 제작(영양사가
+   PowerPoint로 직접 만들어 PDF로 내보내기)이기 때문 — 자동화가 사람 손을
+   실제로 대체하는 순간 이 갭이 터질 지뢰였음.
+2. `deploy/route.ts:210`에 `pptx_url`을 PDF로 속여 보내던 지뢰
+   (`diet_review_items`에 `pdf_url` 컬럼 자체가 없었음).
 
-2. **`app/api/pptx/deploy/route.ts:210`에 이미 알고 있었다는 흔적**:
-   ```
-   // diet_review_items에 pdf_url 컬럼 없음 → PDF 형식은 pptx_url로 대체
-   ```
-   `file_format='PDF'`인 원한테 배포 메일 보내면 버튼엔 "📄 식단표 PDF
-   다운로드"라고 뜨는데 실제 링크는 **.pptx 파일**. DB에 `pdf_url` 컬럼
-   자체가 없음. 자동배포 실사용 시작하는 순간 바로 터지는 지뢰.
+**조치 (완료)**:
+- `.github/workflows/generate-pptx.yml`: `libreoffice-impress` 설치 스텝
+  추가(GitHub Actions 선택 — Render는 메모리 512MB라 위험). timeout
+  30분→45분 확대(변환 추가분 감안).
+- `app_actions.py`: `read_excel.convert_pptx()` 재사용해 메인 루프에 통합.
+  `upload_pptx()`→`upload_file()`로 일반화(확장자별 mime 자동판별).
+  `cfg['file_fmt']`(PDF/JPG/PDF+JPG/PPT) 기준으로 변환·업로드해
+  `weekly_menus.pdf_url`, `diet_review_items.pdf_url`/`jpg_url`에 실제로
+  기록. LibreOffice 미설치 감지 시 1개 원에서만 확인하고 이후 48개는
+  변환 시도 자체를 건너뜀(PPTX 생성은 정상 진행).
+- `supabase/migrations/add_pdf_url_to_diet_review_items.sql`: 신규
+  마이그레이션(`diet_review_items.pdf_url` 컬럼 추가). `jpg_url`은 이미
+  있었으나 채우는 코드가 없어 항상 NULL이었음. `weekly_menus.pdf_url`은
+  기존부터 있던 컬럼이라 안 건드림.
+- `deploy/route.ts`: 진짜 `pdf_url`이 있으면 그걸 쓰고, 재생성 전이라
+  아직 없는 과거 행만 `pptx_url`로 폴백하되 라벨을 정직하게 "PPTX
+  다운로드(PDF 변환 전)"로 표시.
+- `diet-review/route.ts`: `ReviewItemRow` 타입에 `pdf_url` 추가(`select('*')`로
+  이미 조회되고 있었으나 타입 선언 누락 상태였음).
 
-**방향(합의됨, 착수 전)**: LibreOffice 변환은 **GitHub Actions**에서
-(ubuntu-latest, `apt-get install libreoffice` 가능, 이미 PPTX 생성이
-여기서 돎, 30분 타임아웃 여유) — Render는 메모리 512MB 제한 있어 위험.
-
-**해야 할 작업**:
-1. `.github/workflows/generate-pptx.yml`에 `apt-get install -y libreoffice` 스텝 추가
-2. `app_actions.py`에 `read_excel.py`의 `convert_pptx()` 로직 이식(49개 파일 루프)
-3. Supabase `diet_review_items`(또는 `weekly_menus`)에 **`pdf_url` 컬럼 실제 추가**(마이그레이션)
-4. `deploy/route.ts:210` — `pptx_url` 대체 코드를 진짜 `pdf_url`로 교체
-5. 검토 화면(`/erp/review`)에서도 pptx_url을 PDF처럼 쓰는 곳 있으면 같이 점검
-6. **참고 자료**: `_samples/26년 8월 배포 식단표/`(로컬 PC)에 영양사가 만든
-   실물 PDF 원본 있음 — LibreOffice 변환 결과물 품질(줄바꿈·폰트·여백)을
-   이것과 비교 검증할 것
+**⚠️ 미완료 — 다음 세션 최우선**:
+1. **Supabase SQL Editor에서 마이그레이션 직접 실행 필요** — 자동 적용
+   안 됨. `supabase/migrations/add_pdf_url_to_diet_review_items.sql` 내용
+   그대로 실행.
+2. **실제 GitHub Actions 실행으로 검증 필요** — `generate-pptx.yml`
+   workflow_dispatch로 돌려서 (a) LibreOffice 설치 성공하는지 (b) 49개
+   원 전부 PDF/JPG까지 정상 생성되는지 (c) 소요 시간이 45분 안에 드는지
+   확인. 아직 로컬/claude.ai 세션에서는 실제 실행 테스트 못 함(GH Actions
+   환경 필요).
+3. **LibreOffice 변환 품질 검증** — `_samples/26년 8월 배포 식단표/`(로컬
+   PC)의 영양사 실물 PDF와 대조(줄바꿈·폰트·여백 깨짐 없는지). "LibreOffice
+   렌더링 신뢰 안 함" 원칙(701행)과 정면 충돌하는 지점이라 더 꼼꼼히 볼 것.
+4. 검토 화면(`/erp/review`)에서도 pptx_url을 PDF처럼 쓰는 곳 있으면 추가 점검
 
 ---
 
 ## 다음 세션 최우선 작업
 
-1. **PDF/JPG 변환 신설** (바로 위 "PDF/JPG 변환 완전 미구현" 참고) — 방향
-   합의됨(GitHub Actions + LibreOffice), 지금 세션에서 착수 예정.
+1. **PDF/JPG 변환 검증 3종** (바로 위 "PDF/JPG 변환 신설" 미완료 항목
+   1~3번 참고) — 마이그레이션 실행 → 실제 Actions 실행 → 품질 대조.
 2. **실제 엑셀→생성 시 메뉴 텍스트 미삽입 버그 조사** (위 "표 높이 실물 맞추기"
    미검증 항목 참고) — `read_excel.load_excel()` 결과를 `generate()`에 바로
    넣으면 메뉴 텍스트 0건. 원인 확인 후 겹침 육안 확인(내용 최대로 채운 상태)
