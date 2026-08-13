@@ -3,8 +3,9 @@
 > 이 파일은 항상 **"지금 상태"만** 담는다. 매 세션 끝에 최신 상태로 덮어쓴다.
 > 과거 이력은 `git log HANDOFF.md`로 본다.
 
-**최종 갱신:** 2026-08-12 (로컬 PC 세션 — 표 높이 실물 맞추기 완료(커밋 `c06698f`),
-날짜 표기 신규 발견 1건 미해결, 신규 미해결 5건 등록)
+**최종 갱신:** 2026-08-14 (claude.ai 세션 — PDF/JPG 변환 완전 미구현 +
+`deploy/route.ts` pdf_url 지뢰 신규 발견, 착수 예정. 표 높이는 2026-08-12
+로컬 세션에서 이미 완료·검증됨, 아래 참고)
 
 ---
 
@@ -643,16 +644,58 @@ Microsoft 365 Click-to-Run)은 표 기하·박스 위치 일치만 확인했고,
 
 ---
 
+## ⚠️ 신규 발견 — PDF/JPG 변환 완전 미구현 + `deploy/route.ts` pdf_url 지뢰 (2026-08-14, 미해결)
+
+**계기**: "실제 배포되는 PDF는 왜 완전하냐"는 질문에서 출발한 조사 (claude.ai 세션).
+위 701행 "LibreOffice 렌더링 신뢰 안 함 원칙 재검토"보다 구체적인 실무 갭.
+
+1. **PDF 변환이 프로덕션 파이프라인 어디에도 없음.**
+   - `app_actions.py`(GitHub Actions)·`app.py`(Render) 둘 다 `subprocess`/
+     `soffice` 호출 전무. PPTX만 만들고 끝남.
+   - `render.yaml`은 `env: python`(순수 Python, apt-get 불가) — Render에
+     LibreOffice 자체가 안 깔려있음.
+   - `read_excel.py`의 `convert_pptx()`(LibreOffice headless 변환)는 로컬
+     테스트 전용 스크립트라 프로덕션에서 호출 안 됨 — 죽은 코드.
+   - **지금 실제 배포되는 PDF가 완전한 이유**: 49개 파일이 아직 100%
+     수동 제작(영양사가 PowerPoint로 직접 만들어 PDF로 내보내기)이기
+     때문. 자동화가 실제로 사람 손을 대체하는 순간 이 갭이 터짐.
+
+2. **`app/api/pptx/deploy/route.ts:210`에 이미 알고 있었다는 흔적**:
+   ```
+   // diet_review_items에 pdf_url 컬럼 없음 → PDF 형식은 pptx_url로 대체
+   ```
+   `file_format='PDF'`인 원한테 배포 메일 보내면 버튼엔 "📄 식단표 PDF
+   다운로드"라고 뜨는데 실제 링크는 **.pptx 파일**. DB에 `pdf_url` 컬럼
+   자체가 없음. 자동배포 실사용 시작하는 순간 바로 터지는 지뢰.
+
+**방향(합의됨, 착수 전)**: LibreOffice 변환은 **GitHub Actions**에서
+(ubuntu-latest, `apt-get install libreoffice` 가능, 이미 PPTX 생성이
+여기서 돎, 30분 타임아웃 여유) — Render는 메모리 512MB 제한 있어 위험.
+
+**해야 할 작업**:
+1. `.github/workflows/generate-pptx.yml`에 `apt-get install -y libreoffice` 스텝 추가
+2. `app_actions.py`에 `read_excel.py`의 `convert_pptx()` 로직 이식(49개 파일 루프)
+3. Supabase `diet_review_items`(또는 `weekly_menus`)에 **`pdf_url` 컬럼 실제 추가**(마이그레이션)
+4. `deploy/route.ts:210` — `pptx_url` 대체 코드를 진짜 `pdf_url`로 교체
+5. 검토 화면(`/erp/review`)에서도 pptx_url을 PDF처럼 쓰는 곳 있으면 같이 점검
+6. **참고 자료**: `_samples/26년 8월 배포 식단표/`(로컬 PC)에 영양사가 만든
+   실물 PDF 원본 있음 — LibreOffice 변환 결과물 품질(줄바꿈·폰트·여백)을
+   이것과 비교 검증할 것
+
+---
+
 ## 다음 세션 최우선 작업
 
-1. **실제 엑셀→생성 시 메뉴 텍스트 미삽입 버그 조사** (위 "표 높이 실물 맞추기"
+1. **PDF/JPG 변환 신설** (바로 위 "PDF/JPG 변환 완전 미구현" 참고) — 방향
+   합의됨(GitHub Actions + LibreOffice), 지금 세션에서 착수 예정.
+2. **실제 엑셀→생성 시 메뉴 텍스트 미삽입 버그 조사** (위 "표 높이 실물 맞추기"
    미검증 항목 참고) — `read_excel.load_excel()` 결과를 `generate()`에 바로
    넣으면 메뉴 텍스트 0건. 원인 확인 후 겹침 육안 확인(내용 최대로 채운 상태)
    재시도 필요
-2. **날짜 표기 방식 결정·통일** (위 "날짜 표기 방식이 실물과 정반대" 참고)
-3. **타입별 대표 원 5개(C/A/B/F/G) 실물 대조** — 실제 8월 데이터로 생성해
+3. **날짜 표기 방식 결정·통일** (위 "날짜 표기 방식이 실물과 정반대" 참고)
+4. **타입별 대표 원 5개(C/A/B/F/G) 실물 대조** — 실제 8월 데이터로 생성해
    배포본과 한 장씩 비교. "뭐가 빠졌나" 추측하지 말고 차이를 목록으로 뽑을 것
-4. **원별 방학 양식(O/X) 선택** — 업로드 시 사람이 용도 지정(파일명 의존 금지),
+5. **원별 방학 양식(O/X) 선택** — 업로드 시 사람이 용도 지정(파일명 의존 금지),
    원별로 O/X 지정, 방학 없는 달엔 UI 자체가 안 나타나게.
    - **+ VACATION_IMG 발견사항 함께 반영**(이름표 부여 + `remove_holiday_cover_pics`
      제거 대상에서 예외 처리 — 위 "이름표 자동부여" 섹션 참고)
@@ -668,10 +711,10 @@ Microsoft 365 Click-to-Run)은 표 기하·박스 위치 일치만 확인했고,
      텍스트). **8월 배포본 49개를 훑어 방학 텍스트가 있는 원이 몇 곳인지 세어볼 것**
      — 소수면 예외 처리로 충분하고, 다수면 기본값 설계가 달라진다. 박스 좌표는
      방학O/X가 동일, 방학 그림 유무만 차이.
-5. **위탁업장 `contract_type` 신설** (독립 작업, 작음) — 위탁 5곳 **등록 전**에 하면
+6. **위탁업장 `contract_type` 신설** (독립 작업, 작음) — 위탁 5곳 **등록 전**에 하면
    SQL 한 줄. `branch_filters.py`/`pptx-eligibility.ts`를 "temporary만 제외"에서
    **"permanent만 포함"으로 뒤집을 것** (새 유형 추가 시 자동 제외되는 방향이 안전)
-6. **이름표 자동부여 단계4**(업로드 시점 거부) — 우선순위 낮음, 보류 중.
+7. **이름표 자동부여 단계4**(업로드 시점 거부) — 우선순위 낮음, 보류 중.
    `app/api/board/diet/templates/route.ts` POST에 이미 부분 구현된 검증 로직을
    "업로드 거부 + 텍스트 기준 검사"로 업그레이드할지 (위 "이름표 자동부여" 섹션 참고)
 
