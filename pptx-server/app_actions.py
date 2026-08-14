@@ -31,6 +31,7 @@ from pptx_generator import generate as gen_pptx
 from read_excel import _embed_brackets, _inject_exception_to_banchan, convert_pptx, determine_type
 from supabase_uploader import SupabaseREST
 from template_resolver import cleanup_template_path, resolve_template_path
+from validate_template import validate_template
 
 # ── 환경변수 ───────────────────────────────────────────────────────
 SUPABASE_URL = os.environ['SUPABASE_URL']
