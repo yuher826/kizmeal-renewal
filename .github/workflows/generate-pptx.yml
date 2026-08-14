@@ -26,11 +26,13 @@ jobs:
       - name: Install dependencies
         run: pip install -r pptx-server/requirements.txt
 
-      - name: Install LibreOffice (PDF/JPG 변환용)
+      - name: Install LibreOffice + 한글 폰트 (PDF/JPG 변환용)
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libreoffice-impress
+          sudo apt-get install -y --no-install-recommends libreoffice-impress fonts-noto-cjk
+          fc-cache -f
           soffice --version
+          fc-list :lang=ko | head -5
 
       - name: Generate PPTX
         env:
