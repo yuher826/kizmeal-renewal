@@ -3,9 +3,10 @@
 > 이 파일은 항상 **"지금 상태"만** 담는다. 매 세션 끝에 최신 상태로 덮어쓴다.
 > 과거 이력은 `git log HANDOFF.md`로 본다.
 
-**최종 갱신:** 2026-08-14 (claude.ai 세션 — PDF/JPG 변환 신설 코드 완료
-(커밋 `9e44ac3`), Supabase 마이그레이션 실행·실제 Actions 실행 검증·품질
-대조는 미완료. 표 높이는 2026-08-12 로컬 세션에서 이미 완료·검증됨)
+**최종 갱신:** 2026-08-14 (claude.ai 세션 — PDF/JPG 변환 신설 실제
+GitHub Actions로 검증 완료(49개 원 전부 성공), 검증 중 발견된 한글
+폰트 깨짐 버그 수정(`5d4950b`, 재검증 필요). 표 높이는 2026-08-12
+로컬 세션에서 이미 완료·검증됨)
 
 ---
 
@@ -679,19 +680,28 @@ Microsoft 365 Click-to-Run)은 표 기하·박스 위치 일치만 확인했고,
 - `diet-review/route.ts`: `ReviewItemRow` 타입에 `pdf_url` 추가(`select('*')`로
   이미 조회되고 있었으나 타입 선언 누락 상태였음).
 
-**⚠️ 미완료 — 다음 세션 최우선**:
-1. **Supabase SQL Editor에서 마이그레이션 직접 실행 필요** — 자동 적용
-   안 됨. `supabase/migrations/add_pdf_url_to_diet_review_items.sql` 내용
-   그대로 실행.
-2. **실제 GitHub Actions 실행으로 검증 필요** — `generate-pptx.yml`
-   workflow_dispatch로 돌려서 (a) LibreOffice 설치 성공하는지 (b) 49개
-   원 전부 PDF/JPG까지 정상 생성되는지 (c) 소요 시간이 45분 안에 드는지
-   확인. 아직 로컬/claude.ai 세션에서는 실제 실행 테스트 못 함(GH Actions
-   환경 필요).
-3. **LibreOffice 변환 품질 검증** — `_samples/26년 8월 배포 식단표/`(로컬
-   PC)의 영양사 실물 PDF와 대조(줄바꿈·폰트·여백 깨짐 없는지). "LibreOffice
-   렌더링 신뢰 안 함" 원칙(701행)과 정면 충돌하는 지점이라 더 꼼꼼히 볼 것.
-4. 검토 화면(`/erp/review`)에서도 pptx_url을 PDF처럼 쓰는 곳 있으면 추가 점검
+**✅ 검증 완료 (2026-08-14, 실제 GitHub Actions 실행)**:
+1. Supabase 마이그레이션 실행 완료 (SQL Editor에서 직접 실행, `Success. No rows returned`)
+2. 실제 GitHub Actions 실행 검증 완료 — LibreOffice 설치 성공, 49개 원
+   전부 성공(`[완료] 성공 49개 / 실패 0개 / 전체 49개`), 소요 4m 24s(45분
+   여유 충분). 중간에 걸렸던 기존 버그 2건도 이 과정에서 발견·수정:
+   - `app_actions.py`에 `validate_template` import 누락 → 수정(커밋 `1f2fcdb`)
+   - **한글 CJK 폰트 자체가 GitHub Actions 러너에 없어서 PDF 텍스트가
+     전부 깨져 나옴**('엘엘엘', '쌀쌀쌀' 등 엉뚱한 글자) → `fonts-noto-cjk`
+     설치로 해결(커밋 `5d4950b`). 로컬 샌드박스에서 생성→변환→PDF 렌더링을
+     직접 재현해 정상 출력 확인 완료. "LibreOffice 렌더링 신뢰 안 함"
+     원칙(701행)이 정확히 경고했던 상황이 실제로 터진 사례.
+
+**⚠️ 다음 세션 최우선 — 재검증 필요**:
+1. **한글 폰트 수정(`5d4950b`) 반영 후 재실행 필요** — 이 수정이 아직
+   실제 GitHub Actions로 검증 안 됨(코드만 짜고 push까지만 확인). 다시
+   Run workflow 돌려서 PDF 열어보고 한글이 정상 출력되는지 최종 확인할 것.
+2. **LibreOffice 변환 품질 최종 검증** — 한글 깨짐 해결된 뒤에도
+   `_samples/26년 8월 배포 식단표/`(로컬 PC)의 영양사 실물과 대조
+   (줄바꿈·폰트 스타일·여백). Pretendard 폰트 자체는 서버에 없고
+   Noto Sans CJK로 대체되므로, 텍스트는 맞아도 **글꼴 모양 자체는
+   디자이너 원본과 다르게 보일 것** — 이게 허용 가능한지 실물 눈으로 판단.
+3. 검토 화면(`/erp/review`)에서도 pptx_url을 PDF처럼 쓰는 곳 있으면 추가 점검
 
 ---
 
