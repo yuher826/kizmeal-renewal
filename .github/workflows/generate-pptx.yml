@@ -26,10 +26,16 @@ jobs:
       - name: Install dependencies
         run: pip install -r pptx-server/requirements.txt
 
+      - name: Cache apt packages (LibreOffice + 폰트)
+        uses: actions/cache@v4
+        with:
+          path: /var/cache/apt/archives
+          key: apt-libreoffice-nanum-${{ runner.os }}-v2
+
       - name: Install LibreOffice + 한글 폰트 (PDF/JPG 변환용)
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libreoffice-impress fonts-noto-cjk
+          sudo apt-get install -y --no-install-recommends libreoffice-impress fonts-nanum
           fc-cache -f
           soffice --version
           fc-list :lang=ko | head -5
