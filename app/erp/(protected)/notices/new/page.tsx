@@ -27,8 +27,13 @@ export default function NoticesNewPage() {
   const [content, setContent] = useState('')
   const [targetType, setTargetType] = useState<TargetType>('all')
   const [branches, setBranches] = useState<BranchProfileRow[]>([])
+  // ★selectedIds는 branches.id(=branch_profiles.branch_id)를 담는다.
+  // branch_profiles.id를 담으면 parent_notices.branch_id(branches(id) 참조)와
+  // 어긋나 FK 위반 또는 아무 계정에도 안 보이는 유령 공지가 된다.
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [branchSearch, setBranchSearch] = useState('')
+  const [isPopup, setIsPopup] = useState(false)
+  const [popupUntil, setPopupUntil] = useState('')
   const [isSaving, setIsSaving] = useState(false)
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null)
   const [errors, setErrors] = useState<{ title?: string; content?: string; branches?: string }>({})
@@ -88,6 +93,8 @@ export default function NoticesNewPage() {
           content,
           target_type: targetType,
           branch_ids: targetType === 'specific' ? Array.from(selectedIds) : [],
+          is_popup: isPopup,
+          popup_until: isPopup && popupUntil ? new Date(popupUntil).toISOString() : null,
         }),
       })
       if (!res.ok) {
@@ -191,13 +198,13 @@ export default function NoticesNewPage() {
                   <p className="text-sm text-slate-400 text-center py-6">검색 결과가 없습니다</p>
                 ) : filteredBranches.map(b => (
                   <label
-                    key={b.id}
+                    key={b.branch_id}
                     className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 cursor-pointer"
                   >
                     <input
                       type="checkbox"
-                      checked={selectedIds.has(b.id)}
-                      onChange={() => toggleBranch(b.id)}
+                      checked={selectedIds.has(b.branch_id)}
+                      onChange={() => toggleBranch(b.branch_id)}
                       className="w-4 h-4 accent-emerald-600 flex-shrink-0"
                     />
                     <div className="text-sm min-w-0">
@@ -234,6 +241,33 @@ export default function NoticesNewPage() {
             placeholder="공지 내용을 입력하세요"
           />
           {errors.content && <p className="text-red-500 text-xs mt-1">{errors.content}</p>}
+        </div>
+
+        {/* 팝업 노출 */}
+        <div className="border-t border-slate-100 pt-5">
+          <label className="flex items-center gap-2.5 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={isPopup}
+              onChange={e => { setIsPopup(e.target.checked); if (!e.target.checked) setPopupUntil('') }}
+              className="w-4 h-4 accent-emerald-600"
+            />
+            <span className="text-sm font-medium text-slate-700">고객사 포털 로그인 시 팝업으로 노출</span>
+          </label>
+          <p className="text-xs text-slate-400 mt-1 ml-6">폭설로 인한 배송 지연처럼 즉시 알려야 하는 긴급 공지에 사용하세요.</p>
+
+          {isPopup && (
+            <div className="mt-3 ml-6">
+              <label className="block text-xs font-medium text-slate-500 mb-1">팝업 종료 시각 (선택)</label>
+              <input
+                type="datetime-local"
+                value={popupUntil}
+                onChange={e => setPopupUntil(e.target.value)}
+                className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+              />
+              <p className="text-xs text-slate-400 mt-1">비워두면 이 팝업을 직접 끌 때까지 계속 노출됩니다.</p>
+            </div>
+          )}
         </div>
       </div>
 
