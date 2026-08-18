@@ -1,12 +1,17 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
+import { Plus } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
 
 /**
- * ERP 파일보관함 관리 (2026-08-18 권팀장 요청 2번)
+ * ERP 파일보관함 — 목록 (2026-08-18 권팀장 요청 2번)
  *
- * 고객사 포털의 "파일보관함"에 노출될 파일을 올리고 관리한다.
+ * 고객사 포털의 "파일보관함"에 노출될 파일을 조회·삭제한다.
+ * 업로드는 /erp/files/new로 분리 — 고객사 공지(/erp/notices +
+ * /erp/notices/new)와 같은 구조. 업로드는 한 달에 몇 번뿐인데 목록은
+ * 매번 보게 되므로, 자주 보는 쪽에 화면을 온전히 내준다.
  * 식단표는 식단 자동화 파이프라인이 담당하므로 여기서 다루지 않는다.
  *
  * ★배포 범위 3단계:
@@ -42,8 +47,6 @@ const CATEGORY_LABELS: Record<Category, string> = {
   etc:         '기타',
 }
 
-const BUCKET = 'kizmeal-files'
-
 /** 목록 한 페이지에 보여줄 개수. inquiries/history(30)보다 작게 잡음 —
  *  파일 목록은 행 높이가 더 크고 스캔 위주로 보게 되므로 20이 적당 */
 const PAGE_SIZE = 20
@@ -65,17 +68,6 @@ export default function ErpFileArchivePage() {
   const [fScope, setFScope]             = useState<Scope | '__ALL__'>('__ALL__')
   const [page, setPage]                 = useState(1)
 
-  const now = new Date()
-  const [category, setCategory]   = useState<Category>('health_info')
-  const [title, setTitle]         = useState('')
-  const [year, setYear]           = useState(now.getFullYear())
-  const [month, setMonth]         = useState(now.getMonth() + 1)
-  const [scope, setScope]         = useState<Scope>('all')
-  const [scopeDietType, setScopeDietType] = useState('ck')
-  const [scopeBranchId, setScopeBranchId] = useState('')
-  const [file, setFile]           = useState<File | null>(null)
-  const [uploading, setUploading] = useState(false)
-  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const load = useCallback(async () => {
     const supabase = createClient()
@@ -104,64 +96,18 @@ export default function ErpFileArchivePage() {
 
   useEffect(() => { load() }, [load])
 
-  const canSubmit = !!file
-    && title.trim().length > 0
-    && (scope !== 'branch' || !!scopeBranchId)
-    && !uploading
-
-  async function handleUpload(e: React.FormEvent) {
-    e.preventDefault()
-    if (!canSubmit || !file) return
-    setUploading(true)
-    setError('')
-
-    const supabase = createClient()
-    try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('로그인이 필요합니다.')
-
-      // 스토리지 키에 한글이 들어가면 Supabase가 InvalidKey를 반환하므로
-      // 경로는 ASCII만 사용하고, 원래 파일명은 title 컬럼에 보존한다.
-      const ext = (file.name.split('.').pop() || 'bin').toLowerCase()
-      const safeExt = ext.replace(/[^a-z0-9]/g, '') || 'bin'
-      const path = `archive/${year}/${String(month).padStart(2, '0')}/${crypto.randomUUID()}.${safeExt}`
-
-      const { error: upErr } = await supabase.storage
-        .from(BUCKET)
-        .upload(path, file, { upsert: false, contentType: file.type || undefined })
-      if (upErr) throw upErr
-
-      const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(path)
-
-      const { data: adminRow } = await supabase
-        .from('admins').select('id').eq('auth_id', user.id).maybeSingle()
-
-      const { error: insErr } = await supabase.from('file_archive').insert({
-        category,
-        title: title.trim(),
-        file_url: urlData.publicUrl,
-        file_size: file.size,
-        year,
-        month,
-        scope,
-        scope_diet_type: scope === 'group'  ? scopeDietType : null,
-        scope_branch_id: scope === 'branch' ? scopeBranchId : null,
-        uploaded_by: adminRow?.id ?? null,
-      })
-      if (insErr) throw insErr
-
-      setTitle('')
-      setFile(null)
-      if (fileInputRef.current) fileInputRef.current.value = ''
+  // /erp/files/new에서 업로드 성공 후 ?uploaded=1로 돌아온 경우 알림.
+  // useSearchParams는 App Router에서 Suspense 경계를 요구해 빌드가 까다로우므로
+  // 마운트 시 한 번만 location을 직접 읽고, 주소창의 쿼리는 지운다.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('uploaded') === '1') {
       setToast('업로드되었습니다.')
       setTimeout(() => setToast(''), 2500)
-      await load()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '업로드에 실패했습니다.')
-    } finally {
-      setUploading(false)
+      window.history.replaceState({}, '', '/erp/files')
     }
-  }
+  }, [])
 
   async function handleDelete(row: FileRow) {
     if (!confirm(`'${row.title}' 파일을 삭제할까요?\n고객사 화면에서도 즉시 사라집니다.`)) return
@@ -243,11 +189,20 @@ export default function ErpFileArchivePage() {
 
   return (
     <main className="min-h-screen bg-[#F6FAF6] px-4 sm:px-6 py-6 sm:py-8">
-      <div className="mb-6">
-        <h1 className="text-xl font-bold text-slate-900">파일보관함</h1>
-        <p className="text-sm text-slate-500 mt-0.5">
-          고객사 포털 파일보관함에 노출될 파일을 관리합니다 (식단표는 식단 자동화에서 처리)
-        </p>
+      <div className="flex items-start justify-between gap-4 mb-6">
+        <div>
+          <h1 className="text-xl font-bold text-slate-900">파일보관함</h1>
+          <p className="text-sm text-slate-500 mt-0.5">
+            고객사 포털 파일보관함에 노출될 파일을 관리합니다 (식단표는 식단 자동화에서 처리)
+          </p>
+        </div>
+        <Link
+          href="/erp/files/new"
+          className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-4 py-2.5 rounded-lg transition-colors whitespace-nowrap flex-shrink-0"
+        >
+          <Plus size={15} />
+          새 파일 올리기
+        </Link>
       </div>
 
       {toast && (
@@ -260,124 +215,6 @@ export default function ErpFileArchivePage() {
           {error}
         </div>
       )}
-
-      {/* 업로드 폼 */}
-      <form onSubmit={handleUpload} className="bg-white rounded-xl border border-slate-200 p-5 mb-6 space-y-4">
-        <h2 className="font-semibold text-slate-800">새 파일 올리기</h2>
-
-        <div className="grid sm:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">종류</label>
-            <select
-              value={category}
-              onChange={e => setCategory(e.target.value as Category)}
-              className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-            >
-              {(Object.keys(CATEGORY_LABELS) as Category[]).map(c => (
-                <option key={c} value={c}>{CATEGORY_LABELS[c]}</option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">
-              파일명 <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              value={title}
-              onChange={e => setTitle(e.target.value)}
-              placeholder="예: 2026년 8월 건강정보지"
-              className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-            />
-            <p className="text-xs text-slate-400 mt-1">고객사 목록에 이 이름으로 표시됩니다</p>
-          </div>
-        </div>
-
-        <div className="grid sm:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">자료 연·월</label>
-            <div className="flex gap-2">
-              <select
-                value={year}
-                onChange={e => setYear(Number(e.target.value))}
-                className="flex-1 px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              >
-                {Array.from({ length: 5 }, (_, i) => now.getFullYear() - 2 + i).map(y => (
-                  <option key={y} value={y}>{y}년</option>
-                ))}
-              </select>
-              <select
-                value={month}
-                onChange={e => setMonth(Number(e.target.value))}
-                className="flex-1 px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              >
-                {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
-                  <option key={m} value={m}>{m}월</option>
-                ))}
-              </select>
-            </div>
-            <p className="text-xs text-slate-400 mt-1">
-              업로드일이 아니라 <b>자료 기준</b> 연·월입니다 (9월 자료를 8월에 미리 올리는 경우 9월 선택)
-            </p>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">배포 대상</label>
-            <select
-              value={scope}
-              onChange={e => setScope(e.target.value as Scope)}
-              className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-            >
-              <option value="all">전체 원</option>
-              <option value="group">소속별 (CK / 위탁)</option>
-              <option value="branch">특정 원 하나</option>
-            </select>
-
-            {scope === 'group' && (
-              <select
-                value={scopeDietType}
-                onChange={e => setScopeDietType(e.target.value)}
-                className="mt-2 w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              >
-                <option value="ck">CK 소속 원</option>
-                <option value="consignment">위탁 소속 원</option>
-              </select>
-            )}
-
-            {scope === 'branch' && (
-              <select
-                value={scopeBranchId}
-                onChange={e => setScopeBranchId(e.target.value)}
-                className="mt-2 w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              >
-                <option value="">원을 선택하세요</option>
-                {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-              </select>
-            )}
-          </div>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1.5">
-            파일 <span className="text-red-500">*</span>
-          </label>
-          <input
-            ref={fileInputRef}
-            type="file"
-            onChange={e => setFile(e.target.files?.[0] ?? null)}
-            className="w-full text-sm text-slate-600 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100"
-          />
-        </div>
-
-        <button
-          type="submit"
-          disabled={!canSubmit}
-          className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-medium px-5 py-2.5 rounded-lg transition-colors"
-        >
-          {uploading ? '업로드 중…' : '업로드'}
-        </button>
-      </form>
 
       {/* 검색·필터 */}
       <div className="bg-white rounded-xl border border-slate-200 p-4 mb-3 space-y-3">
