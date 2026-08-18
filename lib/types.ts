@@ -230,6 +230,9 @@ export interface Inquiry {
   last_message_at?: string
   unread_count_branch: number
   unread_count_admin: number
+  // 권팀장 요청 7번: 원 담당자가 마지막으로 이 대화방을 연 시각.
+  // 이 시각 이후에 보내진 관리자 메시지만 "아직 안 읽음"으로 보고 수정·삭제를 허용한다.
+  branch_last_read_at: string | null
   created_at: string
   updated_at: string
   branches?: Branch

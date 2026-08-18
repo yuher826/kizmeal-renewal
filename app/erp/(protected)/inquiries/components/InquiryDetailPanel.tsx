@@ -396,6 +396,8 @@ interface ThreadMessageProps {
   adminName?: string
   // 수정/삭제 권한 및 상태
   canEditDelete?: boolean
+  // 원 담당자가 이미 읽어서 수정/삭제 버튼이 사라진 것인지 알려주는 표시용(권팀장 요청 7번)
+  readByBranch?: boolean
   isEditing?: boolean
   editContent?: string
   isDeleting?: boolean
@@ -415,6 +417,7 @@ function ThreadMessage({
   branchName,
   adminName,
   canEditDelete = false,
+  readByBranch = false,
   isEditing = false,
   editContent = '',
   isDeleting = false,
@@ -550,6 +553,7 @@ function ThreadMessage({
           <span className="ml-auto text-xs text-gray-400 flex-shrink-0">
             {time}
             {edited && !isEditing && <span className="ml-1 text-gray-400">(수정됨)</span>}
+            {readByBranch && !isEditing && <span className="ml-1 text-gray-300" title="원 담당자가 읽어 더 이상 수정·삭제할 수 없습니다">· 읽음</span>}
           </span>
         </div>
         <div className="border-t border-gray-100 pt-2">
@@ -669,12 +673,26 @@ export default function InquiryDetailPanel({ inquiryId, onNotify }: Props) {
     setLightbox({ images, index: idx })
   }, [])
 
-  // 수정/삭제 권한 계산 — super_admin은 전체, 그 외는 본인 메시지만
+  // 수정/삭제 권한 계산 — super_admin은 전체, 그 외는 본인 메시지만.
+  // + 권팀장 요청 7번: 원 담당자에게 실제로 보이는 메시지(is_internal=false)는
+  //   상대가 이미 대화방을 열어봤으면(branch_last_read_at 이후) 수정·삭제 금지.
+  //   내부메모(is_internal=true)는 원 담당자에게 애초에 안 보이므로 이 제한 예외.
   function canEditDeleteMessage(msg: Message): boolean {
     if (!currentAdmin) return false
     if (msg.sender_type !== 'admin') return false
-    if (currentAdmin.role === 'super_admin') return true
-    return msg.sender_id === currentAdmin.auth_id
+    if (currentAdmin.role !== 'super_admin' && msg.sender_id !== currentAdmin.auth_id) return false
+    if (msg.is_internal) return true
+    const lastRead = inquiry?.branch_last_read_at
+    if (!lastRead) return true // 원 담당자가 이 대화방을 아직 한 번도 안 연 상태
+    return new Date(msg.created_at).getTime() > new Date(lastRead).getTime()
+  }
+
+  // 원 담당자에게 이미 읽힌 메시지인지(수정·삭제 버튼이 사라진 이유를 알려주는 용도)
+  function isReadByBranch(msg: Message): boolean {
+    if (msg.sender_type !== 'admin' || msg.is_internal) return false
+    const lastRead = inquiry?.branch_last_read_at
+    if (!lastRead) return false
+    return new Date(msg.created_at).getTime() <= new Date(lastRead).getTime()
   }
 
   // ── 수정 핸들러 ───────────────────────────────────────────────
@@ -1260,6 +1278,7 @@ export default function InquiryDetailPanel({ inquiryId, onNotify }: Props) {
                         branchName={inquiry?.branches?.name}
                         adminName={inquiry?.admins?.name || currentAdmin?.name || '키즈밀'}
                         canEditDelete={canEditDeleteMessage(msg)}
+                        readByBranch={isReadByBranch(msg)}
                         isEditing={editingId === msg.id}
                         editContent={editingId === msg.id ? editContent : ''}
                         isDeleting={deletingId === msg.id}
