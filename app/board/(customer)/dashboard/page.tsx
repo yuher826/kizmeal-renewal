@@ -10,6 +10,14 @@ import type { Inquiry, Branch, Notification, SlaRule } from '@/lib/types'
 import InquiryCard from '@/components/board/InquiryCard'
 import AccountMismatchNotice from '@/components/board/AccountMismatchNotice'
 
+// 홈 하단 공지사항 미리보기용 (전체 필드는 /board/customer/notices 에서 조회)
+type NoticePreview = {
+  id: string
+  title: string
+  is_pinned: boolean
+  created_at: string
+}
+
 export default function CustomerDashboardPage() {
   const router = useRouter()
   const [branch, setBranch] = useState<Branch | null>(null)
@@ -19,7 +27,7 @@ export default function CustomerDashboardPage() {
   const [loading, setLoading] = useState(true)
   const [noBranch, setNoBranch] = useState(false)
   const [userEmail, setUserEmail] = useState<string | null>(null)
-  const [hasDietThisMonth, setHasDietThisMonth] = useState<boolean | null>(null)
+  const [notices, setNotices] = useState<NoticePreview[]>([])
   const [logoError, setLogoError] = useState(false) // 로고 로드 실패 시 원 이름 텍스트로 폴백
 
   useEffect(() => {
@@ -87,18 +95,16 @@ export default function CustomerDashboardPage() {
 
         if (notifs) setNotifications(notifs as Notification[])
 
-        // 이번달 식단표 확인
-        const nowYear  = new Date().getFullYear()
-        const nowMonth = new Date().getMonth() + 1
-        const { data: dietCheck } = await supabase
-          .from('weekly_menus')
-          .select('id')
-          .eq('branch_id', branchId)
-          .in('status', ['generation_complete', 'review_requested', 'approved', 'deployed'])
-          .eq('year', nowYear)
-          .eq('month', nowMonth)
-          .limit(1)
-        setHasDietThisMonth((dietCheck?.length ?? 0) > 0)
+        // 공지사항 미리보기 (고정 우선 + 최신순 3건) — 이 시점에서 branchId는 항상 존재
+        // (위에서 !branchId면 이미 return됨). 필터 로직은 /board/customer/notices 페이지와 동일.
+        const { data: noticeRows } = await supabase
+          .from('parent_notices')
+          .select('id, title, is_pinned, created_at')
+          .or(`branch_id.is.null,branch_id.eq.${branchId}`)
+          .order('is_pinned', { ascending: false })
+          .order('created_at', { ascending: false })
+          .limit(3)
+        setNotices((noticeRows || []) as NoticePreview[])
       } finally {
         // branch 없음 / 도중 오류, 어떤 경로로 빠져나가든 로딩은 반드시 종료
         setLoading(false)
@@ -248,27 +254,41 @@ export default function CustomerDashboardPage() {
             )}
           </div>
         </div>
-        {/* 이번달 식단표 */}
+        {/* 공지사항 */}
         <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-            <h2 className="font-bold text-[#1C2B1E]">이번달 식단표</h2>
-            <Link href="/board/customer/diet" className="text-xs text-[#2D6A4F] font-medium hover:underline">
+            <h2 className="font-bold text-[#1C2B1E]">공지사항</h2>
+            <Link href="/board/customer/notices" className="text-xs text-[#2D6A4F] font-medium hover:underline">
               전체 보기
             </Link>
           </div>
-          <div className="p-4">
-            {hasDietThisMonth === null ? (
-              <div className="h-10 bg-gray-50 rounded-xl animate-pulse" />
-            ) : hasDietThisMonth ? (
-              <Link
-                href="/board/customer/diet"
-                className="flex items-center justify-center gap-2 w-full bg-[#2D6A4F] hover:bg-[#1B4332] text-white font-semibold py-3 rounded-xl transition-colors text-sm"
-              >
-                <span>📄</span>
-                <span>이번달 식단표 확인</span>
-              </Link>
+          <div className="p-4 space-y-2">
+            {loading ? (
+              Array.from({ length: 2 }).map((_, i) => (
+                <div key={i} className="bg-gray-50 rounded-xl h-12 animate-pulse" />
+              ))
+            ) : notices.length === 0 ? (
+              <div className="py-8 text-center">
+                <p className="text-gray-400 text-sm">등록된 공지사항이 없습니다.</p>
+              </div>
             ) : (
-              <p className="text-gray-400 text-sm text-center py-2">이번달 식단표 준비 중입니다</p>
+              notices.map(notice => (
+                <Link
+                  key={notice.id}
+                  href="/board/customer/notices"
+                  className="flex items-center gap-2 px-3 py-2.5 rounded-xl hover:bg-gray-50 transition-colors"
+                >
+                  {notice.is_pinned && (
+                    <span className="text-[10px] bg-[#2D6A4F] text-white font-bold px-1.5 py-0.5 rounded-full flex-shrink-0">
+                      📌
+                    </span>
+                  )}
+                  <p className="text-sm text-[#1C2B1E] truncate flex-1">{notice.title}</p>
+                  <p className="text-xs text-gray-400 flex-shrink-0">
+                    {new Date(notice.created_at).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' })}
+                  </p>
+                </Link>
+              ))
             )}
           </div>
         </div>
