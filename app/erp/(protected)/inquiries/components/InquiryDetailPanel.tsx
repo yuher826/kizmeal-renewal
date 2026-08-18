@@ -476,7 +476,7 @@ function ThreadMessage({
       <div className="relative group bg-amber-50 border border-amber-200 rounded-lg p-4 mb-3">
         {/* 수정/삭제 버튼 (hover 시 표시) */}
         {canEditDelete && !isEditing && (
-          <div className="absolute top-2 right-2 hidden group-hover:flex gap-1 z-10">
+          <div className="absolute top-2 right-2 flex gap-1 z-10">
             <button
               onClick={onEditStart}
               title="수정"
@@ -529,7 +529,7 @@ function ThreadMessage({
       <div className="relative group bg-white border border-gray-200 border-l-[3px] border-l-green-600 rounded-lg p-4 mb-3">
         {/* 수정/삭제 버튼 (hover 시 표시) */}
         {canEditDelete && !isEditing && (
-          <div className="absolute top-2 right-2 hidden group-hover:flex gap-1 z-10">
+          <div className="absolute top-2 right-2 flex gap-1 z-10">
             <button
               onClick={onEditStart}
               title="수정"
