@@ -12,7 +12,10 @@ type MenuItem = { icon: string; label: string; href: string }
 const CUSTOMER_MENU: MenuItem[] = [
   { icon: '🏠', label: '홈', href: '/board/dashboard' },
   { icon: '💬', label: '1:1 문의', href: '/board/inquiries' },
-  { icon: '📋', label: '식단표', href: '/board/customer/diet' },
+  // 2026-08-18 권팀장 요청 2번: '식단표' → '파일보관함'으로 확장.
+  // ⚠️ 고객사 메뉴는 이 파일(데스크톱)과 CustomerMobileNav.tsx(모바일)
+  //    두 곳에 각각 정의돼 있다. 라벨을 바꿀 때 반드시 둘 다 고칠 것.
+  { icon: '📁', label: '파일보관함', href: '/board/customer/diet' },
   { icon: '📢', label: '공지사항', href: '/board/customer/notices' },
   { icon: '👤', label: '마이페이지', href: '/board/settings' },
 ]
