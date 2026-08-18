@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef, useCallback } from 'react'
+import { useEffect, useState, useRef, useCallback, Fragment } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 import type { Inquiry, Message, SlaRule } from '@/lib/types'
@@ -274,33 +274,36 @@ export default function CustomerInquiryDetailPage({ params }: { params: { id: st
         {/* 진행 타임라인 */}
         {inquiry && (
           <div className="mt-3 pb-1">
-            {/* 점 + 연결선 행 */}
-            <div className="flex items-center px-1">
+            {/* 원(숫자)과 라벨을 한 덩어리로 묶어 세로로 쌓는다.
+                예전엔 원 행과 라벨 행을 따로 그렸는데, 라벨 행의 각 칸은
+                [원+연결선] 전체 폭을 차지하는 반면 원은 그 칸의 왼쪽 끝에
+                붙어 있어서 가운데 라벨('처리중')만 오른쪽으로 밀려 보였다
+                (권팀장 요청 6번). 이제 원과 라벨이 같은 컨테이너를 공유해
+                항상 정렬된다. */}
+            <div className="flex items-start px-1">
               {STATUS_STEPS.map((step, i) => (
-                <div key={step.key} className={`flex items-center ${i < STATUS_STEPS.length - 1 ? 'flex-1' : ''}`}>
-                  <div className={`w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center text-xs font-bold ${
-                    i < stepIndex ? 'bg-[#2D6A4F] text-white'
-                    : i === stepIndex ? 'bg-[#2D6A4F] text-white ring-2 ring-[#B7E4C7]'
-                    : 'bg-gray-200 text-gray-400'
-                  }`}>
-                    {i < stepIndex ? '✓' : i + 1}
+                <Fragment key={step.key}>
+                  <div className="flex flex-col items-center flex-shrink-0">
+                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                      i < stepIndex ? 'bg-[#2D6A4F] text-white'
+                      : i === stepIndex ? 'bg-[#2D6A4F] text-white ring-2 ring-[#B7E4C7]'
+                      : 'bg-gray-200 text-gray-400'
+                    }`}>
+                      {i < stepIndex ? '✓' : i + 1}
+                    </div>
+                    <span className={`mt-1.5 text-[10px] whitespace-nowrap font-medium ${
+                      i <= stepIndex ? 'text-[#2D6A4F]' : 'text-gray-400'
+                    }`}>
+                      {step.label}
+                    </span>
                   </div>
                   {i < STATUS_STEPS.length - 1 && (
-                    <div className={`flex-1 h-0.5 mx-1 ${i < stepIndex ? 'bg-[#2D6A4F]' : 'bg-gray-200'}`} />
+                    // 원 세로 중앙(24px의 절반 = 12px)에 선을 맞춘다
+                    <div className={`flex-1 h-0.5 mx-1 mt-[11px] ${
+                      i < stepIndex ? 'bg-[#2D6A4F]' : 'bg-gray-200'
+                    }`} />
                   )}
-                </div>
-              ))}
-            </div>
-            {/* 라벨 행 */}
-            <div className="flex mt-1.5 px-1">
-              {STATUS_STEPS.map((step, i) => (
-                <div key={step.key} className={`${i < STATUS_STEPS.length - 1 ? 'flex-1' : ''} ${
-                  i === 0 ? 'text-left' : i === STATUS_STEPS.length - 1 ? 'text-right' : 'text-center'
-                }`}>
-                  <span className={`text-[10px] whitespace-nowrap font-medium ${i <= stepIndex ? 'text-[#2D6A4F]' : 'text-gray-400'}`}>
-                    {step.label}
-                  </span>
-                </div>
+                </Fragment>
               ))}
             </div>
           </div>
