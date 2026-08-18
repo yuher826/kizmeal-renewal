@@ -67,6 +67,9 @@ const CATEGORY_TABS: { key: CategoryKey | 'all'; label: string }[] = [
   { key: 'etc',         label: '기타' },
 ]
 
+/** 한 페이지에 보여줄 개수. ERP 관리자 화면과 동일하게 맞춤 */
+const PAGE_SIZE = 20
+
 const CATEGORY_META: Record<CategoryKey, { icon: string; label: string }> = {
   diet:        { icon: '🍱', label: '식단표' },
   health_info: { icon: '💚', label: '건강정보지' },
@@ -95,9 +98,11 @@ export default function CustomerFileArchivePage() {
   const [branchName, setBranchName] = useState<string | null>(null)
   const [loading, setLoading]       = useState(true)
 
+  const [keyword, setKeyword]         = useState('')
   const [tab, setTab]                 = useState<CategoryKey | 'all'>('all')
   const [filterYear, setFilterYear]   = useState<number | 'all'>('all')
   const [filterMonth, setFilterMonth] = useState<number | 'all'>('all')
+  const [page, setPage]               = useState(1)
 
   useEffect(() => {
     const supabase = createClient()
@@ -218,11 +223,40 @@ export default function CustomerFileArchivePage() {
     return Array.from(set).sort((a, b) => b - a)
   }, [items])
 
-  const visible = useMemo(() => items.filter(i =>
-    (tab === 'all' || i.category === tab)
-    && (filterYear === 'all'  || i.year === filterYear)
-    && (filterMonth === 'all' || i.month === filterMonth)
-  ), [items, tab, filterYear, filterMonth])
+  const visible = useMemo(() => {
+    const kw = keyword.trim().toLowerCase()
+    return items.filter(i =>
+      (kw === '' || i.title.toLowerCase().includes(kw))
+      && (tab === 'all' || i.category === tab)
+      && (filterYear === 'all'  || i.year === filterYear)
+      && (filterMonth === 'all' || i.month === filterMonth)
+    )
+  }, [items, keyword, tab, filterYear, filterMonth])
+
+  const totalPages = Math.max(1, Math.ceil(visible.length / PAGE_SIZE))
+  const pageItems = useMemo(
+    () => visible.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [visible, page],
+  )
+
+  // 조건이 바뀌면 1페이지로. 페이지 범위도 보정
+  useEffect(() => { setPage(1) }, [keyword, tab, filterYear, filterMonth])
+  useEffect(() => { if (page > totalPages) setPage(totalPages) }, [page, totalPages])
+
+  /** 페이지 번호 목록. 10페이지 넘으면 현재 위치 주변만 + 생략(…) 표시
+   *  (ERP 화면들과 동일 로직 — 전체 일관성) */
+  function pageRange(): number[] {
+    if (totalPages <= 10) return Array.from({ length: totalPages }, (_, i) => i + 1)
+    const delta = 2
+    const start = Math.max(2, page - delta)
+    const end   = Math.min(totalPages - 1, page + delta)
+    const range: number[] = [1]
+    if (start > 2) range.push(-1)
+    for (let i = start; i <= end; i++) range.push(i)
+    if (end < totalPages - 1) range.push(-1)
+    range.push(totalPages)
+    return range
+  }
 
   return (
     <div className="min-h-screen bg-[#F6FAF6] font-sans">
@@ -239,6 +273,15 @@ export default function CustomerFileArchivePage() {
       </header>
 
       <div className="px-4 sm:px-6 py-6 space-y-4">
+        {/* 파일명 검색 */}
+        <input
+          type="text"
+          value={keyword}
+          onChange={e => setKeyword(e.target.value)}
+          placeholder="파일명으로 검색"
+          className="w-full px-4 py-2.5 rounded-xl border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-[#2D6A4F] focus:border-transparent"
+        />
+
         {/* 종류 탭 */}
         <div className="flex gap-2 flex-wrap">
           {CATEGORY_TABS.map(t => (
@@ -295,7 +338,7 @@ export default function CustomerFileArchivePage() {
             <p className="text-gray-400 text-sm mt-1 leading-relaxed">
               {items.length === 0
                 ? '파일이 준비되면 알림을 보내드릴게요 😊'
-                : '연도·월 또는 종류 필터를 바꿔보세요.'}
+                : '검색어나 연도·월·종류 조건을 바꿔보세요.'}
             </p>
             {items.length === 0 && (
               <Link
@@ -307,31 +350,73 @@ export default function CustomerFileArchivePage() {
             )}
           </div>
         ) : (
-          <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-            {visible.map((item, idx) => {
-              const meta = CATEGORY_META[item.category]
-              return (
-                <a
-                  key={item.id}
-                  href={item.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={`flex items-center gap-3 px-4 py-3.5 hover:bg-[#F6FAF6] transition-colors ${
-                    idx > 0 ? 'border-t border-gray-50' : ''
-                  }`}
+          <>
+            <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+              {pageItems.map((item, idx) => {
+                const meta = CATEGORY_META[item.category]
+                return (
+                  <a
+                    key={item.id}
+                    href={item.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={`flex items-center gap-3 px-4 py-3.5 hover:bg-[#F6FAF6] transition-colors ${
+                      idx > 0 ? 'border-t border-gray-50' : ''
+                    }`}
+                  >
+                    <span className="text-xl flex-shrink-0">{meta.icon}</span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-[#1C2B1E] truncate">{item.title}</p>
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        {meta.label} · {item.year}년 {item.month}월
+                      </p>
+                    </div>
+                    <span className="text-gray-300 flex-shrink-0">›</span>
+                  </a>
+                )
+              })}
+            </div>
+
+            {/* 페이지네이션 */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-center gap-1 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={page <= 1}
+                  className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-500 hover:bg-white disabled:opacity-30 disabled:hover:bg-transparent text-sm"
                 >
-                  <span className="text-xl flex-shrink-0">{meta.icon}</span>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-[#1C2B1E] truncate">{item.title}</p>
-                    <p className="text-xs text-gray-400 mt-0.5">
-                      {meta.label} · {item.year}년 {item.month}월
-                    </p>
-                  </div>
-                  <span className="text-gray-300 flex-shrink-0">›</span>
-                </a>
-              )
-            })}
-          </div>
+                  ‹
+                </button>
+                {pageRange().map((p, i) =>
+                  p === -1 ? (
+                    <span key={`ellipsis-${i}`} className="w-8 h-8 flex items-center justify-center text-gray-400 text-xs">
+                      …
+                    </span>
+                  ) : (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => setPage(p)}
+                      className={`w-8 h-8 flex items-center justify-center rounded-lg text-xs font-semibold transition-colors ${
+                        p === page ? 'bg-[#2D6A4F] text-white' : 'text-gray-500 hover:bg-white'
+                      }`}
+                    >
+                      {p}
+                    </button>
+                  )
+                )}
+                <button
+                  type="button"
+                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                  disabled={page >= totalPages}
+                  className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-500 hover:bg-white disabled:opacity-30 disabled:hover:bg-transparent text-sm"
+                >
+                  ›
+                </button>
+              </div>
+            )}
+          </>
         )}
       </div>
 
