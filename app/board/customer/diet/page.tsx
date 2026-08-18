@@ -1,10 +1,26 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { ROUTES } from '@/lib/routes'
+
+/**
+ * 파일보관함 (2026-08-18 권팀장 요청 2번)
+ *
+ * 기존 "식단표" 화면을 확장. 식단표 외에 건강정보지·유인물·식단사진까지
+ * 한 곳에서 열람한다. 식대청구서는 KOS에서 전달되므로 제외.
+ *
+ * ★데이터 소스가 둘이다(A안):
+ *   - 식단표      → weekly_menus (자동 생성 파이프라인이 채움. 건드리지 않음)
+ *   - 그 외 파일  → file_archive (관리자가 수동 업로드)
+ *   두 소스를 화면에서 ArchiveItem 형태로 정규화해 하나의 목록으로 합친다.
+ *
+ * ★요청 3번(PDF/PPTX/JPG 표기 및 '우리 원 파일형식' 문구 제거)도 여기서
+ *   함께 해결됨 — 형식별 버튼 3개 대신 파일명을 눌러 바로 여는 방식으로
+ *   바꿨고, 원에 지정된 형식(file_format)에 맞는 파일 하나만 연결한다.
+ */
 
 type MenuRow = {
   id: string
@@ -17,28 +33,71 @@ type MenuRow = {
   week_num: number | null
 }
 
+type ArchiveRow = {
+  id: string
+  category: 'health_info' | 'handout' | 'photo' | 'etc'
+  title: string
+  file_url: string
+  year: number
+  month: number
+  created_at: string
+}
+
 type FileFormat = 'pdf' | 'jpg' | 'ppt' | 'pdf+jpg'
 
-const STATUS_LABELS: Record<string, string> = {
-  generated:        '생성완료',
-  review_requested: '검토중',
-  approved:         '승인됨',
-  deployed:         '배포완료',
+type CategoryKey = 'diet' | 'health_info' | 'handout' | 'photo' | 'etc'
+
+/** 두 소스를 합치기 위한 공통 형태 */
+type ArchiveItem = {
+  id: string
+  category: CategoryKey
+  title: string
+  url: string
+  year: number
+  month: number
+  sortAt: string
 }
 
-const STATUS_COLORS: Record<string, string> = {
-  generated:        'bg-blue-100 text-blue-700',
-  review_requested: 'bg-yellow-100 text-yellow-700',
-  approved:         'bg-green-100 text-green-700',
-  deployed:         'bg-[#E8F5E9] text-[#2D6A4F]',
+const CATEGORY_TABS: { key: CategoryKey | 'all'; label: string }[] = [
+  { key: 'all',         label: '전체' },
+  { key: 'diet',        label: '식단표' },
+  { key: 'health_info', label: '건강정보지' },
+  { key: 'handout',     label: '유인물' },
+  { key: 'photo',       label: '식단사진' },
+  { key: 'etc',         label: '기타' },
+]
+
+const CATEGORY_META: Record<CategoryKey, { icon: string; label: string }> = {
+  diet:        { icon: '🍱', label: '식단표' },
+  health_info: { icon: '💚', label: '건강정보지' },
+  handout:     { icon: '📄', label: '유인물' },
+  photo:       { icon: '📷', label: '식단사진' },
+  etc:         { icon: '📎', label: '기타' },
 }
 
-export default function CustomerDietPage() {
+/** 원에 지정된 형식에 맞는 URL 하나를 고른다. 없으면 있는 것으로 폴백 */
+function pickMenuUrl(menu: MenuRow, fmt: FileFormat): string | null {
+  const byFormat: Record<FileFormat, (string | null)[]> = {
+    'pdf':     [menu.pdf_url],
+    'jpg':     [menu.jpg_url],
+    'ppt':     [menu.pptx_url],
+    'pdf+jpg': [menu.pdf_url, menu.jpg_url],
+  }
+  const preferred = byFormat[fmt]?.find(Boolean)
+  if (preferred) return preferred
+  // 지정 형식이 아직 생성되지 않았을 수 있으므로 폴백
+  return menu.pdf_url || menu.jpg_url || menu.pptx_url || null
+}
+
+export default function CustomerFileArchivePage() {
   const router = useRouter()
-  const [menus, setMenus]           = useState<MenuRow[]>([])
-  const [fileFormat, setFileFormat] = useState<FileFormat>('pdf')
+  const [items, setItems]           = useState<ArchiveItem[]>([])
   const [branchName, setBranchName] = useState<string | null>(null)
   const [loading, setLoading]       = useState(true)
+
+  const [tab, setTab]                 = useState<CategoryKey | 'all'>('all')
+  const [filterYear, setFilterYear]   = useState<number | 'all'>('all')
+  const [filterMonth, setFilterMonth] = useState<number | 'all'>('all')
 
   useEffect(() => {
     const supabase = createClient()
@@ -72,54 +131,98 @@ export default function CustomerDietPage() {
       }
       if (!branchId) { setLoading(false); return }
 
-      // branch_profiles에서 file_format 조회
       const { data: profileData } = await supabase
         .from('branch_profiles')
-        .select('id, file_format, distribution_email')
+        .select('id, file_format')
         .eq('branch_id', branchId)
         .maybeSingle()
-      if (profileData?.file_format) setFileFormat(profileData.file_format as FileFormat)
+
       const profileBranchId: string | null = profileData?.id ?? null
+      const fileFormat = (profileData?.file_format as FileFormat) ?? 'pdf'
 
-      // weekly_menus 조회 (최신 6개월, 배포된 것만)
-      if (!profileBranchId) {
-        setMenus([])
-        setLoading(false)
-        return
-      }
-      const { data: rows } = await supabase
-        .from('weekly_menus')
-        .select('id, year, month, pptx_url, pdf_url, jpg_url, status, week_num')
-        .eq('branch_id', profileBranchId)
-        .in('status', ['generation_complete', 'correction_request', 'resubmitted', 'approved', 'deployed'])
-        .order('year', { ascending: false })
-        .order('month', { ascending: false })
-        .order('week_num', { ascending: true, nullsFirst: true })
+      const merged: ArchiveItem[] = []
 
-      // month 별 대표 row 1개 (week_num IS NULL 우선)
-      if (rows) {
-        const seen = new Set<string>()
-        const monthly: MenuRow[] = []
-        for (const r of rows as MenuRow[]) {
-          const key = `${r.year}-${r.month}`
-          if (!seen.has(key)) {
+      // ── 1) 식단표 (weekly_menus) ──
+      if (profileBranchId) {
+        const { data: rows } = await supabase
+          .from('weekly_menus')
+          .select('id, year, month, pptx_url, pdf_url, jpg_url, status, week_num')
+          .eq('branch_id', profileBranchId)
+          .in('status', ['generation_complete', 'correction_request', 'resubmitted', 'approved', 'deployed'])
+          .order('year',  { ascending: false })
+          .order('month', { ascending: false })
+          .order('week_num', { ascending: true, nullsFirst: true })
+
+        if (rows) {
+          // 같은 연·월은 대표 1건만 (week_num IS NULL 우선)
+          const seen = new Set<string>()
+          for (const r of rows as MenuRow[]) {
+            const key = `${r.year}-${r.month}`
+            if (seen.has(key)) continue
+            const url = pickMenuUrl(r, fileFormat)
+            if (!url) continue
             seen.add(key)
-            monthly.push(r)
-            if (monthly.length >= 6) break
+            merged.push({
+              id: `menu-${r.id}`,
+              category: 'diet',
+              title: `${r.year}년 ${r.month}월 식단표`,
+              url,
+              year: r.year,
+              month: r.month,
+              // 식단표는 생성 시각 대신 자료 연·월(월초)로 정렬
+              sortAt: new Date(r.year, r.month - 1, 1).toISOString(),
+            })
           }
         }
-        setMenus(monthly)
       }
+
+      // ── 2) 그 외 파일 (file_archive) ──
+      //    어떤 파일이 보이는지는 RLS가 판단한다(전체공통/그룹공통/원별).
+      const { data: archiveRows } = await supabase
+        .from('file_archive')
+        .select('id, category, title, file_url, year, month, created_at')
+        .order('year',  { ascending: false })
+        .order('month', { ascending: false })
+        .order('created_at', { ascending: false })
+
+      if (archiveRows) {
+        for (const a of archiveRows as ArchiveRow[]) {
+          merged.push({
+            id: `arch-${a.id}`,
+            category: a.category,
+            title: a.title,
+            url: a.file_url,
+            year: a.year,
+            month: a.month,
+            sortAt: a.created_at,
+          })
+        }
+      }
+
+      // 자료 연·월 기준 최신순
+      merged.sort((x, y) => {
+        if (y.year !== x.year)   return y.year - x.year
+        if (y.month !== x.month) return y.month - x.month
+        return y.sortAt.localeCompare(x.sortAt)
+      })
+
+      setItems(merged)
       setLoading(false)
     }
     load()
   }, [router])
 
-  function isFormatActive(fmt: string): boolean {
-    if (fileFormat === 'pdf+jpg') return fmt === 'pdf' || fmt === 'jpg'
-    if (fileFormat === 'ppt')     return fmt === 'pptx'
-    return fileFormat === fmt
-  }
+  /** 필터 드롭다운에 쓸 연도 목록(자료가 있는 연도만) */
+  const availableYears = useMemo(() => {
+    const set = new Set<number>(items.map(i => i.year))
+    return Array.from(set).sort((a, b) => b - a)
+  }, [items])
+
+  const visible = useMemo(() => items.filter(i =>
+    (tab === 'all' || i.category === tab)
+    && (filterYear === 'all'  || i.year === filterYear)
+    && (filterMonth === 'all' || i.month === filterMonth)
+  ), [items, tab, filterYear, filterMonth])
 
   return (
     <div className="min-h-screen bg-[#F6FAF6] font-sans">
@@ -128,91 +231,107 @@ export default function CustomerDietPage() {
           <div className="flex items-center gap-1 text-xs text-gray-400 mb-0.5">
             <span>{branchName || '소통채널'}</span>
             <span>›</span>
-            <span className="text-[#2D6A4F] font-medium">식단표</span>
+            <span className="text-[#2D6A4F] font-medium">파일보관함</span>
           </div>
-          <h1 className="font-bold text-[#1C2B1E] text-base">식단표</h1>
-          <p className="text-gray-400 text-xs">월별 식단표 다운로드</p>
+          <h1 className="font-bold text-[#1C2B1E] text-base">파일보관함</h1>
+          <p className="text-gray-400 text-xs">식단표·건강정보지 등 전달된 파일을 확인하실 수 있습니다</p>
         </div>
       </header>
 
       <div className="px-4 sm:px-6 py-6 space-y-4">
-        {loading ? (
-          Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="bg-white rounded-2xl h-28 animate-pulse border border-gray-100" />
-          ))
-        ) : menus.length === 0 ? (
-          <div className="bg-white rounded-2xl border border-gray-100 px-6 py-16 text-center">
-            <p className="text-5xl mb-4">🍱</p>
-            <p className="text-gray-600 font-medium">아직 배포된 식단표가 없습니다.</p>
-            <p className="text-gray-400 text-sm mt-1 leading-relaxed">
-              식단표가 준비되면 알림을 보내드릴게요 😊
-            </p>
-            <Link
-              href="/board/inquiries/new"
-              className="inline-flex items-center gap-1.5 mt-5 text-sm text-[#2D6A4F] border border-[#2D6A4F] rounded-xl px-4 py-2 font-medium hover:bg-[#E8F5E9] transition-colors"
+        {/* 종류 탭 */}
+        <div className="flex gap-2 flex-wrap">
+          {CATEGORY_TABS.map(t => (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => setTab(t.key)}
+              className={`px-3.5 py-2 rounded-full border text-xs font-medium transition-all ${
+                tab === t.key
+                  ? 'bg-[#2D6A4F] border-[#2D6A4F] text-white shadow-sm'
+                  : 'bg-white border-gray-200 text-gray-600 hover:border-[#52B788] hover:text-[#2D6A4F]'
+              }`}
             >
-              문의하기
-            </Link>
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {/* 연·월 필터 */}
+        <div className="flex gap-2">
+          <select
+            value={filterYear}
+            onChange={e => setFilterYear(e.target.value === 'all' ? 'all' : Number(e.target.value))}
+            className="px-3 py-2 rounded-xl border border-gray-200 bg-white text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#2D6A4F]"
+          >
+            <option value="all">전체 연도</option>
+            {availableYears.map(y => <option key={y} value={y}>{y}년</option>)}
+          </select>
+          <select
+            value={filterMonth}
+            onChange={e => setFilterMonth(e.target.value === 'all' ? 'all' : Number(e.target.value))}
+            className="px-3 py-2 rounded-xl border border-gray-200 bg-white text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#2D6A4F]"
+          >
+            <option value="all">전체 월</option>
+            {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
+              <option key={m} value={m}>{m}월</option>
+            ))}
+          </select>
+        </div>
+
+        {/* 목록 */}
+        {loading ? (
+          <div className="space-y-2">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="bg-white rounded-2xl h-16 animate-pulse border border-gray-100" />
+            ))}
+          </div>
+        ) : visible.length === 0 ? (
+          <div className="bg-white rounded-2xl border border-gray-100 px-6 py-16 text-center">
+            <p className="text-5xl mb-4">📁</p>
+            <p className="text-gray-600 font-medium">
+              {items.length === 0 ? '아직 전달된 파일이 없습니다.' : '조건에 맞는 파일이 없습니다.'}
+            </p>
+            <p className="text-gray-400 text-sm mt-1 leading-relaxed">
+              {items.length === 0
+                ? '파일이 준비되면 알림을 보내드릴게요 😊'
+                : '연도·월 또는 종류 필터를 바꿔보세요.'}
+            </p>
+            {items.length === 0 && (
+              <Link
+                href="/board/inquiries/new"
+                className="inline-flex items-center gap-1.5 mt-5 text-sm text-[#2D6A4F] border border-[#2D6A4F] rounded-xl px-4 py-2 font-medium hover:bg-[#E8F5E9] transition-colors"
+              >
+                문의하기
+              </Link>
+            )}
           </div>
         ) : (
-          menus.map(menu => {
-            const statusLabel = STATUS_LABELS[menu.status] ?? menu.status
-            const statusColor = STATUS_COLORS[menu.status] ?? 'bg-gray-100 text-gray-600'
-
-            const downloads = [
-              { key: 'pptx', label: 'PPTX', url: menu.pptx_url, active: isFormatActive('pptx') },
-              { key: 'pdf',  label: 'PDF',  url: menu.pdf_url,  active: isFormatActive('pdf') },
-              { key: 'jpg',  label: 'JPG',  url: menu.jpg_url,  active: isFormatActive('jpg') },
-            ]
-
-            return (
-              <div key={menu.id} className="bg-white rounded-2xl border border-gray-100 p-5">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="font-bold text-[#1C2B1E] text-base">
-                    {menu.year}년 {menu.month}월 식단표
-                  </h2>
-                  <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${statusColor}`}>
-                    {statusLabel}
-                  </span>
-                </div>
-                <div className="flex gap-2 flex-wrap">
-                  {downloads.map(dl =>
-                    dl.url ? (
-                      <a
-                        key={dl.key}
-                        href={dl.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors ${
-                          dl.active
-                            ? 'bg-[#2D6A4F] text-white hover:bg-[#1B4332]'
-                            : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
-                        }`}
-                      >
-                        <span>⬇</span>
-                        <span>{dl.label} 다운로드</span>
-                      </a>
-                    ) : (
-                      <button
-                        key={dl.key}
-                        type="button"
-                        disabled
-                        className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold bg-gray-50 text-gray-300 cursor-not-allowed"
-                      >
-                        <span>⬇</span>
-                        <span>{dl.label} 다운로드</span>
-                      </button>
-                    )
-                  )}
-                </div>
-                {fileFormat && (
-                  <p className="text-xs text-gray-400 mt-3">
-                    우리 원 파일 형식: <span className="font-medium text-[#2D6A4F]">{fileFormat.toUpperCase()}</span>
-                  </p>
-                )}
-              </div>
-            )
-          })
+          <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+            {visible.map((item, idx) => {
+              const meta = CATEGORY_META[item.category]
+              return (
+                <a
+                  key={item.id}
+                  href={item.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`flex items-center gap-3 px-4 py-3.5 hover:bg-[#F6FAF6] transition-colors ${
+                    idx > 0 ? 'border-t border-gray-50' : ''
+                  }`}
+                >
+                  <span className="text-xl flex-shrink-0">{meta.icon}</span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-[#1C2B1E] truncate">{item.title}</p>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      {meta.label} · {item.year}년 {item.month}월
+                    </p>
+                  </div>
+                  <span className="text-gray-300 flex-shrink-0">›</span>
+                </a>
+              )
+            })}
+          </div>
         )}
       </div>
 

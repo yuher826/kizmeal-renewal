@@ -8,14 +8,17 @@ import { createClient } from '@/lib/supabase'
 const NAV = [
   { icon: '🏠', label: '홈',         href: '/board/dashboard' },
   { icon: '💬', label: '1:1 문의',   href: '/board/inquiries' },
-  { icon: '🍱', label: '식단표',     href: '/board/customer/diet' },
+  // 2026-08-18 권팀장 요청 2번: '식단표' → '파일보관함'으로 확장.
+  // 식단표 외 건강정보지·유인물·식단사진도 함께 보관.
+  // URL은 /diet 그대로 둔다 — 기존 북마크·이메일 링크가 깨지지 않게.
+  { icon: '📁', label: '파일보관함', href: '/board/customer/diet' },
   { icon: '📢', label: '공지사항',   href: '/board/customer/notices' },
   { icon: '👤', label: '마이페이지', href: '/board/settings' },
 ]
 
 function getPageTitle(pathname: string): string {
   if (pathname.startsWith('/board/inquiries'))        return '1:1 문의'
-  if (pathname.startsWith('/board/customer/diet'))    return '식단표'
+  if (pathname.startsWith('/board/customer/diet'))    return '파일보관함'
   if (pathname.startsWith('/board/customer/notices')) return '공지사항'
   if (pathname.startsWith('/board/settings'))         return '마이페이지'
   if (pathname.startsWith('/board/notifications'))    return '알림'

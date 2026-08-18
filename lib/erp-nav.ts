@@ -28,6 +28,9 @@ export const ERP_NAV_GROUPS: ErpNavGroup[] = [
     items: [
       { label: '고객사 공지', href: '/erp/notices',   icon: Megaphone },
       { label: 'CS 관리',     href: '/erp/inquiries', icon: MessageSquare },
+      // 2026-08-18 권팀장 요청 2번: 고객사 포털 파일보관함에 올릴 파일 관리
+      // (건강정보지·유인물·식단사진). 식단표는 식단 자동화가 담당하므로 제외.
+      { label: '파일보관함',  href: '/erp/files',     icon: Tags },
     ],
   },
   {
