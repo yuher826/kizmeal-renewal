@@ -8,7 +8,7 @@ import type {
 } from '@/lib/types'
 import {
   CATEGORY_COLORS, CATEGORY_ICONS, CATEGORY_LABELS,
-  STATUS_COLORS, STATUS_LABELS,
+  STATUS_COLORS, STATUS_LABELS, formatCategory,
 } from '@/lib/types'
 import { getSlaStatus, getSlaRemaining, getSlaBadgeColor } from '@/lib/sla'
 import StatusBadge from '@/components/board/StatusBadge'
@@ -1472,7 +1472,7 @@ export default function InquiryDetailPanel({ inquiryId, onNotify }: Props) {
                   <span className="text-xs text-gray-500">분류</span>
                   {inquiry && (
                     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${CATEGORY_COLORS[inquiry.category]}`}>
-                      {CATEGORY_ICONS[inquiry.category]} {CATEGORY_LABELS[inquiry.category]}
+                      {CATEGORY_ICONS[inquiry.category]} {formatCategory(inquiry.category, inquiry.subcategory)}
                     </span>
                   )}
                 </div>

@@ -1,49 +1,83 @@
 export type InquiryStatus = 'pending' | 'in_progress' | 'resolved' | 'closed'
-export type InquiryCategory = 'MEAL_COUNT' | 'ALLERGY' | 'DELIVERY' | 'MENU' | 'SCHEDULE' | 'PHOTO' | 'CONTRACT' | 'OTHER' | 'STAFF_MEAL' | 'HYGIENE' | 'COMPLAINT'
+
+// 고객사(가맹점) 1:1 문의 카테고리
+// 2026-08-18 권팀장 요청으로 전면 재정의. 기존 코드(MEAL_COUNT/PHOTO/CONTRACT/
+// STAFF_MEAL/MENU/HYGIENE/SCHEDULE)는 폐기:
+//   - MEAL_COUNT(식수 변경) → KOS에서 처리하므로 제외
+//   - PHOTO(급식 사진)      → 파일보관함 기능으로 이관 예정(요청 2번)
+//   - CONTRACT(계약/서류)   → OTHER(기타)로 흡수
+//   - STAFF_MEAL(교직원 급식) → 별도 분류 불필요
+//   - MENU/HYGIENE          → COMPLAINT 하위분류로 흡수
+// 라벨에서 '문의' 접미사 제거(권팀장 요청).
+export type InquiryCategory =
+  | 'SCHEDULE_OPS'   // 일정/운영
+  | 'DELIVERY'       // 배송/납품
+  | 'COMPLAINT'      // 컴플레인 (하위분류 필수)
+  | 'ACCOUNTING'     // 회계
+  | 'ALLERGY'        // 알러지
+  | 'OTHER'          // 기타
+
+// 컴플레인 전용 하위분류. COMPLAINT를 고른 경우에만 값이 채워진다
+// (inquiries.subcategory 컬럼). 그 외 카테고리는 null.
+export type ComplaintSubcategory =
+  | 'MENU'              // 메뉴
+  | 'QUANTITY'          // 수량
+  | 'HYGIENE_SAFETY'    // 위생/안전
+  | 'DELIVERY'          // 배송
+  | 'ORDER_SYSTEM'      // 주문/시스템
+  | 'CUSTOMER_SERVICE'  // 고객응대
+  | 'ETC'               // 기타
+
 export type SenderType = 'branch' | 'admin' | 'system'
 export type Priority = 'low' | 'medium' | 'high' | 'urgent'
 export type SlaStatus = 'ok' | 'warning' | 'exceeded'
 
 export const CATEGORY_LABELS: Record<InquiryCategory, string> = {
-  MEAL_COUNT: '식수 변경',
-  ALLERGY: '알레르기',
-  DELIVERY: '배송/납품 문제',
-  MENU: '메뉴 컴플레인/요청',
-  SCHEDULE: '일정 변경',
-  PHOTO: '급식 사진',
-  CONTRACT: '계약/서류',
-  OTHER: '기타 문의',
-  STAFF_MEAL: '교직원 급식 컴플레인',
-  HYGIENE: '위생 민원',
-  COMPLAINT: '컴플레인',
+  SCHEDULE_OPS: '일정/운영',
+  DELIVERY:     '배송/납품',
+  COMPLAINT:    '컴플레인',
+  ACCOUNTING:   '회계',
+  ALLERGY:      '알러지',
+  OTHER:        '기타',
+}
+
+export const COMPLAINT_SUB_LABELS: Record<ComplaintSubcategory, string> = {
+  MENU:             '메뉴',
+  QUANTITY:         '수량',
+  HYGIENE_SAFETY:   '위생/안전',
+  DELIVERY:         '배송',
+  ORDER_SYSTEM:     '주문/시스템',
+  CUSTOMER_SERVICE: '고객응대',
+  ETC:              '기타',
+}
+
+/** 카테고리 + 하위분류를 한 줄 표시용 문자열로. 예: "컴플레인 > 위생/안전" */
+export function formatCategory(
+  category: InquiryCategory | string,
+  subcategory?: string | null,
+): string {
+  const main = CATEGORY_LABELS[category as InquiryCategory] ?? category
+  if (category !== 'COMPLAINT' || !subcategory) return main
+  const sub = COMPLAINT_SUB_LABELS[subcategory as ComplaintSubcategory] ?? subcategory
+  return `${main} > ${sub}`
 }
 
 export const CATEGORY_ICONS: Record<InquiryCategory, string> = {
-  MEAL_COUNT: '🍽️',
-  ALLERGY: '🌿',
-  DELIVERY: '📦',
-  MENU: '🍽️',
-  SCHEDULE: '📅',
-  PHOTO: '📸',
-  CONTRACT: '📄',
-  OTHER: '💬',
-  STAFF_MEAL: '👨‍🍳',
-  HYGIENE: '🧹',
-  COMPLAINT: '😤',
+  SCHEDULE_OPS: '📅',
+  DELIVERY:     '📦',
+  COMPLAINT:    '😤',
+  ACCOUNTING:   '💰',
+  ALLERGY:      '🌿',
+  OTHER:        '💬',
 }
 
 export const CATEGORY_COLORS: Record<InquiryCategory, string> = {
-  MEAL_COUNT: 'bg-green-100 text-green-800',
-  ALLERGY: 'bg-emerald-100 text-emerald-800',
-  DELIVERY: 'bg-blue-100 text-blue-800',
-  MENU: 'bg-teal-100 text-teal-800',
-  SCHEDULE: 'bg-purple-100 text-purple-800',
-  PHOTO: 'bg-pink-100 text-pink-800',
-  CONTRACT: 'bg-orange-100 text-orange-800',
-  OTHER: 'bg-gray-100 text-gray-700',
-  STAFF_MEAL: 'bg-amber-100 text-amber-800',
-  HYGIENE: 'bg-red-100 text-red-800',
-  COMPLAINT: 'bg-red-100 text-red-800',
+  SCHEDULE_OPS: 'bg-purple-100 text-purple-800',
+  DELIVERY:     'bg-blue-100 text-blue-800',
+  COMPLAINT:    'bg-red-100 text-red-800',
+  ACCOUNTING:   'bg-orange-100 text-orange-800',
+  ALLERGY:      'bg-emerald-100 text-emerald-800',
+  OTHER:        'bg-gray-100 text-gray-700',
 }
 
 export const STATUS_LABELS: Record<InquiryStatus, string> = {
@@ -185,6 +219,8 @@ export interface Inquiry {
   assigned_admin_id?: string
   title: string
   category: InquiryCategory
+  /** COMPLAINT 카테고리일 때만 채워짐(하위분류). 그 외 카테고리는 null. */
+  subcategory?: ComplaintSubcategory | null
   status: InquiryStatus
   priority: Priority
   form_data?: Record<string, unknown>

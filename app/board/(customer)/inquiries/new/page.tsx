@@ -5,68 +5,33 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 import { ROUTES } from '@/lib/routes'
-import { CATEGORY_ICONS, CATEGORY_LABELS, type InquiryCategory } from '@/lib/types'
+import {
+  CATEGORY_ICONS,
+  CATEGORY_LABELS,
+  COMPLAINT_SUB_LABELS,
+  type ComplaintSubcategory,
+  type InquiryCategory,
+} from '@/lib/types'
 import FileUpload from '@/components/board/FileUpload'
 import AccountMismatchNotice from '@/components/board/AccountMismatchNotice'
 
+// 2026-08-18 권팀장 요청으로 재정의된 문의 유형(6종).
+// 컴플레인만 하위분류를 한 번 더 고르는 2단계 구조(A안).
 const FORM_CATEGORIES: InquiryCategory[] = [
-  'DELIVERY', 'MENU', 'STAFF_MEAL', 'HYGIENE', 'COMPLAINT', 'CONTRACT', 'OTHER',
+  'SCHEDULE_OPS', 'DELIVERY', 'COMPLAINT', 'ACCOUNTING', 'ALLERGY', 'OTHER',
 ]
 
-interface CatConfig {
-  showItemName?: boolean
-  showDate?: boolean
-  dateLabel?: string
-  showStaffCount?: boolean
-  showContent: boolean
-  contentLabel: string
-  showFile?: boolean
-  fileHint?: string
-}
-
-const CAT_CONFIG: Record<string, CatConfig> = {
-  DELIVERY: {
-    showItemName: true,
-    showDate: true, dateLabel: '발생일',
-    showContent: true, contentLabel: '구체적 내용',
-    showFile: true, fileHint: '관련 사진이나 파일을 첨부하실 수 있습니다',
-  },
-  MENU: {
-    showDate: true, dateLabel: '해당 날짜',
-    showContent: true, contentLabel: '구체적 요청사항',
-    showFile: true, fileHint: '관련 사진이나 파일을 첨부하실 수 있습니다',
-  },
-  STAFF_MEAL: {
-    showDate: true, dateLabel: '해당 날짜',
-    showStaffCount: true,
-    showContent: true, contentLabel: '컴플레인 내용',
-    showFile: true, fileHint: '관련 사진이나 파일을 첨부하실 수 있습니다',
-  },
-  HYGIENE: {
-    showDate: true, dateLabel: '발생일',
-    showContent: true, contentLabel: '구체적 내용',
-    showFile: true, fileHint: '관련 사진이나 파일을 첨부하실 수 있습니다',
-  },
-  COMPLAINT: {
-    showDate: true, dateLabel: '발생일',
-    showContent: true, contentLabel: '컴플레인 내용',
-    showFile: true, fileHint: '관련 사진이나 파일을 첨부하실 수 있습니다',
-  },
-  CONTRACT: {
-    showContent: true, contentLabel: '문의 내용',
-    showFile: true, fileHint: '관련 서류나 파일을 첨부하실 수 있습니다',
-  },
-  OTHER: {
-    showContent: true, contentLabel: '문의 내용',
-    showFile: true, fileHint: '관련 사진이나 파일을 첨부하실 수 있습니다',
-  },
-}
+const COMPLAINT_SUBS: ComplaintSubcategory[] = [
+  'MENU', 'QUANTITY', 'HYGIENE_SAFETY', 'DELIVERY',
+  'ORDER_SYSTEM', 'CUSTOMER_SERVICE', 'ETC',
+]
 
 export default function NewInquiryPage() {
   const router = useRouter()
   const [branchName, setBranchName] = useState('')
   const [category, setCategory] = useState<InquiryCategory | null>(null)
-  const [formData, setFormData] = useState<Record<string, string>>({})
+  const [subcategory, setSubcategory] = useState<ComplaintSubcategory | null>(null)
+  const [title, setTitle] = useState('')
   const [content, setContent] = useState('')
   const [files, setFiles] = useState<File[]>([])
   const [submitting, setSubmitting] = useState(false)
@@ -109,16 +74,15 @@ export default function NewInquiryPage() {
     fetchBranch()
   }, [router])
 
-  const handleFieldChange = useCallback((key: string, value: string) => {
-    setFormData(prev => ({ ...prev, [key]: value }))
+  /** 유형을 바꾸면 하위분류는 초기화(컴플레인 → 다른 유형으로 옮길 때 잔값 방지) */
+  const handleCategorySelect = useCallback((cat: InquiryCategory) => {
+    setCategory(cat)
+    if (cat !== 'COMPLAINT') setSubcategory(null)
   }, [])
 
-  const cfg = category ? CAT_CONFIG[category as string] : null
-
-  const canSubmit = !!cfg
-    && (!cfg.showItemName || !!formData.item_name?.trim())
-    && (!cfg.showDate || !!formData.incident_date)
-    && (!cfg.showStaffCount || !!formData.staff_count?.trim())
+  const canSubmit = !!category
+    && (category !== 'COMPLAINT' || !!subcategory)
+    && title.trim().length > 0
     && content.trim().length > 0
     && !submitting
 
@@ -176,20 +140,23 @@ export default function NewInquiryPage() {
         brandId = b?.brand_id || null
       }
 
-      const storedFormData = Object.keys(formData).length > 0 ? formData : null
-
       const { data: inquiry, error: inqError } = await supabase
         .from('inquiries')
         .insert({
           branch_id: branchId,
           brand_id: brandId,
-          title: CATEGORY_LABELS[category],
+          // 2026-08-18 이전에는 CATEGORY_LABELS[category]로 제목을 자동 고정해
+          // 사용자가 제목을 쓸 수 없었다(권팀장 요청 1번). 직접 입력값으로 변경.
+          title: title.trim(),
           category,
+          subcategory: category === 'COMPLAINT' ? subcategory : null,
           status: 'pending',
           priority: 'medium',
           created_by_type: 'branch',
           created_by_id: user.id,
-          form_data: storedFormData,
+          // 카테고리별 고정 양식(품목명·발생일·인원수)을 폐기해 저장할 값이 없음.
+          // 컬럼 자체는 과거 데이터 조회를 위해 유지.
+          form_data: null,
           last_message_at: new Date().toISOString(),
         })
         .select()
@@ -291,23 +258,18 @@ export default function NewInquiryPage() {
             </div>
           )}
 
-          {/* 카테고리 선택 */}
+          {/* 문의 유형 선택 (1단계) */}
           <div>
             <label className="block text-sm font-bold text-gray-700 mb-1">
-              문의 분류 <span className="text-red-500">*</span>
+              문의 유형 <span className="text-red-500">*</span>
             </label>
-            <p className="text-xs text-gray-400 mb-3">분류를 선택하면 입력 항목이 나타납니다</p>
+            <p className="text-xs text-gray-400 mb-3">유형을 선택하면 입력 항목이 나타납니다</p>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               {FORM_CATEGORIES.map(cat => (
                 <button
                   key={cat}
                   type="button"
-                  onClick={() => {
-                    setCategory(cat)
-                    setFormData({})
-                    setContent('')
-                    setFiles([])
-                  }}
+                  onClick={() => handleCategorySelect(cat)}
                   className={`flex flex-col items-center gap-1.5 px-3 py-3 rounded-xl border text-sm font-medium transition-all ${
                     category === cat
                       ? 'bg-[#2D6A4F] border-[#2D6A4F] text-white shadow-md'
@@ -321,92 +283,81 @@ export default function NewInquiryPage() {
             </div>
           </div>
 
-          {/* 카테고리별 동적 필드 */}
-          <div className={`overflow-hidden transition-all duration-300 ${cfg ? 'max-h-[1200px] opacity-100' : 'max-h-0 opacity-0'}`}>
-            {cfg && (
+          {/* 컴플레인 하위분류 (2단계) — 컴플레인 선택 시에만 노출 */}
+          <div className={`overflow-hidden transition-all duration-300 ${
+            category === 'COMPLAINT' ? 'max-h-[400px] opacity-100' : 'max-h-0 opacity-0'
+          }`}>
+            {category === 'COMPLAINT' && (
+              <div className="border-t border-gray-100 pt-4">
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  세부 유형 <span className="text-red-500">*</span>
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {COMPLAINT_SUBS.map(sub => (
+                    <button
+                      key={sub}
+                      type="button"
+                      onClick={() => setSubcategory(sub)}
+                      className={`px-3.5 py-2 rounded-full border text-xs font-medium transition-all ${
+                        subcategory === sub
+                          ? 'bg-[#2D6A4F] border-[#2D6A4F] text-white shadow-sm'
+                          : 'bg-white border-gray-200 text-gray-600 hover:border-[#52B788] hover:text-[#2D6A4F]'
+                      }`}
+                    >
+                      {COMPLAINT_SUB_LABELS[sub]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* 제목·내용·첨부 — 유형 선택 후 노출 */}
+          <div className={`overflow-hidden transition-all duration-300 ${
+            category ? 'max-h-[1200px] opacity-100' : 'max-h-0 opacity-0'
+          }`}>
+            {category && (
               <div className="space-y-4 border-t border-gray-100 pt-4">
-                {/* 품목명 (배송/납품 문제) */}
-                {cfg.showItemName && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                      품목명 <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.item_name || ''}
-                      onChange={e => handleFieldChange('item_name', e.target.value)}
-                      placeholder="불량 품목명을 입력하세요"
-                      className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#2D6A4F] focus:border-transparent"
-                    />
-                  </div>
-                )}
+                {/* 제목 */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    제목 <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={title}
+                    onChange={e => setTitle(e.target.value)}
+                    maxLength={100}
+                    placeholder="문의 제목을 입력해 주세요"
+                    className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#2D6A4F] focus:border-transparent"
+                  />
+                </div>
 
-                {/* 날짜 선택 */}
-                {cfg.showDate && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                      {cfg.dateLabel} <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="date"
-                      value={formData.incident_date || ''}
-                      onChange={e => handleFieldChange('incident_date', e.target.value)}
-                      className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#2D6A4F] focus:border-transparent"
-                    />
-                  </div>
-                )}
-
-                {/* 교직원 식수 */}
-                {cfg.showStaffCount && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                      교직원 식수 <span className="text-red-500">*</span>
-                    </label>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="number"
-                        min="1"
-                        value={formData.staff_count || ''}
-                        onChange={e => handleFieldChange('staff_count', e.target.value)}
-                        placeholder="인원 수"
-                        className="w-36 px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#2D6A4F] focus:border-transparent"
-                      />
-                      <span className="text-sm text-gray-500">명분</span>
-                    </div>
-                  </div>
-                )}
-
-                {/* 내용 텍스트 */}
-                {cfg.showContent && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                      {cfg.contentLabel} <span className="text-red-500">*</span>
-                    </label>
-                    <textarea
-                      value={content}
-                      onChange={e => setContent(e.target.value)}
-                      rows={5}
-                      placeholder={`${cfg.contentLabel}을 자세히 입력해 주세요`}
-                      className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#2D6A4F] focus:border-transparent resize-none"
-                    />
-                    <p className="text-xs text-gray-400 mt-1 text-right">{content.length}자</p>
-                  </div>
-                )}
+                {/* 내용 (자유 서술) */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    내용 <span className="text-red-500">*</span>
+                  </label>
+                  <textarea
+                    value={content}
+                    onChange={e => setContent(e.target.value)}
+                    rows={7}
+                    placeholder="문의 내용을 자유롭게 입력해 주세요"
+                    className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#2D6A4F] focus:border-transparent resize-none"
+                  />
+                  <p className="text-xs text-gray-400 mt-1 text-right">{content.length}자</p>
+                </div>
 
                 {/* 사진 첨부 */}
-                {cfg.showFile && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                      사진 첨부 <span className="text-gray-400">(선택)</span>
-                    </label>
-                    {cfg.fileHint && (
-                      <p className="text-xs text-[#2D6A4F] bg-[#E8F5E9] rounded-lg px-3 py-2 mb-2">
-                        {cfg.fileHint}
-                      </p>
-                    )}
-                    <FileUpload files={files} onFilesChange={setFiles} maxFiles={5} maxSizeMB={10} />
-                  </div>
-                )}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    사진 첨부 <span className="text-gray-400">(선택)</span>
+                  </label>
+                  <p className="text-xs text-[#2D6A4F] bg-[#E8F5E9] rounded-lg px-3 py-2 mb-2">
+                    관련 사진이나 파일을 첨부하실 수 있습니다
+                  </p>
+                  <FileUpload files={files} onFilesChange={setFiles} maxFiles={5} maxSizeMB={10} />
+                </div>
               </div>
             )}
           </div>
