@@ -22,12 +22,12 @@ function timeAgo(isoString: string) {
   return '방금'
 }
 
-// 권팀장 요청: 상대시간만으론 정확한 시점을 알 수 없어서, 마우스 올리면
-// 정확한 년/월/일/시간이 보이도록 title 툴팁으로 제공.
+// 권팀장 요청: 상대시간만으론 정확한 시점을 알 수 없어서, 옆에 정확한
+// 날짜·시간이 바로 보이도록 함(호버 툴팁은 캡처·확인이 번거롭다는 피드백으로
+// 상시 노출로 변경).
 function fullDateTime(isoString: string) {
   return new Date(isoString).toLocaleString('ko-KR', {
-    year: 'numeric', month: 'long', day: 'numeric',
-    hour: '2-digit', minute: '2-digit',
+    month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
   })
 }
 
@@ -53,11 +53,9 @@ export default function InquiryCard({ inquiry, slaRules, href, showBranch = fals
                 {unreadCount}
               </span>
             )}
-            <span
-              className="text-xs text-gray-400 whitespace-nowrap cursor-help"
-              title={fullDateTime(inquiry.last_message_at || inquiry.created_at)}
-            >
+            <span className="text-xs text-gray-400 whitespace-nowrap">
               {timeAgo(inquiry.last_message_at || inquiry.created_at)}
+              <span className="text-gray-300"> · {fullDateTime(inquiry.last_message_at || inquiry.created_at)}</span>
             </span>
           </div>
         </div>

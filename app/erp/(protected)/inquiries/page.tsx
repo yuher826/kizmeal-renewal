@@ -85,11 +85,10 @@ function timeAgo(iso: string) {
   return '방금'
 }
 
-// 권팀장 요청: 상대시간 옆에 정확한 년/월/일/시간을 title 툴팁으로 제공
+// 권팀장 요청: 상대시간 옆에 정확한 날짜·시간을 상시 노출(호버 대신)
 function fullDateTime(iso: string) {
   return new Date(iso).toLocaleString('ko-KR', {
-    year: 'numeric', month: 'long', day: 'numeric',
-    hour: '2-digit', minute: '2-digit',
+    month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
   })
 }
 
@@ -632,8 +631,9 @@ function CsManagementInner() {
                               {STATUS_LABELS[inq.status]}
                             </span>
                           </div>
-                          <span className="text-[10px] text-gray-400 cursor-help" title={fullDateTime(inq.created_at)}>
+                          <span className="text-[10px] text-gray-400">
                             {timeAgo(inq.created_at)}
+                            <span className="text-gray-300"> · {fullDateTime(inq.created_at)}</span>
                           </span>
                         </button>
                       )
