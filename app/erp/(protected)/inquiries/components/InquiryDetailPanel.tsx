@@ -553,7 +553,14 @@ function ThreadMessage({
           <span className="ml-auto text-xs text-gray-400 flex-shrink-0">
             {time}
             {edited && !isEditing && <span className="ml-1 text-gray-400">(수정됨)</span>}
-            {readByBranch && !isEditing && <span className="ml-1 text-gray-300" title="원 담당자가 읽어 더 이상 수정·삭제할 수 없습니다">· 읽음</span>}
+            {readByBranch && !isEditing && (
+              <span
+                className="inline-flex items-center gap-0.5 ml-1.5 text-[10px] font-medium text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded-full align-middle"
+                title="원 담당자가 읽어 더 이상 수정·삭제할 수 없습니다"
+              >
+                ✓ 읽음
+              </span>
+            )}
           </span>
         </div>
         <div className="border-t border-gray-100 pt-2">
