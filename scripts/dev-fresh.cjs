@@ -62,5 +62,8 @@ killPort(PORT)
 removeNextCache()
 console.log('── next dev 기동 ──')
 
-const child = spawn('npx', ['next', 'dev'], { stdio: 'inherit', shell: true })
+// shell:true + 배열 인자 조합은 Node DEP0190 경고 대상(인자 이스케이프 방식이
+// 셸마다 달라 위험할 수 있음). 여기 인자는 고정 문자열이라 실질 위험은 없지만,
+// 문자열 커맨드 하나로 넘기는 형태가 그 경고 자체를 깔끔하게 피한다.
+const child = spawn('npx next dev', { stdio: 'inherit', shell: true })
 child.on('exit', code => process.exit(code ?? 0))
