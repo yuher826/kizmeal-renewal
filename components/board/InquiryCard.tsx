@@ -22,6 +22,15 @@ function timeAgo(isoString: string) {
   return '방금'
 }
 
+// 권팀장 요청: 상대시간만으론 정확한 시점을 알 수 없어서, 마우스 올리면
+// 정확한 년/월/일/시간이 보이도록 title 툴팁으로 제공.
+function fullDateTime(isoString: string) {
+  return new Date(isoString).toLocaleString('ko-KR', {
+    year: 'numeric', month: 'long', day: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  })
+}
+
 export default function InquiryCard({ inquiry, slaRules, href, showBranch = false, unreadCount }: Props) {
   const rule = slaRules?.[inquiry.category]
   const lastMessage = inquiry.messages?.[0]
@@ -44,7 +53,10 @@ export default function InquiryCard({ inquiry, slaRules, href, showBranch = fals
                 {unreadCount}
               </span>
             )}
-            <span className="text-xs text-gray-400 whitespace-nowrap">
+            <span
+              className="text-xs text-gray-400 whitespace-nowrap cursor-help"
+              title={fullDateTime(inquiry.last_message_at || inquiry.created_at)}
+            >
               {timeAgo(inquiry.last_message_at || inquiry.created_at)}
             </span>
           </div>
