@@ -23,6 +23,10 @@ export default function CustomerInquiriesPage() {
   const [inquiries, setInquiries] = useState<Inquiry[]>([])
   const [slaRules, setSlaRules] = useState<Record<string, SlaRule>>({})
   const [activeTab, setActiveTab] = useState<InquiryStatus | 'all'>('all')
+  // 대화 내용 검색(권팀장 요청 8-2). 이 화면은 이미 각 문의의 messages를
+  // 통째로 로드해와서(위 select 참고) 별도 DB 조회 없이 클라이언트에서
+  // 제목 + 대화 내용을 함께 검색할 수 있다.
+  const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
   const [noBranch, setNoBranch] = useState(false)
   const [userEmail, setUserEmail] = useState<string | null>(null)
@@ -101,6 +105,28 @@ export default function CustomerInquiriesPage() {
     ? inquiries
     : inquiries.filter(i => i.status === activeTab)
 
+  // 대화 내용 검색(권팀장 요청 8-2) — 제목 + 대화 내용(내부메모 제외) 모두 검색.
+  // 제목엔 없고 대화 내용에서만 걸린 경우, 그 매칭된 메시지를 미리보기로 보여준다.
+  const searchKw = search.trim().toLowerCase()
+  const searched = searchKw.length < 2
+    ? filtered
+    : filtered.filter(inq => {
+        const titleMatch = (inq.title || '').toLowerCase().includes(searchKw)
+        const contentMatch = (inq.messages || [])
+          .some(m => !m.is_internal && (m.content || '').toLowerCase().includes(searchKw))
+        return titleMatch || contentMatch
+      })
+
+  function matchPreviewFor(inq: Inquiry): string | undefined {
+    if (searchKw.length < 2) return undefined
+    if ((inq.title || '').toLowerCase().includes(searchKw)) return undefined // 제목에서 이미 보임
+    const hit = (inq.messages || []).find(
+      m => !m.is_internal && (m.content || '').toLowerCase().includes(searchKw)
+    )
+    if (!hit?.content) return undefined
+    return hit.content.length > 60 ? `${hit.content.slice(0, 60)}…` : hit.content
+  }
+
   return (
     <div className="min-h-screen bg-[#F6FAF6] font-sans">
       <header className="bg-white border-b border-gray-100 px-4 sm:px-6 py-4 hidden sm:flex items-center gap-3 sticky top-0 z-10">
@@ -120,6 +146,24 @@ export default function CustomerInquiriesPage() {
       </header>
 
       <div className="px-4 sm:px-6 py-6">
+        {/* 대화 내용 검색 */}
+        <div className="relative mb-4">
+          <svg
+            width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+            className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-300 pointer-events-none"
+          >
+            <circle cx="11" cy="11" r="8" />
+            <path strokeLinecap="round" d="M21 21l-4.35-4.35" />
+          </svg>
+          <input
+            type="text"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="제목, 대화 내용으로 검색..."
+            className="w-full bg-white border border-gray-200 rounded-xl pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:border-[#2D6A4F] focus:ring-1 focus:ring-[#2D6A4F]"
+          />
+        </div>
+
         {/* 상태 필터 탭 */}
         <div className="flex gap-2 mb-5 overflow-x-auto pb-1 scrollbar-none">
           {TABS.map(tab => (
@@ -150,20 +194,23 @@ export default function CustomerInquiriesPage() {
             ))
           ) : noBranch ? (
             <AccountMismatchNotice email={userEmail} />
-          ) : filtered.length === 0 ? (
+          ) : searched.length === 0 ? (
             <div className="bg-white rounded-2xl border border-gray-100 px-6 py-10 text-center">
               <p className="text-gray-400 text-sm">
-                {activeTab === 'all' ? '문의 내역이 없습니다.' : `${STATUS_LABELS[activeTab as InquiryStatus]} 문의가 없습니다.`}
+                {searchKw.length >= 2
+                  ? '검색 결과가 없습니다.'
+                  : activeTab === 'all' ? '문의 내역이 없습니다.' : `${STATUS_LABELS[activeTab as InquiryStatus]} 문의가 없습니다.`}
               </p>
             </div>
           ) : (
-            filtered.map(inq => (
+            searched.map(inq => (
               <InquiryCard
                 key={inq.id}
                 inquiry={inq}
                 slaRules={slaRules}
                 href={`/board/inquiries/${inq.id}`}
                 unreadCount={inq.unread_count_branch}
+                matchPreview={matchPreviewFor(inq)}
               />
             ))
           )}

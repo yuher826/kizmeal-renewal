@@ -81,6 +81,9 @@ function HistoryInner() {
   // 검색 결과 데이터
   const [rawInquiries, setRawInquiries] = useState<HistoryInquiry[]>([])
   const [appliedKeyword, setAppliedKeyword] = useState(searchParams.get('keyword') || '')
+  // 대화 내용 검색(권팀장 요청 8-2) — messages.content에서 매칭된 문의 id 집합 + 미리보기
+  const [contentMatchIds, setContentMatchIds] = useState<Set<string>>(new Set())
+  const [contentPreview, setContentPreview] = useState<Record<string, string>>({})
   const [profiles, setProfiles] = useState<Record<string, BranchProfile>>({})
   const [msgCounts, setMsgCounts] = useState<Record<string, number>>({})
   const [branchOptions, setBranchOptions] = useState<BranchOption[]>([])
@@ -169,6 +172,31 @@ function HistoryInner() {
     setPage(1)
     setSelectedId(null)
 
+    // 대화 내용 검색(권팀장 요청 8-2) — 키워드가 있으면 messages.content에서도 찾는다
+    if (kw.trim().length >= 2) {
+      const { data: msgMatches } = await supabase
+        .from('messages')
+        .select('inquiry_id, content')
+        .eq('is_internal', false)
+        .ilike('content', `%${kw.trim()}%`)
+        .order('created_at', { ascending: false })
+        .limit(500)
+      const ids = new Set<string>()
+      const preview: Record<string, string> = {}
+      for (const row of (msgMatches || [])) {
+        if (!row.inquiry_id || !row.content) continue
+        ids.add(row.inquiry_id)
+        if (!preview[row.inquiry_id]) {
+          preview[row.inquiry_id] = row.content.length > 60 ? `${row.content.slice(0, 60)}…` : row.content
+        }
+      }
+      setContentMatchIds(ids)
+      setContentPreview(preview)
+    } else {
+      setContentMatchIds(new Set())
+      setContentPreview({})
+    }
+
     // 전체 결과에 대한 메시지 수 한 번에 로드
     if (inquiries.length > 0) {
       const ids = inquiries.map(i => i.id)
@@ -222,9 +250,10 @@ function HistoryInner() {
       const branch = one(inq.branches)
       const prof = profiles[inq.branch_id]
       const branchName = prof?.branch_full_name || branch?.name || ''
-      return branchName.toLowerCase().includes(kw) || (inq.title || '').toLowerCase().includes(kw)
+      const matchesText = branchName.toLowerCase().includes(kw) || (inq.title || '').toLowerCase().includes(kw)
+      return matchesText || contentMatchIds.has(inq.id)
     })
-  }, [rawInquiries, appliedKeyword, profiles])
+  }, [rawInquiries, appliedKeyword, profiles, contentMatchIds])
 
   const sorted = useMemo(() => {
     return [...filtered].sort((a, b) => {
@@ -367,7 +396,7 @@ function HistoryInner() {
             value={keyword}
             onChange={e => setKeyword(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="지점명, 제목 검색..."
+            placeholder="지점명, 제목, 대화 내용 검색..."
             className="px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#2D6A4F] min-w-[180px]"
           />
           <input
@@ -523,6 +552,15 @@ function HistoryInner() {
                       {/* 문의 내용 요약 */}
                       <td className="px-4 py-3 text-gray-600 max-w-xs">
                         <span className="block truncate">{summary}</span>
+                        {/* 대화 내용 검색으로 걸린 경우(제목엔 검색어가 없는 경우) 매칭된 부분 미리보기 */}
+                        {appliedKeyword.trim().length >= 2
+                          && contentPreview[inq.id]
+                          && !(inq.title || '').toLowerCase().includes(appliedKeyword.trim().toLowerCase())
+                          && (
+                            <span className="block truncate text-[11px] text-amber-700 bg-amber-50 rounded px-1.5 py-0.5 mt-1">
+                              💬 {contentPreview[inq.id]}
+                            </span>
+                        )}
                       </td>
                       {/* 상태 */}
                       <td className="px-4 py-3 whitespace-nowrap">

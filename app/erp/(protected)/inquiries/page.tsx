@@ -127,6 +127,12 @@ function CsManagementInner() {
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set())
 
   const [search, setSearch] = useState('')
+  // 대화 내용 검색(권팀장 요청 8-2) — 제목·지점명 검색은 아래 filtered에서
+  // 클라이언트 메모리로 즉시 필터링하지만, 대화 내용은 messages 테이블에
+  // 없어서(성능상 목록 로드 시 안 가져옴) 검색어 입력 시 별도 조회한다.
+  const [contentMatchIds, setContentMatchIds] = useState<Set<string>>(new Set())
+  // inquiry_id → 매칭된 메시지 내용 미리보기 (검색 결과에 왜 매칭됐는지 보여주기 위함)
+  const [contentPreview, setContentPreview] = useState<Record<string, string>>({})
   const [filterStatus, setFilterStatus] = useState<InquiryStatus | ''>('')
   const [filterMonth, setFilterMonth] = useState('')
   const [unreadOnly, setUnreadOnly] = useState(false)
@@ -300,6 +306,40 @@ function CsManagementInner() {
     return Array.from(months).sort((a, b) => b.localeCompare(a))
   }, [inquiries])
 
+  // ── 대화 내용 검색 (권팀장 요청 8-2, 300ms 디바운스) ──────────
+  useEffect(() => {
+    const kw = search.trim()
+    if (kw.length < 2) {
+      setContentMatchIds(new Set())
+      setContentPreview({})
+      return
+    }
+    let cancelled = false
+    const timer = setTimeout(async () => {
+      const supabase = createClient()
+      const { data } = await supabase
+        .from('messages')
+        .select('inquiry_id, content')
+        .eq('is_internal', false)
+        .ilike('content', `%${kw}%`)
+        .order('created_at', { ascending: false })
+        .limit(200)
+      if (cancelled || !data) return
+      const ids = new Set<string>()
+      const preview: Record<string, string> = {}
+      for (const row of data) {
+        if (!row.inquiry_id || !row.content) continue
+        ids.add(row.inquiry_id)
+        if (!preview[row.inquiry_id]) {
+          preview[row.inquiry_id] = row.content.length > 60 ? `${row.content.slice(0, 60)}…` : row.content
+        }
+      }
+      setContentMatchIds(ids)
+      setContentPreview(preview)
+    }, 300)
+    return () => { cancelled = true; clearTimeout(timer) }
+  }, [search])
+
   // ── 상단 통계 (전체 기준) ────────────────────────────────────
   const stats = useMemo(() => {
     const now = new Date()
@@ -355,7 +395,9 @@ function CsManagementInner() {
         if (q) {
           const name = r.displayName.toLowerCase()
           const title = (r.inq.title || '').toLowerCase()
-          if (!name.includes(q) && !title.includes(q)) return false
+          const matchesText = name.includes(q) || title.includes(q)
+          const matchesContent = contentMatchIds.has(r.inq.id)
+          if (!matchesText && !matchesContent) return false
         }
         return true
       })
@@ -364,7 +406,7 @@ function CsManagementInner() {
         if (a.isUrgentComplaint !== b.isUrgentComplaint) return a.isUrgentComplaint ? -1 : 1
         return new Date(b.inq.created_at).getTime() - new Date(a.inq.created_at).getTime()
       })
-  }, [rows, search, filterStatus, unreadOnly, filterMonth, statFilter, slaRules])
+  }, [rows, search, filterStatus, unreadOnly, filterMonth, statFilter, slaRules, contentMatchIds])
 
   // ── 페이지네이션 (전체 목록 기준 20건씩) ─────────────────────
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
@@ -500,7 +542,7 @@ function CsManagementInner() {
               type="text"
               value={search}
               onChange={e => setSearch(e.target.value)}
-              placeholder="지점명, 제목으로 검색..."
+              placeholder="지점명, 제목, 대화 내용으로 검색..."
               className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#2D6A4F]"
             />
             <div className="flex items-center gap-2">
@@ -635,6 +677,15 @@ function CsManagementInner() {
                             {timeAgo(inq.created_at)}
                             <span className="text-gray-300"> · {fullDateTime(inq.created_at)}</span>
                           </span>
+                          {/* 대화 내용 검색으로 걸린 경우(제목엔 검색어가 없는 경우) 매칭된 부분 미리보기 */}
+                          {search.trim().length >= 2
+                            && contentPreview[inq.id]
+                            && !(inq.title || '').toLowerCase().includes(search.trim().toLowerCase())
+                            && (
+                              <span className="text-[10px] text-amber-700 bg-amber-50 rounded px-1.5 py-0.5 truncate">
+                                💬 {contentPreview[inq.id]}
+                              </span>
+                          )}
                         </button>
                       )
                     })}

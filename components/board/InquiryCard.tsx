@@ -9,6 +9,9 @@ interface Props {
   href: string
   showBranch?: boolean
   unreadCount?: number
+  // 대화 내용 검색(권팀장 요청 8-2)에서 제목이 아니라 대화 내용으로 매칭된
+  // 경우, 그 매칭된 부분을 보여주기 위한 미리보기(있으면 기본 preview 대신 표시)
+  matchPreview?: string
 }
 
 function timeAgo(isoString: string) {
@@ -31,7 +34,7 @@ function fullDateTime(isoString: string) {
   })
 }
 
-export default function InquiryCard({ inquiry, slaRules, href, showBranch = false, unreadCount }: Props) {
+export default function InquiryCard({ inquiry, slaRules, href, showBranch = false, unreadCount, matchPreview }: Props) {
   const rule = slaRules?.[inquiry.category]
   const lastMessage = inquiry.messages?.[0]
   const preview = lastMessage?.content?.slice(0, 80) || '내용 없음'
@@ -71,6 +74,12 @@ export default function InquiryCard({ inquiry, slaRules, href, showBranch = fals
         )}
 
         <p className="text-xs text-gray-400 line-clamp-1">{preview}</p>
+
+        {matchPreview && (
+          <p className="text-xs text-amber-700 bg-amber-50 rounded px-2 py-1 mt-2 line-clamp-1">
+            💬 {matchPreview}
+          </p>
+        )}
       </div>
     </Link>
   )
