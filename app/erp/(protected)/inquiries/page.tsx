@@ -88,7 +88,7 @@ function timeAgo(iso: string) {
 // 권팀장 요청: 상대시간 옆에 정확한 날짜·시간을 상시 노출(호버 대신)
 function fullDateTime(iso: string) {
   return new Date(iso).toLocaleString('ko-KR', {
-    month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
+    year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
   })
 }
 

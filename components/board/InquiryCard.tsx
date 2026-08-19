@@ -30,7 +30,7 @@ function timeAgo(isoString: string) {
 // 상시 노출로 변경).
 function fullDateTime(isoString: string) {
   return new Date(isoString).toLocaleString('ko-KR', {
-    month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
+    year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
   })
 }
 
