@@ -4,7 +4,7 @@
 > 과거 이력은 `git log HANDOFF.md`로 본다.
 
 **최종 갱신:** 2026-08-19 (권팀장 요청 8건 중 7건 완료(1·2·3·4·5·6·7번).
-잔여 1건(8번). 7번은 UI 단 제약만 완료, RLS 보강은 다음 세션)
+잔여 1건(8번). 7번 UI+DB 단 제약 모두 완료)
 
 ---
 
@@ -751,9 +751,20 @@ CJK 전체) 설치에 소모. 한글만 필요하므로 `fonts-nanum`(10.3MB, �
 - 수정·삭제 버튼을 호버 대신 항상 표시로 변경(확인 편의)
 - 원 담당자 화면에 `messages` UPDATE/DELETE 실시간 리스너 신설
 - 이미 읽힌 메시지엔 인디고 톤 "✓ 읽음" 배지 표시
-- ★다음 세션 예정: 지금은 UI(버튼) 단에서만 막고 있어서, 관리자가
-  API를 직접 호출하면 이미 읽은 메시지도 수정·삭제가 가능한 상태.
-  RLS로 DB 단에서도 막는 보강 작업 진행 예정(진단부터 시작)
+- DB 단 보강 완료: `messages` 테이블에 RESTRICTIVE 정책 2개 추가
+  (`messages_block_edit_after_read`, `messages_block_delete_after_read`)
+  — 관리자가 API를 직접 호출해도 이미 읽은 메시지는 수정·삭제 불가.
+  기존 3개 정책(`messages_update_admin/read`, `messages_delete_admin`)은
+  안 건드림.
+- 착수 전 진단(`pg_policies` 실측)에서 `messages_update_read`라는 정책이
+  이름과 달리 "읽음"과 무관(원 담당자 본인 메시지 수정 허용용)임을
+  확인 — 이름만 보고 오해하지 않도록 기록.
+- RLS 테스트: `SET LOCAL ROLE authenticated` + `request.jwt.claims`로
+  관리자 가장 후 이미 읽은 메시지 UPDATE 직접 시도 → content 안 바뀜
+  확인(`BEGIN`~`ROLLBACK`로 실제 반영은 안 되게 진행)
+- 마이그레이션
+  `supabase/migrations/restrict_message_edit_after_read_260819.sql`,
+  Supabase에서 실행 완료
 - 마이그레이션 `supabase/migrations/add_branch_last_read_at_260818.sql`,
   Supabase에서 실행 완료
 - 강동E 테스트 계정으로 실물 확인 완료
@@ -886,8 +897,7 @@ CJK 전체) 설치에 소모. 한글만 필요하므로 `fonts-nanum`(10.3MB, �
 
 ## 다음 세션 최우선 작업
 
-0. ① 7번 메시지 수정·삭제 RLS 보강(진단부터) ② 8번 대화 점프
-   (위 "권팀장 요청 8건 대응" 표 참고)
+0. **8번(대화 점프)만 남음** (위 "권팀장 요청 8건 대응" 표 참고)
 1. **실제 엑셀→생성 시 메뉴 텍스트 미삽입 버그 조사** (위 "표 높이 실물 맞추기"
    미검증 항목 참고) — `read_excel.load_excel()` 결과를 `generate()`에 바로
    넣으면 메뉴 텍스트 0건. 원인 확인 후 겹침 육안 확인(내용 최대로 채운 상태)
