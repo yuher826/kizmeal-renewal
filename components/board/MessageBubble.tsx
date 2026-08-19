@@ -8,6 +8,7 @@ interface Props {
 
 function formatTime(isoString: string) {
   return new Date(isoString).toLocaleString('ko-KR', {
+    year: 'numeric',
     month: 'numeric',
     day: 'numeric',
     hour: '2-digit',
