@@ -346,27 +346,61 @@ export default function HolidayConfirmPopup({ year, month, context, onClose, onC
  * "양식 준비" 클릭 시 이 함수를 먼저 호출한다.
  *
  * 반환:
- *   { openPopup: false } — needsAttention 없음. 이미 POST(mode:'sync')까지
- *     끝낸 상태이므로 호출자는 바로 폼 생성으로 진행하면 된다.
- *     summary는 ⑥ 토스트 문구에 쓴다.
- *   { openPopup: true }  — 호출자가 <HolidayConfirmPopup>을 열어야 한다.
+ *   { openPopup: false, summary }  — needsAttention 없음. 이미 POST(mode:'sync')
+ *     까지 끝낸 상태이므로 호출자는 바로 폼 생성으로 진행하면 된다.
+ *   { openPopup: true }            — 호출자가 <HolidayConfirmPopup>을 열어야 한다.
+ *   { openPopup: false, error }    — 공휴일 확인 자체가 실패함(API 키 누락,
+ *     특일정보 API 장애, 네트워크 오류 등). ★"공휴일 없음"과 절대 같은
+ *     신호가 아니다 — 호출자가 반드시 사람에게 보여줘야 한다.
  *
- * ⚠️ needsAttention 없을 때의 sync POST는 "확인은 했다"는 흔적(synced_at)만
- *    남기고 confirmed_by/at은 절대 건드리지 않는다(route.ts가 보장) — 사람이
- *    바꾼 적 없는데 자동 호출로 결정자가 바뀌면 안 되기 때문.
+ * ⚠️ 실패해도 폼 생성 자체는 막지 않는다(gen_form.py의 fetch_holiday_map()과
+ *    동일한 설계 — DB/API를 못 읽으면 경고만 내고 진행, 전체를 세우지 않음).
+ *    막지 않는 것과 "조용히 넘어가는 것"은 다르다 — 실패는 반드시 알린다.
+ *
+ * ⚠️ 2026-08-20 프로덕션에서 실제 발생: 이 함수가 실패 시 아무 신호 없이
+ *    { openPopup: false }만 반환해서, "공휴일 없음"과 "조회 실패"가
+ *    화면상 구분이 안 됐다(12월 성탄절이 있는데도 팝업 없이 그냥 넘어감).
+ *    error 필드를 추가해 호출자가 토스트로 반드시 보여주도록 고침.
+ *
+ * needsAttention 없을 때의 sync POST는 "확인은 했다"는 흔적(synced_at)만
+ * 남기고 confirmed_by/at은 절대 건드리지 않는다(route.ts가 보장) — 사람이
+ * 바꾼 적 없는데 자동 호출로 결정자가 바뀌면 안 되기 때문.
  */
 export async function checkHolidaysBeforeGenerate(
   year: number, month: number,
-): Promise<{ openPopup: boolean; summary?: string }> {
-  const res  = await fetch(`/api/diet-automation/holidays?year=${year}&month=${month}`)
-  const json: HolidaysResponse = await res.json()
+): Promise<{ openPopup: boolean; summary?: string; error?: string }> {
+  let res: Response
+  // 실패 응답은 route.ts가 { error: string } 형태로 내려주므로 성공 타입과
+  // 함께 열어둔다 — !res.ok 분기에서 그 사유를 그대로 읽어 보여줘야 한다
+  let json: HolidaysResponse | { error: string }
+  try {
+    res  = await fetch(`/api/diet-automation/holidays?year=${year}&month=${month}`)
+    json = await res.json()
+  } catch (e) {
+    // 네트워크 자체가 끊긴 경우 — res.json() 파싱 실패도 여기 걸린다
+    return {
+      openPopup: false,
+      error: `공휴일 확인 요청에 실패했습니다(네트워크 오류) — 공휴일 확인 없이 진행합니다: ${
+        e instanceof Error ? e.message : String(e)
+      }`,
+    }
+  }
   if (!res.ok) {
-    // 공휴일 API 장애로 폼 생성 자체를 막지 않는다 — gen_form.py도 DB 조회
-    // 실패 시 경고만 내고 진행하는 동일한 설계
-    return { openPopup: false }
+    // route.ts가 { error: string }으로 사유를 내려준다(키 누락/특일정보 API
+    // 장애 등). 그 메시지를 그대로 보여줘야 진짜 원인(①키 문제 vs ②API
+    // 장애)을 실무자·관리자가 구분할 수 있다.
+    const msg = ('error' in json && json.error) || `HTTP ${res.status}`
+    return {
+      openPopup: false,
+      error: `공휴일 확인에 실패했습니다 — 공휴일 확인 없이 진행합니다: ${msg}`,
+    }
   }
 
-  if (json.diff.needsAttention) {
+  // 여기 도달하면 res.ok이므로 json은 실제로 HolidaysResponse다.
+  // TS는 res.ok와 json의 타입을 자동으로 연결 못 해 명시적으로 단언한다
+  const okJson = json as HolidaysResponse
+
+  if (okJson.diff.needsAttention) {
     return { openPopup: true }
   }
 
@@ -379,16 +413,16 @@ export async function checkHolidaysBeforeGenerate(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         year, month, mode: 'sync',
-        holidays: json.fromApi.map(h => ({ date: h.date })),
+        holidays: okJson.fromApi.map(h => ({ date: h.date })),
       }),
     })
   } catch {
     // sync 실패는 치명적이지 않다 — 다음 호출 때 다시 시도됨
   }
 
-  const sample = json.fromApi[0]
+  const sample = okJson.fromApi[0]
   const samplePolicy = sample
-    ? json.stored.find(s => s.date === sample.date)?.closurePolicy
+    ? okJson.stored.find(s => s.date === sample.date)?.closurePolicy
     : null
   const summary = sample
     ? `공휴일 확인 완료 — 이번 달 변경 없음(${sample.name} ${fmtDate(sample.date)}, ` +

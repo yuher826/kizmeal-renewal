@@ -328,12 +328,16 @@ function DietAutomationContent() {
   async function handlePrepareClick() {
     setHolidayCheckBusy(true)
     try {
-      const { openPopup, summary } = await checkHolidaysBeforeGenerate(pptxYear, pptxMonth)
+      const { openPopup, summary, error } = await checkHolidaysBeforeGenerate(pptxYear, pptxMonth)
       if (openPopup) {
         setHolidayPopup({ context: 'pre-generate' })
         return
       }
-      if (summary) showToast(summary)   // ⑥ 변경 없음 요약
+      // ★공휴일 확인 실패는 "공휴일 없음"과 다른 신호다 — 반드시 알린다.
+      // 막지는 않는다(gen_form.py의 DB 조회 실패 시 경고만 내고 진행하는
+      // 설계와 동일) — alert로 확실히 눈에 띄게 한 뒤 계속 진행
+      if (error) alert(`⚠️ ${error}`)
+      else if (summary) showToast(summary)   // ⑥ 변경 없음 요약
       await handleGenerateForm()
     } finally {
       setHolidayCheckBusy(false)
