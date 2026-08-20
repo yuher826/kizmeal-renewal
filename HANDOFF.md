@@ -933,6 +933,35 @@ CJK 전체) 설치에 소모. 한글만 필요하므로 `fonts-nanum`(10.3MB, �
 
 ---
 
+## ⚠️ 반복 함정 — Supabase 프로젝트가 2개 (SQL 실행 전 이름 확인)
+
+**kizmeal 조직 안에 프로젝트가 둘 있다: `icanmeal` / `kizmeal-renewal`.**
+SQL Editor는 마지막에 열었던 프로젝트를 기억하므로, **실행 버튼을 누르기 전
+좌측 상단 프로젝트 이름을 반드시 눈으로 확인할 것.**
+
+2026-08-20 `add_holiday_exceptions_260820.sql` 실행 시 `icanmeal`에서 돌려
+`relation "admins" does not exist` 에러가 났음. SQL 자체는 멀쩡했고
+프로젝트만 잘못 고른 것이었다.
+
+**→ 에러가 "relation ... does not exist" 형태로 나오면 SQL 문법을 뜯어보기
+전에 프로젝트 오선택부터 의심할 것.** 테이블이 통째로 없다는 건 대개
+스키마 문제가 아니라 접속 대상 문제다.
+
+### 함께 기억할 것 — 레포 SQL 파일에 있다 ≠ 실제 DB에 있다
+
+양방향으로 다 어긋나 있다:
+
+- **레포에 있는데 DB엔 없을 수 있다** — `supabase/migrations/*.sql`은 자동
+  적용되지 않는다. 사람이 SQL Editor에서 실행해야 반영된다.
+  (그래서 이 문서는 실행한 마이그레이션에 "→ Supabase에서 실행 완료"를
+  붙여 기록해 왔다. 새 마이그레이션도 같은 표기를 남길 것)
+- **DB에 있는데 레포엔 없을 수 있다** — `branch_profiles.contract_type`,
+  `branch_profiles.sort_order`는 실사용 중이지만 **DDL 마이그레이션 파일이
+  레포에 없다**(수동 생성 추정). `diet_settings` 테이블도 마찬가지.
+  **레포 grep 결과만 보고 "이 컬럼 없다"고 단정하지 말 것.**
+
+---
+
 ## ✅ 메뉴 텍스트 미삽입 — 원인 규명 완료 (2026-08-20)
 
 **결론: 코드 버그 아님. 어댑터 누락 가설도 틀렸음.**
@@ -1005,13 +1034,70 @@ CJK 전체) 설치에 소모. 한글만 필요하므로 `fonts-nanum`(10.3MB, �
 
 ### 착수 순서
 
-1. **data.go.kr 특일 정보 API 조사** — 무료 여부, API 키 발급 필요 여부, 응답 형식
-2. **DB 스키마 설계** — 월별×원별 예외설정 테이블(공휴일·방학 공용 구조).
-   전년도 동시기 조회가 자연스러운 형태여야 함
-3. `gen_form.py` / `generate-form.yml` 연결 방식 확정
-4. 팝업 UI 구현 → 실물 검증
+1. ~~**data.go.kr 특일 정보 API 조사**~~ → **완료 (2026-08-20)**. 아래 조사결과 참고
+2. ~~**DB 스키마 설계**~~ → **완료 (2026-08-20)**.
+   `supabase/migrations/add_holiday_exceptions_260820.sql`
+   → **Supabase(`kizmeal-renewal`)에서 실행 완료**, 시드 2행 확인
+3. **API 수집 코드 + diff 감지 구현** ← 다음
+4. `gen_form.py` / `generate-form.yml` 연결 방식 확정
+   (현재 `--holiday`가 워크플로에 배선 안 돼 있음 — 위 "신규 미해결" 참고)
+5. `template_resolver.py` 원별 방학양식 분기 (아래 ★ 참고)
+6. 팝업 UI 구현 → 실물 검증
+7. **별도 커밋**: `pptx_generator.py:49` `_HOLIDAY_OPERATING` 하드코딩 제거
+   → `cfg['operates_on_holidays']` 참조로 교체(소비 지점 990/1008/1023/1034행).
+   49개 원 전부에 영향 가는 파일이라 스키마 안정 확인 후 착수하기로 분리
 
 ⚠️ **모델**: 스키마·데이터모델 설계 단계는 **Opus**, 확정 후 구현은 Sonnet 복귀.
+
+### 1단계 조사결과 — data.go.kr 특일 정보 API (2026-08-20)
+
+- **무료 · 자동승인**(심의 없음). 개발계정 **일 10,000건**, 운영계정은 확장 가능
+- 엔드포인트: `https://apis.data.go.kr/B090041/openapi/service/SpcdeInfoService/getRestDeInfo`
+  - 5개 오퍼레이션 중 **`getRestDeInfo`(공휴일)** 를 쓸 것. "관공서 공휴일에 관한
+    규정" 기준이라 국경일·대체공휴일·임시공휴일·선거일을 모두 포함한다.
+    `getHoliDeInfo`(국경일)는 3·1절·광복절 등만 나와 범위가 좁다
+- 파라미터: `serviceKey`, `solYear`(필수), `solMonth`(생략 시 연 단위 조회),
+  `numOfRows`, `_type=json`
+- 응답: `locdate`(**YYYYMMDD 정수**, 문자열 아님), `dateKind`, `isHoliday`(Y/N),
+  `dateName`, `seq`
+- **함정: `numOfRows` 기본값이 10.** 연 단위 조회 시 공휴일이 20건 안팎이라
+  기본값 그대로 두면 **에러 없이 조용히 절반이 잘린다.** 반드시 키울 것
+- ⚠️ **연초 1회 수집으로는 부족한 이유** — 임시공휴일·재보궐선거는 사후 지정되고,
+  API 데이터도 천문연구원 수기 입력 기반이라 "앞으로 약 1년치"만 노출된다.
+  → **월별 diff 감지 방식으로 확정**(설계 결정 4). 매달 폼 생성 시 해당 월
+  재조회 → 저장값과 diff → 변경 있을 때만 팝업. 평소엔 diff가 없어 팝업이
+  안 뜨므로 "확인만 하면 되는" UX가 유지된다
+
+### 2단계 확정 스키마 — 테이블 3개 + 기존 확장 2건
+
+| 대상 | 역할 |
+|---|---|
+| `public_holidays` | 공휴일 마스터(API 캐시 + 승인대장). `source='manual'`로 임시공휴일 수동 입력 |
+| `branch_holiday_operations` | 원별·**날짜별** 운영여부 |
+| `branch_monthly_vacation` | 원별·**월별** 방학 양식 O/X |
+| `branch_profiles.operates_on_holidays` | 원별 기본 정책(팝업 프리필). 하드코딩 이관분 |
+| `diet_templates.vacation_variant` | `none`/`vacation_on`/`vacation_off` |
+
+- **원 참조는 전부 `branch_profiles(id)`로 통일**(설계 결정 2). 레포에 선례가
+  갈려 있으나(`weekly_menus`·`diet_review_items`는 `branches(id)`) 이 기능의
+  소비자가 PPTX 생성기이므로 후자 기준. 새로 만드는 것부터 통일해
+  `weekly_menus.branch_id` 오조회 버그 계열이 더 번지지 않게 한다
+- 통합 1테이블은 검토 후 폐기 — 공휴일(날짜, 원)과 방학(연, 월, 원)은 자연키
+  축이 달라 CHECK + 부분 유니크 2개로 갈라야 해서 묶는 이득이 없다
+- 상세 설계 근거는 마이그레이션 파일 상단 주석에 전부 기록해 둠
+
+### ★ 5단계 상세 — `template_resolver.py`가 진짜 걸림돌
+
+`template_resolver.py:52-56`이 **"연·월당 active 템플릿 1개"** 를 전제하는데
+방학 O/X 2벌과 정면 충돌한다. `vacation_variant` 축으로 원별 분기하도록
+고쳐야 한다. 다행히 `app.py`·`app_actions.py` 양쪽이 이 모듈만 거치므로
+**수정 지점은 한 곳**이다.
+
+방학 그림 자체는 **코드가 삽입·크기조정할 필요 없다**(발견③ — 원별로 양식만
+선택). 다만 `remove_holiday_cover_pics()`가 표 위 최상위 PICTURE를 공휴일 셀
+좌표 겹침으로 지우므로, **방학 그림이 공휴일 셀과 겹치는 달에는 실수로
+삭제될 수 있다**(7월은 하단 5주차, 8월은 상단 1주차 위치). 이 방어는
+여전히 필요하다.
 
 ---
 
