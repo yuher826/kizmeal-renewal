@@ -1048,9 +1048,13 @@ SQL Editor는 마지막에 열었던 프로젝트를 기억하므로, **실행 �
 4. ~~`gen_form.py` / `generate-form.yml` 연결~~ → **완료 (2026-08-20)**
    `gen_form.fetch_holiday_map()`이 `public_holidays`를 읽는다.
    워크플로 수정 불필요(자격증명이 이미 있었음)
-5. `template_resolver.py` 원별 방학양식 분기 (아래 ★ 참고) ← 다음
-6. 팝업 UI 구현 → 실물 검증
+5. ~~`template_resolver.py` 원별 방학양식 분기~~ → **완료 (2026-08-20)**
+   `resolve_template_set()` + `pick_template()` + `fetch_vacation_map()`.
+   `app.py`(2곳)·`app_actions.py` 배선 완료
+6. 팝업 UI 구현 → 실물 검증 ← **다음 (남은 마지막 단계)**
    ⚠️ 이때 `holidays/route.ts` GET/POST 실물 확인 필요(아직 미검증)
+   ⚠️ 방학 O/X 배정 UI도 여기서 함께 — 지금은 `branch_monthly_vacation`에
+      행이 없어 전 원이 "방학X"로 처리된다(경고는 찍힘)
 7. **별도 커밋**: `pptx_generator.py:49` `_HOLIDAY_OPERATING` 하드코딩 제거
    → `cfg['operates_on_holidays']` 참조로 교체(소비 지점 990/1008/1023/1034행).
    49개 원 전부에 영향 가는 파일이라 스키마 안정 확인 후 착수하기로 분리
@@ -1134,7 +1138,30 @@ SQL Editor는 마지막에 열었던 프로젝트를 기억하므로, **실행 �
   축이 달라 CHECK + 부분 유니크 2개로 갈라야 해서 묶는 이득이 없다
 - 상세 설계 근거는 마이그레이션 파일 상단 주석에 전부 기록해 둠
 
-### ★ 5단계 상세 — `template_resolver.py`가 진짜 걸림돌
+### ✅ 5단계 완료 (2026-08-20) — `template_resolver.py` 방학 분기
+
+"연·월당 active 템플릿 1개" 전제를 깼다. API가 둘로 나뉜다:
+- `resolve_template_set()` — 그 달 템플릿을 variant별로 **한 번씩만** 준비
+  (다운로드·이름표·검증 비용이 원 수와 무관)
+- `pick_template()` — 원별 방학 여부로 그중 하나 선택
+- `fetch_vacation_map()` — `branch_monthly_vacation` 조회. 키가
+  **`branch_profiles.id`** 이고 `cfg['branch_uuid']`·`_get_branch_id_map()`
+  값과 그대로 맞물린다
+
+배선: `app_actions.py`, `app.py` **2곳**(`/generate`, `/generate_from_json`).
+호출자 0이 된 `resolve_template_path()`는 제거했다 — 이 모듈 docstring이
+말하는 "로직 두 벌" 그 자체가 되기 때문.
+
+⚠️ **미배정 원은 방학X로 보수 처리하고 원 이름을 로그에 찍는다.** 49개 원
+생성을 통째로 세울 수 없고, 없는 그림이 빠지는 쪽이 엉뚱한 방학 그림이
+붙는 쪽보다 덜 틀리다고 판단. 로그에서 추적 가능.
+
+⚠️ **생성 전 문지기가 준비된 variant를 전부 검증한다** — 한 벌만 깨져도
+그 원들이 조용히 잘못 생성되므로.
+
+아래는 착수 당시 배경 기록:
+
+### ★ 5단계 배경 — `template_resolver.py`가 진짜 걸림돌이었던 이유
 
 `template_resolver.py:52-56`이 **"연·월당 active 템플릿 1개"** 를 전제하는데
 방학 O/X 2벌과 정면 충돌한다. `vacation_variant` 축으로 원별 분기하도록

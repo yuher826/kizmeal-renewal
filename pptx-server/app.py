@@ -79,7 +79,7 @@ def generate():
 
     job_id  = str(uuid4())
     tmp_dir = f'/tmp/kizmeal_output/{job_id}'
-    active_template_path = TEMPLATE_PATH  # 템플릿 결정 전 예외 시에도 finally에서 참조 가능하게
+    tpl_set = {}  # 템플릿 결정 전 예외 시에도 finally에서 참조 가능하게
 
     try:
         output_dir = os.path.join(tmp_dir, 'output')
@@ -92,7 +92,9 @@ def generate():
         from read_excel import load_excel
         from pptx_generator import generate as gen_pptx
         from supabase_uploader import get_supabase_client
-        from template_resolver import resolve_template_path
+        from template_resolver import (
+            fetch_vacation_map, pick_template, resolve_template_set,
+        )
 
         menu_data, branches, date_map = load_excel(excel_path)
 
@@ -101,20 +103,30 @@ def generate():
 
         # 업로드 템플릿 우선 사용 (발견① — app_actions.py와 동일 로직, template_resolver 공용)
         print(f'[템플릿] {year}년 {month}월 사용할 템플릿 결정...')
-        active_template_path, tpl_source = resolve_template_path(
-            get_supabase_client(), TEMPLATE_PATH, year, month,
-        )
-        print(f'  최종 사용 템플릿: {tpl_source}')
+        _client = get_supabase_client()
+        tpl_set = resolve_template_set(_client, TEMPLATE_PATH, year, month)
+        for _v, (_p, _src) in sorted(tpl_set.items()):
+            print(f'  최종 사용 템플릿[{_v}]: {_src}')
+        if not tpl_set:
+            print('  최종 사용 템플릿: 로컬(업로드없음)')
+
+        # 원별 방학 배정 (방학 없는 달이면 빈 dict)
+        vacation_map = fetch_vacation_map(_client, year, month)
 
         _BATCH = 5
         raw_results = []
         for batch_start in range(0, len(branches), _BATCH):
             for cfg in branches[batch_start:batch_start + _BATCH]:
                 branch_full_name = cfg['name']
-                branch_uuid8 = (branch_id_map.get(branch_full_name) or '')[:8] or branch_full_name
+                branch_uuid  = branch_id_map.get(branch_full_name) or ''
+                branch_uuid8 = branch_uuid[:8] or branch_full_name
                 out_pptx = os.path.join(output_dir, f'{branch_uuid8}_{year}{month:02d}.pptx')
+                tpl_path, _ = pick_template(
+                    tpl_set, TEMPLATE_PATH,
+                    vacation_map.get(branch_uuid), branch_full_name,
+                )
                 try:
-                    gen_pptx(cfg, menu_data, active_template_path, out_pptx, date_map=date_map)
+                    gen_pptx(cfg, menu_data, tpl_path, out_pptx, date_map=date_map)
                     raw_results.append({
                         'branch_full_name': branch_full_name,
                         'pptx_path':   out_pptx,
@@ -170,8 +182,8 @@ def generate():
 
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
-        from template_resolver import cleanup_template_path
-        cleanup_template_path(active_template_path, TEMPLATE_PATH)
+        from template_resolver import cleanup_template_set
+        cleanup_template_set(tpl_set, TEMPLATE_PATH)
         _generate_lock.release()
 
 
@@ -527,7 +539,7 @@ def generate_from_json():
 
     job_id  = str(uuid4())
     tmp_dir = f'/tmp/kizmeal_output/{job_id}'
-    active_template_path = TEMPLATE_PATH  # 템플릿 결정 전 예외 시에도 finally에서 참조 가능하게
+    tpl_set = {}  # 템플릿 결정 전 예외 시에도 finally에서 참조 가능하게
 
     try:
         output_dir = os.path.join(tmp_dir, 'output')
@@ -546,24 +558,36 @@ def generate_from_json():
 
         from pptx_generator import generate as gen_pptx
         from supabase_uploader import get_supabase_client
-        from template_resolver import resolve_template_path
+        from template_resolver import (
+            fetch_vacation_map, pick_template, resolve_template_set,
+        )
 
         # 업로드 템플릿 우선 사용 (발견① — app_actions.py와 동일 로직, template_resolver 공용)
         print(f'[템플릿] {year}년 {month}월 사용할 템플릿 결정...')
-        active_template_path, tpl_source = resolve_template_path(
-            get_supabase_client(), TEMPLATE_PATH, year, month,
-        )
-        print(f'  최종 사용 템플릿: {tpl_source}')
+        _client = get_supabase_client()
+        tpl_set = resolve_template_set(_client, TEMPLATE_PATH, year, month)
+        for _v, (_p, _src) in sorted(tpl_set.items()):
+            print(f'  최종 사용 템플릿[{_v}]: {_src}')
+        if not tpl_set:
+            print('  최종 사용 템플릿: 로컬(업로드없음)')
+
+        # 원별 방학 배정 (방학 없는 달이면 빈 dict)
+        vacation_map = fetch_vacation_map(_client, year, month)
 
         _BATCH = 5
         raw_results = []
         for batch_start in range(0, len(branch_cfgs), _BATCH):
             for cfg in branch_cfgs[batch_start:batch_start + _BATCH]:
                 branch_full_name = cfg['name']
-                branch_uuid8 = cfg['branch_uuid'][:8]
+                branch_uuid  = cfg['branch_uuid']
+                branch_uuid8 = branch_uuid[:8]
                 out_pptx = os.path.join(output_dir, f'{branch_uuid8}_{year}{month:02d}.pptx')
+                tpl_path, _ = pick_template(
+                    tpl_set, TEMPLATE_PATH,
+                    vacation_map.get(branch_uuid), branch_full_name,
+                )
                 try:
-                    gen_pptx(cfg, adapted_menu, active_template_path, out_pptx, date_map=date_map)
+                    gen_pptx(cfg, adapted_menu, tpl_path, out_pptx, date_map=date_map)
                     raw_results.append({
                         'branch_full_name': branch_full_name,
                         'pptx_path':   out_pptx,
@@ -620,8 +644,8 @@ def generate_from_json():
 
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
-        from template_resolver import cleanup_template_path
-        cleanup_template_path(active_template_path, TEMPLATE_PATH)
+        from template_resolver import cleanup_template_set
+        cleanup_template_set(tpl_set, TEMPLATE_PATH)
         _generate_lock.release()
 
 

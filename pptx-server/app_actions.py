@@ -30,7 +30,9 @@ from branch_filters import filter_eligible_branches
 from pptx_generator import generate as gen_pptx
 from read_excel import _embed_brackets, _inject_exception_to_banchan, convert_pptx, determine_type
 from supabase_uploader import SupabaseREST
-from template_resolver import cleanup_template_path, resolve_template_path
+from template_resolver import (
+    cleanup_template_set, fetch_vacation_map, pick_template, resolve_template_set,
+)
 from validate_template import validate_template
 
 # ── 환경변수 ───────────────────────────────────────────────────────
@@ -353,10 +355,10 @@ def upsert_diet_review_item(weekly_menu_id, branch_uuid, branch_name, pptx_url, 
 # ════════════════════════════════════════════════════════════════════
 # 실제 로직은 template_resolver.py(app.py와 공용)로 이전됨 — 로직을 두 벌로
 # 두면 한쪽만 고치는 사고가 난다(board/erp 중복본 정리 때 겪은 것과 동일 패턴).
-def _resolve_template_path():
-    """사용할 템플릿 경로를 결정한다. 반환: (사용할_경로, 출처설명)
-    임시파일이 만들어졌으면 main()에서 생성 종료 후 cleanup_template_path()로 정리."""
-    return resolve_template_path(client, TEMPLATE_PATH, YEAR, MONTH)
+def _resolve_template_set():
+    """그 달 템플릿을 variant별로 준비한다. 반환: {variant: (경로, 출처설명)}
+    임시파일이 만들어지므로 main()에서 생성 종료 후 cleanup_template_set()으로 정리."""
+    return resolve_template_set(client, TEMPLATE_PATH, YEAR, MONTH)
 
 
 # ════════════════════════════════════════════════════════════════════
@@ -367,21 +369,33 @@ def main():
 
     # ── 템플릿 결정 + 검증 (생성 전 문지기) ──
     print('[검증] 사용할 템플릿 결정 + 이름표/구조 확인...')
-    active_template_path, tpl_source = _resolve_template_path()
-    print(f'  최종 사용 템플릿: {tpl_source}')
+    tpl_set = _resolve_template_set()
+    if tpl_set:
+        for _v, (_p, _src) in sorted(tpl_set.items()):
+            print(f'  최종 사용 템플릿[{_v}]: {_src}')
+    else:
+        print('  최종 사용 템플릿: 로컬(업로드없음)')
 
-    # 최종 결정된 템플릿을 한 번 더 검증 (로컬이든 업로드든)
-    with open(active_template_path, 'rb') as _tf:
-        _tpl_bytes = _tf.read()
-    _vr = validate_template(_tpl_bytes)
-    print(f'  {_vr["summary"]}')
-    for _s in _vr['slides']:
-        _mark = 'O' if _s['valid'] else 'X'
-        print(f'    [{_mark}] {_s["slide"]}: 누락={_s["missing"]} 컬럼={_s["columns"]}')
-    if not _vr['valid']:
-        print('[중단] 템플릿 검증 실패 — 생성을 시작하지 않습니다.')
-        sys.exit(1)
+    # 최종 결정된 템플릿을 한 번 더 검증 (로컬이든 업로드든).
+    # 방학 O/X면 2벌이므로 준비된 것 전부를 본다 — 한 벌만 깨져도 그 원들이
+    # 조용히 잘못 생성되므로 생성 전에 막는다.
+    _check_paths = [p for p, _ in tpl_set.values()] or [TEMPLATE_PATH]
+    for _path in _check_paths:
+        with open(_path, 'rb') as _tf:
+            _tpl_bytes = _tf.read()
+        _vr = validate_template(_tpl_bytes)
+        print(f'  {_vr["summary"]}')
+        for _s in _vr['slides']:
+            _mark = 'O' if _s['valid'] else 'X'
+            print(f'    [{_mark}] {_s["slide"]}: 누락={_s["missing"]} 컬럼={_s["columns"]}')
+        if not _vr['valid']:
+            print('[중단] 템플릿 검증 실패 — 생성을 시작하지 않습니다.')
+            cleanup_template_set(tpl_set, TEMPLATE_PATH)
+            sys.exit(1)
     print('[검증] 통과 — 생성을 진행합니다.')
+
+    # 원별 방학 배정 (방학 없는 달이면 빈 dict)
+    vacation_map = fetch_vacation_map(client, YEAR, MONTH)
 
     print('[1/4] menu_data 조회...')
     raw_menu_data = fetch_menu_data()
@@ -420,9 +434,15 @@ def main():
                 out_pptx     = os.path.join(tmp_dir, fname)
                 storage_path = f'{YEAR}/{MONTH:02d}/{fname}'
 
+                # 원별 방학 배정으로 양식 선택 (평월은 variant가 하나뿐)
+                tpl_path, _ = pick_template(
+                    tpl_set, TEMPLATE_PATH,
+                    vacation_map.get(branch_uuid), short_code,
+                )
+
                 try:
                     gen_pptx(
-                        cfg, adapted_menu, active_template_path, out_pptx,
+                        cfg, adapted_menu, tpl_path, out_pptx,
                         date_map=date_map,
                         origin_text=origin_text,
                         material_text=material_text,
@@ -469,7 +489,7 @@ def main():
             gc.collect()
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
-        cleanup_template_path(active_template_path, TEMPLATE_PATH)
+        cleanup_template_set(tpl_set, TEMPLATE_PATH)
 
     print(f'\n[완료] 성공 {succeeded}개 / 실패 {failed}개 / 전체 {len(branch_cfgs)}개')
 
