@@ -1062,6 +1062,46 @@ SQL Editor는 마지막에 열었던 프로젝트를 기억하므로, **실행 �
   `dateName`, `seq`
 - **함정: `numOfRows` 기본값이 10.** 연 단위 조회 시 공휴일이 20건 안팎이라
   기본값 그대로 두면 **에러 없이 조용히 절반이 잘린다.** 반드시 키울 것
+  - 실측(2026-08-20): **2026년 전체 22건**. 기본값이었으면 12건이 소실됐다.
+    `lib/holidays.ts`는 `NUM_OF_ROWS=100` + `totalCount > NUM_OF_ROWS`면
+    조용히 흘리지 않고 에러를 던지도록 방어해 둠
+- ⚠️ **API가 주는 isHoliday='Y'가 곧 "원이 쉰다"는 뜻은 아니다.** 2026년
+  응답에 **노동절(5/1)·제헌절(7/17)** 도 `Y`로 포함돼 있다. 어린이집 실제
+  운영 여부와 다를 수 있으므로 **팝업 첫 사용 때 영양기획팀과 대조할 것.**
+  (원별 운영여부 설정이 있는 이유 자체가 이 간극이다)
+- **함정: 인증키 이중 인코딩** — data.go.kr는 인증키를 두 벌 준다.
+  - **Decoding 키** = 원본(`+`, `/`, `=` 포함) ← **이걸 저장한다**
+  - **Encoding 키** = 그걸 URL 인코딩한 것(`%2B`, `%2F` …)
+
+  `URLSearchParams`(TS)나 `requests`의 `params=`(Python)는 값을 **자동으로
+  한 번 인코딩**한다. 여기에 Encoding 키를 넣으면 `%2B` → `%252B`로
+  이중 인코딩되어 아래 에러가 난다:
+
+  ```json
+  {"errMsg":"SERVICE_KEY_IS_NOT_REGISTERED_ERROR","returnAuthMsg":"등록되지 않은 서비스키","returnReasonCode":"30"}
+  ```
+
+  **키가 멀쩡한데 이 에러가 나오면 키를 의심하기 전에 이중 인코딩부터 볼 것.**
+  (이 에러 메시지는 키가 아예 없을 때도 똑같이 나와서 구분이 안 된다 —
+  2026-08-20 무인증 생존확인 테스트에서 동일 응답을 받았음)
+
+  **2026-08-20 실측 확인** — 실제 발급키로 세 방식 비교:
+
+  | 전달 방식 | 결과 |
+  |---|---|
+  | `URLSearchParams`에 Encoding 키 그대로 | ❌ code=30 |
+  | 원문 그대로 이어붙임 | ✅ |
+  | `decodeURIComponent` 후 `URLSearchParams` | ✅ |
+
+  → **`lib/holidays.ts`의 `normalizeServiceKey()`가 둘 다 흡수**하도록 처리함.
+  포털에서 어느 쪽을 복사해와도 동작한다. 형태를 사람에게 강제하는 대신
+  코드가 받아내는 쪽을 택함
+- **키 이름은 `DATA_GO_KR_SERVICE_KEY`**, 서버 전용(`NEXT_PUBLIC_` 금지).
+  `.env.local` + Vercel 환경변수에만 둔다. **GitHub Actions Secrets에는 넣지
+  않는다** — 팝업은 Actions에서 띄울 수 없으므로 API 호출은 Next.js가 맡고,
+  `gen_form.py`는 사람 확인을 거친 `public_holidays`를 읽기만 한다.
+  덕분에 "`generate-form.yml`이 `--holiday` 없이 호출한다"는 기존 미해결
+  건도 CLI 인자 대신 DB 조회로 자연히 풀린다
 - ⚠️ **연초 1회 수집으로는 부족한 이유** — 임시공휴일·재보궐선거는 사후 지정되고,
   API 데이터도 천문연구원 수기 입력 기반이라 "앞으로 약 1년치"만 노출된다.
   → **월별 diff 감지 방식으로 확정**(설계 결정 4). 매달 폼 생성 시 해당 월
