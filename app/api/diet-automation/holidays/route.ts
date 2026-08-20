@@ -186,22 +186,30 @@ export async function GET(req: NextRequest) {
  * ★mode 두 가지 (⑤ 결정 이력 ↔ ⑥ 변경없음 표시 충돌을 푸는 지점)
  *
  *   'confirm' (기본) — 사람이 팝업에서 확정한 경우.
- *       confirmed_by/confirmed_at을 **갱신**하고, 목록에서 빠진 API 수집분을
- *       삭제한다.
+ *       name/source/closure_policy/confirmed_by/confirmed_at 전부를
+ *       upsert하고, 목록에서 빠진 API 수집분을 삭제한다.
  *
  *   'sync' — diff가 없어 팝업을 띄우지 않았고, "확인했다"는 사실만 남기는 경우.
- *       synced_at만 갱신하고 **confirmed_by/confirmed_at은 건드리지 않는다.**
- *       이걸 구분하지 않으면, 7월에 배서영이 정한 정책이 8월에 폼 생성을 누른
- *       정예진 이름으로 덮여서 "이거 왜 이렇게 됐지" 추적이 끊긴다.
- *       안전을 위해 삭제도 하지 않는다(부분 목록이 와도 데이터가 날아가지 않게).
+ *       **좁은 UPDATE로 synced_at/updated_at 딱 두 컬럼만 건드린다.**
+ *       holidays 배열의 date만 쓰고 나머지 필드(name/source/closurePolicy)는
+ *       이 모드에서 아예 읽지 않는다 — payload에 뭐가 들어있든 무관하게
+ *       다른 컬럼은 절대 안 바뀐다. 삭제도 하지 않는다.
+ *
+ *       ⚠️ 실물 검증 중 발견된 사고(2026-08-20): 이전엔 confirm과 같은
+ *       upsert row 조립 함수를 공유하며 confirmed_by/at만 조건부로 뺐는데,
+ *       프론트가 closurePolicy 필드를 빠뜨린 sync payload를 보내는 바람에
+ *       이미 분류돼 있던 값이 null로 덮였다. "넘긴 컬럼만 건드린다"를
+ *       프론트 payload 구성에 의존하면 같은 사고가 반복된다 — 그래서
+ *       구조 자체를 좁은 UPDATE로 바꿔 서버가 보장한다.
  *
  * body: {
  *   year, month,
  *   mode?: 'confirm' | 'sync',
  *   holidays: [{
- *     date: 'YYYY-MM-DD', name: string,
- *     source?: 'kasi_api' | 'manual',
- *     closurePolicy?: 'all_closed' | 'all_operating' | null
+ *     date: 'YYYY-MM-DD',
+ *     name: string,                                    // confirm 모드만 사용
+ *     source?: 'kasi_api' | 'manual',                   // confirm 모드만 사용
+ *     closurePolicy?: 'all_closed' | 'all_operating' | null  // confirm 모드만 사용
  *   }]
  * }
  */
@@ -232,11 +240,9 @@ export async function POST(req: NextRequest) {
   const { from, to } = monthRange(ym.year, ym.month)
   const now = new Date().toISOString()
 
-  const VALID_POLICIES = ['all_closed', 'all_operating']
-
-  // 입력 검증 — 날짜 형식과 해당 월 소속을 여기서 막는다.
+  // 날짜 형식 + 해당 월 소속 검증은 두 모드가 공유한다.
   // (DB에는 year/month 컬럼이 없어 범위를 강제할 CHECK가 없으므로 앱이 지킨다)
-  const rows: Array<Record<string, unknown>> = []
+  const dates: string[] = []
   for (const raw of body.holidays as Array<Record<string, unknown>>) {
     const date = String(raw?.date ?? '').trim()
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
@@ -251,6 +257,49 @@ export async function POST(req: NextRequest) {
         { status: 400 },
       )
     }
+    dates.push(date)
+  }
+
+  // ════════════════════════════════════════════════════════════════
+  // sync 모드 — "변경 없음"을 전제로 도는 자동 호출.
+  //
+  // ★일부러 upsert 대신 좁은 UPDATE를 쓴다. 애초에 confirm과 같은 upsert
+  //   row 조립 함수를 공유했다가, 프론트가 closurePolicy 필드를 빠뜨린
+  //   payload를 보내는 바람에 이미 분류돼 있던 값이 null로 덮인 사고가
+  //   실물 검증 중 재현됐다(2026-08-20). "넘긴 컬럼만 건드린다"를
+  //   프론트 payload 구성에 의존하면 다음에도 같은 사고가 난다 —
+  //   그래서 서버가 synced_at/updated_at **딱 두 컬럼만** 쓰도록 구조로
+  //   막는다. name/source/closure_policy/confirmed_*는 이 경로에서
+  //   절대 손대지 않는다(입력값이 무엇이든 무관).
+  //   삭제도 하지 않는다 — sync는 원래 삭제할 게 없는 경로다.
+  // ════════════════════════════════════════════════════════════════
+  if (mode === 'sync') {
+    if (dates.length > 0) {
+      const { error: syncErr } = await supabase
+        .from('public_holidays')
+        .update({ synced_at: now, updated_at: now })
+        .in('holiday_date', dates)
+
+      if (syncErr) {
+        return NextResponse.json(
+          { error: `공휴일 동기화 중 오류: ${syncErr.message}` },
+          { status: 500 },
+        )
+      }
+    }
+    return NextResponse.json({
+      success: true, mode, year: ym.year, month: ym.month,
+      saved: dates.length, deleted: 0,
+    })
+  }
+
+  // ════════════════════════════════════════════════════════════════
+  // confirm 모드 — 사람이 팝업에서 확정. 값 전체를 upsert하고 삭제도 한다.
+  // ════════════════════════════════════════════════════════════════
+  const VALID_POLICIES = ['all_closed', 'all_operating']
+  const rows: Array<Record<string, unknown>> = []
+  for (const raw of body.holidays as Array<Record<string, unknown>>) {
+    const date = String(raw?.date ?? '').trim()
 
     // closurePolicy는 null 허용 — 팝업에서 일부를 안 정하고 저장할 수 있다.
     // 그 경우 다음 조회에서 unclassified로 다시 잡혀 스스로 복구된다
@@ -265,23 +314,16 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const row: Record<string, unknown> = {
+    rows.push({
       holiday_date: date,
       name: String(raw?.name ?? '').trim() || '공휴일',
       source: raw?.source === 'manual' ? 'manual' : 'kasi_api',
       closure_policy: rawPolicy == null ? null : String(rawPolicy),
       synced_at: now,
       updated_at: now,
-    }
-
-    // ★sync 모드에서는 confirmed_* 키를 아예 넣지 않는다.
-    //   upsert는 넘긴 컬럼만 UPDATE하므로, 빼면 기존 값이 그대로 보존된다.
-    if (mode === 'confirm') {
-      row.confirmed_by = adminId
-      row.confirmed_at = now
-    }
-
-    rows.push(row)
+      confirmed_by: adminId,
+      confirmed_at: now,
+    })
   }
 
   // 1. 확정 목록 upsert (holiday_date 유니크 기준)
@@ -301,44 +343,37 @@ export async function POST(req: NextRequest) {
   // 2. 확정 목록에서 빠진 API 수집분 삭제 (= 지정 취소된 공휴일)
   //    ★ source='manual'은 지우지 않는다 — API가 아직 안 올린 임시공휴일을
   //      사람이 넣어둔 것이라, API에 없다는 이유로 지우면 탈출구가 무의미해진다
-  //    ★sync 모드에서는 삭제하지 않는다. sync는 "변경 없음"을 전제로 도는
-  //      자동 호출이라 삭제할 것이 원래 없고, 만에 하나 부분 목록이 오면
-  //      멀쩡한 공휴일이 날아간다. 삭제는 사람이 확정한 confirm에서만.
-  let toDelete: string[] = []
+  const keepDates = new Set(dates)
+  const { data: existing, error: fetchErr } = await supabase
+    .from('public_holidays')
+    .select('holiday_date, source')
+    .gte('holiday_date', from)
+    .lte('holiday_date', to)
 
-  if (mode === 'confirm') {
-    const keepDates = new Set(rows.map(r => r.holiday_date as string))
-    const { data: existing, error: fetchErr } = await supabase
+  if (fetchErr) {
+    return NextResponse.json(
+      { error: `기존 공휴일 조회 중 오류: ${fetchErr.message}` },
+      { status: 500 },
+    )
+  }
+
+  const toDelete = (existing ?? [])
+    .filter(r => r.source === 'kasi_api' && !keepDates.has(r.holiday_date as string))
+    .map(r => r.holiday_date as string)
+
+  if (toDelete.length > 0) {
+    // branch_holiday_operations는 holiday_date FK ON DELETE CASCADE라
+    // 해당 날짜의 원별 결정값도 같이 정리된다
+    const { error: delErr } = await supabase
       .from('public_holidays')
-      .select('holiday_date, source')
-      .gte('holiday_date', from)
-      .lte('holiday_date', to)
+      .delete()
+      .in('holiday_date', toDelete)
 
-    if (fetchErr) {
+    if (delErr) {
       return NextResponse.json(
-        { error: `기존 공휴일 조회 중 오류: ${fetchErr.message}` },
+        { error: `공휴일 삭제 중 오류: ${delErr.message}` },
         { status: 500 },
       )
-    }
-
-    toDelete = (existing ?? [])
-      .filter(r => r.source === 'kasi_api' && !keepDates.has(r.holiday_date as string))
-      .map(r => r.holiday_date as string)
-
-    if (toDelete.length > 0) {
-      // branch_holiday_operations는 holiday_date FK ON DELETE CASCADE라
-      // 해당 날짜의 원별 결정값도 같이 정리된다
-      const { error: delErr } = await supabase
-        .from('public_holidays')
-        .delete()
-        .in('holiday_date', toDelete)
-
-      if (delErr) {
-        return NextResponse.json(
-          { error: `공휴일 삭제 중 오류: ${delErr.message}` },
-          { status: 500 },
-        )
-      }
     }
   }
 

@@ -13,6 +13,7 @@ import {
 import { createClient } from '@/lib/supabase'
 import DietNotificationPanel, { type DietNotification } from '@/components/board/DietNotificationPanel'
 import BranchProfileAlert from '@/components/erp/BranchProfileAlert'
+import HolidayConfirmPopup, { checkHolidaysBeforeGenerate } from './HolidayConfirmPopup'
 import { UPLOAD_ROLES, ROLES } from '@/lib/roles'
 import { getYearOptions } from '@/lib/diet-utils'
 
@@ -126,6 +127,9 @@ function DietAutomationContent() {
   // ── PPTX 생성 상태 ────────────────────────────────────────────────
   const [genStatus,  setGenStatus]  = useState<PptxGenStatus>('idle')
   const [formGenStatus, setFormGenStatus] = useState<'idle'|'requesting'|'done'|'error'>('idle')
+  // 공휴일 확인 팝업 — null이면 닫힘. context로 저장 후 동작(다음 단계 진행 vs 그냥 닫기)이 갈린다
+  const [holidayPopup, setHolidayPopup] = useState<{ context: 'pre-generate' | 'revisit' } | null>(null)
+  const [holidayCheckBusy, setHolidayCheckBusy] = useState(false)
   const [downloadStatus, setDownloadStatus] = useState<'idle'|'downloading'|'error'>('idle')
   const [genError,   setGenError]   = useState<string | null>(null)
   const [genResults, setGenResults] = useState<GenerationResults | null>(null)
@@ -314,6 +318,25 @@ function DietAutomationContent() {
     } catch (err) {
       setGenError(String(err))
       setGenStatus('error')
+    }
+  }
+
+  // ── 공휴일 확인 (양식 준비 클릭 시 먼저 실행 — ③ 표시 시점) ─────────
+  // needsAttention이면 팝업을 열고, 아니면 조용히 sync만 남긴 뒤 바로 진행한다.
+  // 팝업에서 저장하면 onConfirmed가 이 함수를 다시 부르지 않고 바로
+  // handleGenerateForm으로 이어간다(무한루프 방지 — 저장 시점엔 이미 최신).
+  async function handlePrepareClick() {
+    setHolidayCheckBusy(true)
+    try {
+      const { openPopup, summary } = await checkHolidaysBeforeGenerate(pptxYear, pptxMonth)
+      if (openPopup) {
+        setHolidayPopup({ context: 'pre-generate' })
+        return
+      }
+      if (summary) showToast(summary)   // ⑥ 변경 없음 요약
+      await handleGenerateForm()
+    } finally {
+      setHolidayCheckBusy(false)
     }
   }
 
@@ -661,7 +684,7 @@ function DietAutomationContent() {
   // 각 단계 active 시 실행할 액션 (조각7-3b)
   function handleWfStep(idx: number) {
     switch (idx) {
-      case 0: return handleGenerateForm()
+      case 0: return handlePrepareClick()
       case 1: return handleDownloadForm()
       case 2: return router.push('/erp/upload')
       case 3: return handleGenerate()
@@ -842,7 +865,7 @@ function DietAutomationContent() {
                 const Icon     = step.Icon
                 const canClick = !!(userRole && UPLOAD_ROLES.includes(userRole))
                 const busy =
-                  (i === 0 && formPolling) ||
+                  (i === 0 && (formPolling || holidayCheckBusy)) ||
                   (i === 1 && downloadStatus === 'downloading') ||
                   (i === 3 && isGenerating)
                 return (
@@ -875,7 +898,30 @@ function DietAutomationContent() {
                 )
               })}
             </div>
+            {/* ④ 다시 열기 진입점 — 실수로 닫거나 잘못 저장했을 때 되돌아갈 길 */}
+            <div className="text-right mt-2">
+              <button
+                type="button"
+                onClick={() => setHolidayPopup({ context: 'revisit' })}
+                className="text-[11px] text-gray-400 hover:text-[#8B1E3F] underline underline-offset-2"
+              >
+                공휴일 설정 다시 보기
+              </button>
+            </div>
           </div>
+
+          {holidayPopup && (
+            <HolidayConfirmPopup
+              year={pptxYear}
+              month={pptxMonth}
+              context={holidayPopup.context}
+              onClose={() => setHolidayPopup(null)}
+              onConfirmed={() => {
+                setHolidayPopup(null)
+                handleGenerateForm()
+              }}
+            />
+          )}
 
           {/* ── 빠른 이동 링크 (조각7-3d) ─────────────────────────────── */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-8">
