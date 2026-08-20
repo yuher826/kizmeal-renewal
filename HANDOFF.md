@@ -90,11 +90,16 @@
 
 ## ⚠️ 신규 미해결 — 오늘 발생, 운영 확정 필요
 
-- **`generate-form.yml`이 `--holiday` 없이 `gen_form.py`를 호출함**
-  (`.github/workflows/generate-form.yml:33`)
-  → ERP에서 폼 생성 시 **공휴일 지정 경로가 없음**. 아래 둘 중 하나로 확정 필요:
-  - ① ERP UI에서 공휴일을 입력받아 워크플로로 전달
-  - ② 영양사가 생성된 파일 헤더를 직접 수정
+- ~~**`generate-form.yml`이 `--holiday` 없이 `gen_form.py`를 호출함**~~
+  → **해결됨 (2026-08-20, 4단계)**. CLI 인자로 넘기는 대신 `gen_form.py`가
+  `public_holidays`를 직접 읽는다. **워크플로 수정은 필요 없었다** —
+  `generate-form.yml:31-32`가 이미 `SUPABASE_URL`/`SUPABASE_SERVICE_KEY`를
+  넘기고 있어서, 그 자격증명으로 조회만 추가하면 됐다.
+  - `closure_policy='all_closed'`인 날만 공휴일 서식 적용
+  - `'all_operating'`(노동절·제헌절 등)은 운영일로 둠
+  - 미분류(NULL)는 **적용하지 않고 경고** — 코드가 추측하면 원칙이 깨진다
+  - `--holiday`는 DB 값 위에 덮어쓰는 수동 경로로 유지(긴급·로컬 테스트)
+  - `--no-db-holiday` 플래그 신설(오프라인 테스트용)
 - **엑셀 `✏️ 입력 가이드` 시트 r65~69 공휴일 처리 안내 보완 필요**
   - 헤더에 공휴일을 **어떤 형식으로 쓰는지가 빠져 있음**
     (형식: `수  7/17` 줄바꿈 `공휴일` 줄바꿈 `(제헌절)`)
@@ -1038,11 +1043,14 @@ SQL Editor는 마지막에 열었던 프로젝트를 기억하므로, **실행 �
 2. ~~**DB 스키마 설계**~~ → **완료 (2026-08-20)**.
    `supabase/migrations/add_holiday_exceptions_260820.sql`
    → **Supabase(`kizmeal-renewal`)에서 실행 완료**, 시드 2행 확인
-3. **API 수집 코드 + diff 감지 구현** ← 다음
-4. `gen_form.py` / `generate-form.yml` 연결 방식 확정
-   (현재 `--holiday`가 워크플로에 배선 안 돼 있음 — 위 "신규 미해결" 참고)
-5. `template_resolver.py` 원별 방학양식 분기 (아래 ★ 참고)
+3. ~~**API 수집 코드 + diff 감지**~~ → **완료 (2026-08-20)**
+   `lib/holidays.ts` + `app/api/diet-automation/holidays/route.ts`
+4. ~~`gen_form.py` / `generate-form.yml` 연결~~ → **완료 (2026-08-20)**
+   `gen_form.fetch_holiday_map()`이 `public_holidays`를 읽는다.
+   워크플로 수정 불필요(자격증명이 이미 있었음)
+5. `template_resolver.py` 원별 방학양식 분기 (아래 ★ 참고) ← 다음
 6. 팝업 UI 구현 → 실물 검증
+   ⚠️ 이때 `holidays/route.ts` GET/POST 실물 확인 필요(아직 미검증)
 7. **별도 커밋**: `pptx_generator.py:49` `_HOLIDAY_OPERATING` 하드코딩 제거
    → `cfg['operates_on_holidays']` 참조로 교체(소비 지점 990/1008/1023/1034행).
    49개 원 전부에 영향 가는 파일이라 스키마 안정 확인 후 착수하기로 분리

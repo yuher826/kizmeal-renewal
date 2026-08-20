@@ -16,10 +16,21 @@
 공휴일을 칠하면 그 차이를 뭉갠다. 그래서 기본 동작에서 열 상태는 둘뿐이다:
   · 운영일        — 그 달에 존재하는 평일
   · 해당없음      — 그 달에 없는 날(주 앞뒤가 잘린 칸, 미사용 주차)
-공휴일 표시는 영양사가 3행 헤더에 '공휴일(사유)'를 직접 입력하는 것이
-진실 기준이다. 다만 공휴일 열은 행마다 상태가 달라(아래 참조) 손으로
-재현하기 어려우므로, 사람이 --holiday 로 날짜와 사유를 명시한 경우에 한해
-서식만 대신 입혀준다. 코드가 스스로 날짜를 찾아내는 일은 없다.
+공휴일 표시는 사람이 판단한 결과가 진실 기준이다. 다만 공휴일 열은 행마다
+상태가 달라(아래 참조) 손으로 재현하기 어려우므로, **사람이 이미 정해둔
+경우에 한해** 서식만 대신 입혀준다. 코드가 스스로 날짜를 찾아내는 일은 없다.
+
+그 "사람이 정해둔 것"의 입력 경로가 둘이다:
+  1) public_holidays 테이블 (기본) — ERP 팝업에서 영양기획팀이 확인·분류한
+     결과. closure_policy='all_closed'인 날만 공휴일 서식을 입힌다.
+     'all_operating'(노동절·제헌절 등 원이 정상운영하는 날)은 운영일로 둔다.
+     ⚠️ 미분류(NULL)는 **적용하지 않고 경고만** 낸다 — 코드가 어느 쪽으로든
+        추측하면 위 원칙이 깨진다. 팝업에서 분류하고 다시 생성하면 된다.
+  2) --holiday 일:사유 (수동) — DB 값 위에 덮어쓴다. 긴급 상황과 로컬
+     테스트용. DB를 못 읽어도(환경변수 없음/장애) 이 경로는 살아 있다.
+
+이 구조 덕분에 특일 정보 API 인증키를 Actions에 둘 필요가 없다. API 호출과
+팝업은 Next.js(ERP)가 맡고, 여기서는 사람 확인을 거친 결과만 읽는다.
 
 ■ 서식 템플릿 표본 (모두 기준폼 6월 데이터에서 캡처)
   · 운영일   = 각 주차 시트의 B열(월요일). 6월은 모든 월요일이 정상
@@ -149,6 +160,71 @@ def parse_holiday_args(items):
     return result
 
 
+def fetch_holiday_map(year, month):
+    """public_holidays에서 그 달의 공휴일을 읽는다.
+
+    반환: (holiday_map, unclassified, operating)
+      holiday_map  {일(int): 사유(str)}  — closure_policy='all_closed'. 서식 적용 대상
+      unclassified [(일, 이름), …]        — closure_policy IS NULL. 적용하지 않고 경고
+      operating    [(일, 이름), …]        — 'all_operating'. 운영일로 두었음을 알리는 용도
+
+    DB를 못 읽는 상황(환경변수 없음, 네트워크 장애)에서는 폼 생성 자체를
+    막지 않고 빈 결과 + 경고로 넘어간다. --holiday 수동 경로가 살아 있고,
+    영양사가 생성된 파일 헤더에 직접 입력하는 길도 남아 있기 때문.
+    """
+    url = os.getenv('SUPABASE_URL', '')
+    key = os.getenv('SUPABASE_SERVICE_KEY', '')
+    if not url or not key:
+        print('  [공휴일] SUPABASE_URL/SUPABASE_SERVICE_KEY 없음 → DB 조회 생략')
+        return {}, [], []
+
+    try:
+        from supabase_uploader import SupabaseREST   # 지연 import
+        client = SupabaseREST(url, key)
+        # SupabaseREST.select는 등가 필터만 지원하므로(gte/lte 없음) 전량 조회 후
+        # 파이썬에서 거른다. public_holidays는 연 20여 행짜리 표라 부담이 없고,
+        # PPTX 파이프라인 전체가 쓰는 공용 모듈을 건드리지 않아도 된다.
+        rows = client.select('public_holidays', 'holiday_date,name,closure_policy')
+    except Exception as exc:
+        print(f'  [공휴일] DB 조회 실패 → 공휴일 없이 진행합니다: {exc}')
+        return {}, [], []
+
+    prefix = f'{year}-{month:02d}-'
+    holiday_map, unclassified, operating = {}, [], []
+    weekend = []
+    for r in rows or []:
+        date_str = str(r.get('holiday_date') or '')
+        if not date_str.startswith(prefix):
+            continue
+        try:
+            day = int(date_str[8:10])
+        except ValueError:
+            continue
+        name   = (r.get('name') or '공휴일').strip()
+        policy = r.get('closure_policy')
+
+        # ★주말 공휴일은 폼에 칸 자체가 없다(B~F열 = 월~금).
+        #   그냥 넘기지 않고 걸러야 한다 — build_blank_form이 "평일이 아닌
+        #   날짜를 공휴일로 지정했습니다"로 예외를 던져 생성이 통째로 죽는다.
+        #   예: 2026년 광복절 8/15는 토요일(그래서 8/17 대체공휴일이 생겼다).
+        if datetime.date(year, month, day).weekday() >= 5:
+            weekend.append((day, name))
+            continue
+
+        if policy == 'all_closed':
+            holiday_map[day] = name
+        elif policy == 'all_operating':
+            operating.append((day, name))
+        else:
+            unclassified.append((day, name))
+
+    if weekend:
+        days = ', '.join(f'{month}/{d} {n}' for d, n in sorted(weekend))
+        print(f'  [공휴일] 주말이라 폼에 칸이 없어 건너뜀: {days}')
+
+    return holiday_map, sorted(unclassified), sorted(operating)
+
+
 def build_blank_form(base_path, out_path, year, month, holiday_map=None):
     """대상 월의 빈 폼을 생성한다.
 
@@ -260,15 +336,38 @@ if __name__ == '__main__':
                     help='생성 후 Supabase Storage에 업로드')
     ap.add_argument('--holiday', action='append', metavar='일:사유',
                     help='공휴일을 직접 지정 (예: --holiday 17:제헌절). '
-                         '여러 번 쓸 수 있음. 지정하지 않으면 모든 평일이 운영일.')
+                         '여러 번 쓸 수 있음. DB(public_holidays) 값 위에 덮어쓴다.')
+    ap.add_argument('--no-db-holiday', action='store_true',
+                    help='public_holidays 조회를 생략 (로컬 테스트·오프라인용)')
     args = ap.parse_args()
     y, m = args.year, args.month
 
     try:
-        holiday_map = parse_holiday_args(args.holiday)
+        cli_holidays = parse_holiday_args(args.holiday)
     except ValueError as exc:
         print(f'오류: {exc}')
         sys.exit(1)
+
+    # ── 공휴일 결정: DB(사람이 팝업에서 분류한 결과) + --holiday 덮어쓰기 ──
+    if args.no_db_holiday:
+        print('  [공휴일] --no-db-holiday → DB 조회 생략')
+        db_holidays, unclassified, operating = {}, [], []
+    else:
+        db_holidays, unclassified, operating = fetch_holiday_map(y, m)
+
+    holiday_map = dict(db_holidays)
+    holiday_map.update(cli_holidays)      # 수동 지정이 우선
+
+    if operating:
+        days = ', '.join(f'{m}/{d} {n}' for d, n in operating)
+        print(f'  [공휴일] 전 원 정상운영으로 분류되어 운영일로 둠: {days}')
+    if unclassified:
+        days = ', '.join(f'{m}/{d} {n}' for d, n in unclassified)
+        print(f'  ⚠️ [공휴일] 미분류라 서식을 적용하지 않았습니다: {days}')
+        print('     ERP 공휴일 설정에서 분류한 뒤 다시 생성하세요.')
+    overridden = sorted(set(cli_holidays) & set(db_holidays))
+    if overridden:
+        print(f'  [공휴일] --holiday 가 DB 값을 덮어썼습니다: {overridden}')
 
     HERE = os.path.dirname(os.path.abspath(__file__))
     base = os.path.join(HERE, '키즈밀_식단표_기준폼_v6.xlsx')
@@ -285,9 +384,10 @@ if __name__ == '__main__':
     print(f'  운영일 {counts["운영일"]}칸 / 공휴일 {counts["공휴일"]}칸 '
           f'/ 해당없음 {counts["해당없음"]}칸')
     if not holiday_map:
-        print('  ※ 공휴일은 자동 판정하지 않습니다. 원마다 공휴일 운영 여부가 달라')
-        print('     코드가 일괄로 정할 수 없기 때문입니다. 필요하면 --holiday 로')
-        print("     지정하거나, 생성된 파일 3행 헤더에 '공휴일(사유)'를 직접 입력하세요.")
+        print('  ※ 공휴일 서식이 적용된 칸이 없습니다. 코드는 공휴일을 스스로')
+        print('     판정하지 않습니다 — 원마다 운영 여부가 달라서입니다.')
+        print('     ERP 공휴일 설정에서 분류하거나, --holiday 로 지정하거나,')
+        print("     생성된 파일 3행 헤더에 '공휴일(사유)'를 직접 입력하세요.")
 
     if args.upload:
         public_url = upload_blank_form(out, y, m)
