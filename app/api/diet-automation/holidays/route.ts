@@ -4,10 +4,12 @@ import { UPLOAD_ROLES } from '@/lib/roles'
 import {
   fetchHolidaysFromKasi,
   diffHolidays,
+  inheritPolicy,
   monthRange,
   HolidayApiError,
   type Holiday,
   type StoredHoliday,
+  type ClosurePolicy,
 } from '@/lib/holidays'
 
 /**
@@ -94,7 +96,7 @@ export async function GET(req: NextRequest) {
   const { from, to } = monthRange(ym.year, ym.month)
   const { data: rows, error: dbErr } = await supabase
     .from('public_holidays')
-    .select('holiday_date, name, source, confirmed_at')
+    .select('holiday_date, name, source, confirmed_at, confirmed_by, closure_policy')
     .gte('holiday_date', from)
     .lte('holiday_date', to)
     .order('holiday_date')
@@ -111,26 +113,96 @@ export async function GET(req: NextRequest) {
     name: r.name as string,
     source: r.source as StoredHoliday['source'],
     confirmedAt: r.confirmed_at as string | null,
+    closurePolicy: r.closure_policy as StoredHoliday['closurePolicy'],
   }))
+
+  const diff = diffHolidays(fromApi, stored)
+
+  // 3. 분류가 필요한 공휴일에 대해 "작년엔 이렇게 하셨습니다" 제안을 만든다.
+  //    별도 정책 테이블 없이 같은 이름의 과거 행을 거슬러 올라간다
+  //    (add_holiday_closure_policy_260820.sql 설계 참고)
+  const needPolicy = Array.from(
+    new Set(
+      diff.added.map(h => h.name).concat(diff.unclassified.map(h => h.name)),
+    ),
+  )
+  const policySuggestions: Record<string, { policy: string; fromDate: string }> = {}
+
+  if (needPolicy.length > 0) {
+    const { data: hist } = await supabase
+      .from('public_holidays')
+      .select('holiday_date, name, closure_policy')
+      .in('name', needPolicy)
+      .not('closure_policy', 'is', null)
+      .lt('holiday_date', from)
+      .order('holiday_date', { ascending: false })
+
+    const byName = new Map<string, Array<{ date: string; closurePolicy: ClosurePolicy | null }>>()
+    for (const h of hist ?? []) {
+      const name = h.name as string
+      if (!byName.has(name)) byName.set(name, [])
+      byName.get(name)!.push({
+        date: h.holiday_date as string,
+        closurePolicy: h.closure_policy as ClosurePolicy | null,
+      })
+    }
+
+    for (const name of needPolicy) {
+      const found = inheritPolicy(byName.get(name) ?? [], from)
+      if (found) policySuggestions[name] = found
+    }
+  }
+
+  // 4. 마지막 확인자 이름 (⑤ 결정 이력 표시용)
+  //    confirmed_by는 admins.id → 이름을 붙여 내려준다
+  const confirmerIds = Array.from(
+    new Set((rows ?? []).map(r => r.confirmed_by).filter(Boolean) as string[]),
+  )
+  const confirmerNames: Record<string, string> = {}
+  if (confirmerIds.length > 0) {
+    const { data: admins } = await supabase
+      .from('admins').select('id, name').in('id', confirmerIds)
+    for (const a of admins ?? []) confirmerNames[a.id as string] = a.name as string
+  }
 
   return NextResponse.json({
     year: ym.year,
     month: ym.month,
     fromApi,
-    stored,
-    diff: diffHolidays(fromApi, stored),
+    stored: stored.map((s, i) => ({
+      ...s,
+      confirmedByName: confirmerNames[(rows ?? [])[i]?.confirmed_by as string] ?? null,
+    })),
+    diff,
+    policySuggestions,
   })
 }
 
 /**
  * POST /api/diet-automation/holidays
  *
- * 팝업에서 사람이 확인한 **그 달의 최종 공휴일 목록**을 저장한다.
- * 멱등 — 같은 목록을 두 번 보내도 결과가 같다.
+ * 그 달의 최종 공휴일 목록을 저장한다. 멱등 — 두 번 보내도 결과가 같다.
+ *
+ * ★mode 두 가지 (⑤ 결정 이력 ↔ ⑥ 변경없음 표시 충돌을 푸는 지점)
+ *
+ *   'confirm' (기본) — 사람이 팝업에서 확정한 경우.
+ *       confirmed_by/confirmed_at을 **갱신**하고, 목록에서 빠진 API 수집분을
+ *       삭제한다.
+ *
+ *   'sync' — diff가 없어 팝업을 띄우지 않았고, "확인했다"는 사실만 남기는 경우.
+ *       synced_at만 갱신하고 **confirmed_by/confirmed_at은 건드리지 않는다.**
+ *       이걸 구분하지 않으면, 7월에 배서영이 정한 정책이 8월에 폼 생성을 누른
+ *       정예진 이름으로 덮여서 "이거 왜 이렇게 됐지" 추적이 끊긴다.
+ *       안전을 위해 삭제도 하지 않는다(부분 목록이 와도 데이터가 날아가지 않게).
  *
  * body: {
  *   year, month,
- *   holidays: [{ date: 'YYYY-MM-DD', name: string, source?: 'kasi_api'|'manual' }]
+ *   mode?: 'confirm' | 'sync',
+ *   holidays: [{
+ *     date: 'YYYY-MM-DD', name: string,
+ *     source?: 'kasi_api' | 'manual',
+ *     closurePolicy?: 'all_closed' | 'all_operating' | null
+ *   }]
  * }
  */
 export async function POST(req: NextRequest) {
@@ -138,7 +210,7 @@ export async function POST(req: NextRequest) {
   if ('error' in auth) return auth.error
   const { supabase, adminId } = auth
 
-  let body: { year?: unknown; month?: unknown; holidays?: unknown }
+  let body: { year?: unknown; month?: unknown; holidays?: unknown; mode?: unknown }
   try {
     body = await req.json()
   } catch {
@@ -156,8 +228,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'holidays 배열이 필요합니다.' }, { status: 400 })
   }
 
+  const mode = body.mode === 'sync' ? 'sync' : 'confirm'
   const { from, to } = monthRange(ym.year, ym.month)
   const now = new Date().toISOString()
+
+  const VALID_POLICIES = ['all_closed', 'all_operating']
 
   // 입력 검증 — 날짜 형식과 해당 월 소속을 여기서 막는다.
   // (DB에는 year/month 컬럼이 없어 범위를 강제할 CHECK가 없으므로 앱이 지킨다)
@@ -176,16 +251,37 @@ export async function POST(req: NextRequest) {
         { status: 400 },
       )
     }
-    const source = raw?.source === 'manual' ? 'manual' : 'kasi_api'
-    rows.push({
+
+    // closurePolicy는 null 허용 — 팝업에서 일부를 안 정하고 저장할 수 있다.
+    // 그 경우 다음 조회에서 unclassified로 다시 잡혀 스스로 복구된다
+    const rawPolicy = raw?.closurePolicy
+    if (
+      rawPolicy != null &&
+      !VALID_POLICIES.includes(String(rawPolicy))
+    ) {
+      return NextResponse.json(
+        { error: `closurePolicy 값이 올바르지 않습니다: ${String(rawPolicy)}` },
+        { status: 400 },
+      )
+    }
+
+    const row: Record<string, unknown> = {
       holiday_date: date,
       name: String(raw?.name ?? '').trim() || '공휴일',
-      source,
+      source: raw?.source === 'manual' ? 'manual' : 'kasi_api',
+      closure_policy: rawPolicy == null ? null : String(rawPolicy),
       synced_at: now,
-      confirmed_by: adminId,
-      confirmed_at: now,
       updated_at: now,
-    })
+    }
+
+    // ★sync 모드에서는 confirmed_* 키를 아예 넣지 않는다.
+    //   upsert는 넘긴 컬럼만 UPDATE하므로, 빼면 기존 값이 그대로 보존된다.
+    if (mode === 'confirm') {
+      row.confirmed_by = adminId
+      row.confirmed_at = now
+    }
+
+    rows.push(row)
   }
 
   // 1. 확정 목록 upsert (holiday_date 유니크 기준)
@@ -205,42 +301,50 @@ export async function POST(req: NextRequest) {
   // 2. 확정 목록에서 빠진 API 수집분 삭제 (= 지정 취소된 공휴일)
   //    ★ source='manual'은 지우지 않는다 — API가 아직 안 올린 임시공휴일을
   //      사람이 넣어둔 것이라, API에 없다는 이유로 지우면 탈출구가 무의미해진다
-  const keepDates = new Set(rows.map(r => r.holiday_date as string))
-  const { data: existing, error: fetchErr } = await supabase
-    .from('public_holidays')
-    .select('holiday_date, source')
-    .gte('holiday_date', from)
-    .lte('holiday_date', to)
+  //    ★sync 모드에서는 삭제하지 않는다. sync는 "변경 없음"을 전제로 도는
+  //      자동 호출이라 삭제할 것이 원래 없고, 만에 하나 부분 목록이 오면
+  //      멀쩡한 공휴일이 날아간다. 삭제는 사람이 확정한 confirm에서만.
+  let toDelete: string[] = []
 
-  if (fetchErr) {
-    return NextResponse.json(
-      { error: `기존 공휴일 조회 중 오류: ${fetchErr.message}` },
-      { status: 500 },
-    )
-  }
-
-  const toDelete = (existing ?? [])
-    .filter(r => r.source === 'kasi_api' && !keepDates.has(r.holiday_date as string))
-    .map(r => r.holiday_date as string)
-
-  if (toDelete.length > 0) {
-    // branch_holiday_operations는 holiday_date FK ON DELETE CASCADE라
-    // 해당 날짜의 원별 결정값도 같이 정리된다
-    const { error: delErr } = await supabase
+  if (mode === 'confirm') {
+    const keepDates = new Set(rows.map(r => r.holiday_date as string))
+    const { data: existing, error: fetchErr } = await supabase
       .from('public_holidays')
-      .delete()
-      .in('holiday_date', toDelete)
+      .select('holiday_date, source')
+      .gte('holiday_date', from)
+      .lte('holiday_date', to)
 
-    if (delErr) {
+    if (fetchErr) {
       return NextResponse.json(
-        { error: `공휴일 삭제 중 오류: ${delErr.message}` },
+        { error: `기존 공휴일 조회 중 오류: ${fetchErr.message}` },
         { status: 500 },
       )
+    }
+
+    toDelete = (existing ?? [])
+      .filter(r => r.source === 'kasi_api' && !keepDates.has(r.holiday_date as string))
+      .map(r => r.holiday_date as string)
+
+    if (toDelete.length > 0) {
+      // branch_holiday_operations는 holiday_date FK ON DELETE CASCADE라
+      // 해당 날짜의 원별 결정값도 같이 정리된다
+      const { error: delErr } = await supabase
+        .from('public_holidays')
+        .delete()
+        .in('holiday_date', toDelete)
+
+      if (delErr) {
+        return NextResponse.json(
+          { error: `공휴일 삭제 중 오류: ${delErr.message}` },
+          { status: 500 },
+        )
+      }
     }
   }
 
   return NextResponse.json({
     success: true,
+    mode,
     year: ym.year,
     month: ym.month,
     saved: rows.length,

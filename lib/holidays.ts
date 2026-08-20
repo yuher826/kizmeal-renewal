@@ -37,10 +37,19 @@ export interface Holiday {
   name: string
 }
 
+/**
+ * 공휴일 자체의 기본 정책 (2단 필터 1단계)
+ *   all_closed    = 전 원 휴무 기본 → 2단계에서 원별 예외를 확인한다
+ *   all_operating = 전 원 정상운영 → 원별 확인을 생략한다
+ * null = 미분류. 코드가 추측하지 않고 사람에게 묻는다.
+ */
+export type ClosurePolicy = 'all_closed' | 'all_operating'
+
 /** DB(public_holidays)에 저장돼 있는 공휴일 한 건 */
 export interface StoredHoliday extends Holiday {
   source: 'kasi_api' | 'manual'
   confirmedAt: string | null
+  closurePolicy: ClosurePolicy | null
 }
 
 /** API 응답과 DB 저장값의 차이 */
@@ -51,10 +60,22 @@ export interface HolidayDiff {
   removed: StoredHoliday[]
   /** 날짜는 같은데 명칭이 바뀜 */
   renamed: Array<{ date: string; from: string; to: string }>
+  /**
+   * DB에 있으나 closure_policy가 아직 NULL인 것.
+   * API와 비교해 달라진 게 없어도 이게 남아 있으면 사람이 분류해야 한다.
+   */
+  unclassified: StoredHoliday[]
   /** 그대로인 건수 */
   unchangedCount: number
-  /** 셋 중 하나라도 있으면 true → 팝업을 띄운다 */
+  /** added/removed/renamed 중 하나라도 있으면 true (= API와 달라졌다) */
   hasChanges: boolean
+  /**
+   * ★팝업을 띄울지 판단하는 값. hasChanges || unclassified 있음.
+   *
+   * hasChanges만 보면 "API와 같지만 아무도 분류한 적 없는 공휴일"이 조용히
+   * 넘어가서, closure_policy가 NULL인 채로 식단 생성까지 흘러간다.
+   */
+  needsAttention: boolean
 }
 
 /** 특일정보 API 호출 실패 */
@@ -250,13 +271,46 @@ export function diffHolidays(
     db => db.source !== 'manual' && !apiByDate.has(db.date),
   )
 
+  // 삭제 예정인 것까지 "분류하라"고 물으면 혼란스러우므로 removed는 뺀다
+  const removedDates = new Set(removed.map(r => r.date))
+  const unclassified = fromDb.filter(
+    db => db.closurePolicy === null && !removedDates.has(db.date),
+  )
+
+  const hasChanges =
+    added.length > 0 || removed.length > 0 || renamed.length > 0
+
   return {
     added,
     removed,
     renamed,
+    unclassified,
     unchangedCount,
-    hasChanges: added.length > 0 || removed.length > 0 || renamed.length > 0,
+    hasChanges,
+    needsAttention: hasChanges || unclassified.length > 0,
   }
+}
+
+/**
+ * 전년도(이전) 같은 이름의 공휴일에 어떤 정책을 썼는지 찾는다.
+ *
+ * 팝업의 "작년 동일 공휴일엔 이렇게 하셨습니다" 표시와, 새 공휴일의
+ * 기본값 프리필에 함께 쓴다. 별도 정책 테이블을 두지 않고 이름으로
+ * 거슬러 올라가는 방식(add_holiday_closure_policy_260820.sql 참고).
+ *
+ * ⚠️ 선거처럼 매년 이름이 달라지는 공휴일은 매칭되지 않는다(의도된 동작).
+ *
+ * @param history 같은 name을 가진 과거 공휴일들(날짜 내림차순 권장)
+ */
+export function inheritPolicy(
+  history: Array<{ date: string; closurePolicy: ClosurePolicy | null }>,
+  before: string,
+): { policy: ClosurePolicy; fromDate: string } | null {
+  for (const h of history) {
+    if (h.date >= before) continue
+    if (h.closurePolicy) return { policy: h.closurePolicy, fromDate: h.date }
+  }
+  return null
 }
 
 /** 해당 연월의 첫날/마지막날 ('YYYY-MM-DD'). DB 날짜 범위 조회용 */
