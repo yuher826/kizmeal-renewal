@@ -3,17 +3,18 @@
 > 이 파일은 항상 **"지금 상태"만** 담는다. 매 세션 끝에 최신 상태로 덮어쓴다.
 > 과거 이력은 `git log HANDOFF.md`로 본다.
 
-**최종 갱신:** 2026-08-24 (프로덕션 공휴일 팝업 미표시 — 원인 확인
-완료: 배포 타이밍 문제, 코드 정상이었음. "신규 미해결" 항목 해결
-처리. **원별 예외 아코디언(② 단계)·방학 O/X 배정 UI(④, 착수 순서 8번)
-둘 다 구현 + 실물 검증 완료** — 원별 예외는 9월 추석 3일 실데이터로,
-방학 배정은 실데이터가 없어 SQL로 임시 시드해서 검증(검증 후 전부
-삭제, DB 원상복구 확인). 둘 다 검증 중 `setChoices` 누락 버그 계열을
-잡아 수정. **새로 발견한 미완성 지점**: 템플릿 관리 화면
-(`/erp/diet/templates`)이 업로드 시 `year`/`month`/`vacation_variant`를
-지정하지 못하는 구식 모델이라, 방학 배정 UI가 실제로 동작하려면
-그 화면부터 손봐야 함 — 다음 세션 후보. 그 외 다음 세션 우선순위:
-착수 순서 9번(`pptx_generator.py` `_HOLIDAY_OPERATING` 하드코딩 제거))
+**최종 갱신:** 2026-08-24 (원별 예외 아코디언·방학 O/X 배정 UI 둘 다
+구현+실물 검증 완료 후, 템플릿 관리 화면 착수하려다 **더 급한 문제
+2개 발견**: ① 현재 유일한 실템플릿이 `year`/`month`가 NULL이라
+`template_resolver.py` 필터에 안 걸려 실제 생성엔 영향 없음(레거시로
+라벨만 달기로 결정, 삭제 보류) ② `diet_templates` 활성 템플릿 트리거가
+테이블 전체 1개만 허용해 방학O/X 동시 active가 구조적으로 불가능
+(어제 만든 방학 배정 UI가 이 상태론 실전에서 못 돌아감). **트리거
+수정 마이그레이션 초안 작성 완료**
+(`supabase/migrations/fix_diet_templates_active_trigger_260824.sql`) —
+**아직 Supabase 미실행, 커밋 전 상태.** 다음 세션 순서: ①이 마이그레이션
+검토·실행 → ②업로드 폼에 연/월/방학O·X 선택 추가 → ③목록 UI 연월별
+그룹핑 → ④v1 레거시 라벨 표시)
 
 ---
 
@@ -1316,6 +1317,52 @@ dev`가 내부에서 spawn한 자식 `node.exe` 프로세스가 살아남는 경
 9. **별도 커밋**: `pptx_generator.py:49` `_HOLIDAY_OPERATING` 하드코딩 제거
    → `cfg['operates_on_holidays']` 참조로 교체(소비 지점 990/1008/1023/1034행).
    49개 원 전부에 영향 가는 파일이라 스키마 안정 확인 후 착수하기로 분리
+
+### 템플릿 관리 화면(year/month/vacation_variant 업로드 UI) 착수 전 조사 — 2026-08-24
+
+**아직 코드 변경 없음. SQL 마이그레이션 초안만 작성, 실행은 다음 세션으로 미룸(유대표 결정).**
+
+착수하려고 `/erp/diet/templates` + `template_resolver.py`를 대조하다가
+당초 알려진 것보다 범위가 큰 문제 2개를 발견함:
+
+- **★신규 발견 — 지금 "활성 템플릿"이 실제 PPTX 생성에 전혀 영향이 없음.**
+  DB에 유일하게 존재하는 실템플릿(v1 `2026년6월식단표폼`, `is_active=true`)의
+  `year`·`month`가 **둘 다 NULL**. `template_resolver.py`의
+  `resolve_template_set()`은 항상 구체적 `year`/`month`로 필터링해서
+  조회하는데(`filters={'is_active':'true','year':year,'month':month}`),
+  NULL은 어떤 구체값과도 매칭이 안 됨 → **v1을 "활성화"해도 파이프라인은
+  항상 로컬 6월 폴백(`TEMPLATE_PATH`)만 씀.** 8/11 기록된 "발견①(폴백이
+  문지기를 무력화)"과는 다른 원인(그땐 검증 실패, 지금은 필터 자체가
+  안 맞음)이지만 결과는 동일 — 디자이너 업로드본이 여전히 실사용 안 됨.
+  → **결정(유대표, 2026-08-24)**: v1은 그대로 두고 삭제 판단 보류.
+  화면에 **"레거시(효과없음)"** 라벨만 표시하기로 확정. 다음 세션
+  업로드 UI 작업 범위에 이 라벨 표시를 포함할 것.
+- **트리거 충돌 — 방학 O/X 동시 active가 구조적으로 불가능함.**
+  `diet_template_tables.sql`의 `ensure_single_active_template` 트리거가
+  `WHERE id != NEW.id`로 **테이블 전체에서 무조건 1개만** active를 허용.
+  `template_resolver.py`는 "같은 (year,month) 안에서 vacation_variant별로
+  여러 개 동시 active"를 전제로 설계돼 있어(5단계, HANDOFF 참고) —
+  방학O 활성화 시 같은 달 방학X가 트리거에 의해 자동으로 꺼짐.
+  **이 트리거를 안 고치면 어제 만든 방학 O/X 배정 UI(8번)가 실전에서
+  못 돌아간다.**
+  → **초안 작성 완료, 실행은 다음 세션**:
+  `supabase/migrations/fix_diet_templates_active_trigger_260824.sql`
+  — 트리거 함수를 "같은 `(year, month, vacation_variant)` 조합 안에서만
+  단일 active"로 좁힘. `IS NOT DISTINCT FROM`으로 NULL(레거시 행)끼리는
+  기존처럼 "통틀어 1개만" 동작을 그대로 보존, year/month가 채워진 새
+  행들만 그 값 기준으로 정확히 묶이게 함
+  - ⚠️ **레포에 있다 ≠ DB에 반영됐다** — 이 파일은 초안이며 **아직
+    Supabase에 실행하지 않았다.** 다음 세션에 검토 후 SQL Editor에서
+    실행할 것(프로젝트 `kizmeal-renewal`, 위 "반복 함정" 항목 확인).
+    실행 완료되면 이 항목에 "→ Supabase에서 실행 완료" 추가할 것
+- **다음 세션 순서**: ① 위 트리거 마이그레이션 실행·확인 → ② 업로드
+  폼에 연도(`getYearOptions()` 재사용)·월·방학O/X/무관 선택 추가 →
+  ③ 목록 UI를 연월별로 그룹핑(현재는 "활성 1개 vs 나머지" 이분법이라
+  여러 달·variant가 동시에 active인 새 모델을 못 담음) → ④ v1에
+  "레거시(효과없음)" 라벨 표시
+- **이번엔 범위에 안 넣기로 한 것**: `group_tag`(원 계열별 템플릿) 축.
+  `resolve_template_set()`이 아직 이 컬럼을 안 읽어서(dead column,
+  향후 확장용으로 추정) 이번 작업과 무관 — 손대지 않음
 
 ⚠️ **모델**: 스키마·데이터모델 설계 단계는 **Opus**, 확정 후 구현은 Sonnet 복귀.
 
