@@ -5,10 +5,15 @@
 
 **최종 갱신:** 2026-08-24 (프로덕션 공휴일 팝업 미표시 — 원인 확인
 완료: 배포 타이밍 문제, 코드 정상이었음. "신규 미해결" 항목 해결
-처리. **원별 예외 아코디언(② 단계) 구현 + 실물 검증 완료** — 9월
-추석 3일 실데이터로 검증하다 프리필 그룹 분류 버그(`setChoices`
-누락) 하나를 잡아 수정, 재검증 통과, DB 147건 대조까지 완료 후 커밋.
-다음 세션 우선순위: 방학 O/X 배정 UI(착수 순서 8번))
+처리. **원별 예외 아코디언(② 단계)·방학 O/X 배정 UI(④, 착수 순서 8번)
+둘 다 구현 + 실물 검증 완료** — 원별 예외는 9월 추석 3일 실데이터로,
+방학 배정은 실데이터가 없어 SQL로 임시 시드해서 검증(검증 후 전부
+삭제, DB 원상복구 확인). 둘 다 검증 중 `setChoices` 누락 버그 계열을
+잡아 수정. **새로 발견한 미완성 지점**: 템플릿 관리 화면
+(`/erp/diet/templates`)이 업로드 시 `year`/`month`/`vacation_variant`를
+지정하지 못하는 구식 모델이라, 방학 배정 UI가 실제로 동작하려면
+그 화면부터 손봐야 함 — 다음 세션 후보. 그 외 다음 세션 우선순위:
+착수 순서 9번(`pptx_generator.py` `_HOLIDAY_OPERATING` 하드코딩 제거))
 
 ---
 
@@ -1251,9 +1256,63 @@ dev`가 내부에서 spawn한 자식 `node.exe` 프로세스가 살아남는 경
        - 임시계약 원(크레오 3곳·테스트P)이 저장에 섞인 행 **0건** —
          `filterEligibleBranches()` 필터가 저장 경로에서도 정확히 작동
      - 화면 표시값 = DB 저장값 = 기대값, 세 축 전부 일치 확인하고 커밋함
-8. 방학 O/X 배정 UI — 미착수. 지금은 `branch_monthly_vacation`에 행이
-   없어 전 원이 "방학X"로 처리된다(경고는 찍힘, `template_resolver.py` 5단계
-   완료로 이미 안전하게 폴백함)
+8. ~~**방학 O/X 배정 UI**~~ → **구현 + 실물 검증 완료 (2026-08-24)**.
+   - **판정 신호 확인 — 착수 전 DB 조사에서 예상 밖 사실 발견**: 원래
+     설계된 판정 신호인 `diet_templates.year`/`month`/`vacation_variant`가
+     **DB에 전혀 채워져 있지 않음**(전부 0행). 템플릿 관리 화면
+     (`/erp/diet/templates`, `app/api/board/diet/templates/route.ts`)이
+     아직 "전역 active 템플릿 1개" 구식 모델이라 업로드 시 이 세 컬럼을
+     지정하는 UI 자체가 없다 — **별개 미완성 작업**(이 항목 범위 밖으로 확정).
+   - 그래도 **판정은 달을 하드코딩(7·8월, 12·1월 등)하지 않고
+     `diet_templates.vacation_variant IN ('vacation_on','vacation_off')`
+     존재 여부로 동적으로 감**(CLAUDE.md 원칙 + `closure_policy` 설계와
+     같은 "사람이 표시 → 코드가 읽는다" 원칙 유지). 지금은 실데이터가
+     없어 이 팝업이 항상 스킵되지만, 위 미완성 작업이 채워지는 순간
+     코드 수정 없이 바로 동작한다
+   - API: `app/api/diet-automation/vacation/route.ts` (GET=판정+조회,
+     POST=저장). 저장 대상 `branch_monthly_vacation`, `source='manual'`
+   - 프리필 우선순위: 이번 라운드 결정값 > **전년도 동일 월**(year-1, 같은
+     month)의 그 원 결정(승계 — 공휴일과 달리 "이름" 매칭이 필요 없음,
+     방학엔 이름이 없고 학기 단위로 고정된다는 전제) > 기본값
+     `has_vacation=false`(방학X). `branch_profiles`엔 방학 기본정책
+     컬럼이 없어서, 기본값을 `template_resolver.py`가 미배정 원을
+     방학X로 보수 처리하는 것과 **의도적으로 일치**시켜 UI·파이프라인
+     불일치를 방지함
+   - 아코디언: 오늘 만든 원별 공휴일 예외 화면과 대칭 — "방학O 배정"
+     (기본 펼침) / "방학X 배정"(기본 접힘) 2그룹. 대상 원은 동일하게
+     `filterEligibleBranches()`(임시계약 제외)
+   - 새 컴포넌트: `app/erp/(protected)/diet/VacationAssignmentPopup.tsx`
+     + `checkVacationAssignmentNeeded()`. `page.tsx`의
+     `proceedToFormGeneration()` 뒤에 3번째 게이트 `proceedToVacationCheck()`
+     로 연결(공휴일 분류① → 원별 예외② → 방학 배정④ → 폼 생성). "방학
+     배정 확인" 다시보기 링크도 신설
+   - **★state 초기화 버그 재발 방지**: 오늘 오전 원별 예외 화면에서
+     `setChoices(initChoices)` 호출 누락으로 난 버그를 교훈 삼아, 이번엔
+     `load()`에서 `initChoices` 계산 직후 바로 `setChoices()`를 호출하고
+     그 옆에 재발 방지 주석까지 남김. 코드 작성 후 실제로 이 줄이
+     있는지 `grep`으로 직접 확인하고서야 검증 단계로 넘어감
+   - **실물 검증(2026-08-24, 2026년 8월 — SQL로 임시 시드 후 검증, 검증
+     끝나고 전부 삭제)**: DB에 실데이터가 없어 9월 공휴일 때처럼 기존
+     데이터로 검증할 수 없었음. `diet_templates`에 2026-08 방학O/X
+     테스트 행 2개(가짜 `file_path`) + `branch_monthly_vacation`에
+     **2025-08**(전년도) 시드 2행(강동E=방학O, 목동E=방학X, 승계 로직
+     검증용으로 임의 지정) 삽입 → 화면에서 "방학O 배정 (1개)=강동E
+     (작년 승계 라벨)" / "방학X 배정 (48개)=목동E(작년 승계)+나머지
+     47개(기본값)" 정상 확인 → 저장 → DB 대조 결과 `branch_monthly_vacation`
+     2026-08에 정확히 49건, 전부 `source='manual'`, `decided_by`/`at`
+     빠짐없음, `has_vacation=true`는 정확히 1건(강동E) 확인, 임시계약
+     원 섞임 0건
+   - **테스트 데이터 전부 삭제 완료** — `diet_templates` 테스트 2행,
+     `branch_monthly_vacation` 2025-08 시드 2행 + 2026-08 저장분 49건
+     전부 삭제. 삭제 후 재조회로 `diet_templates`는 원래 실템플릿 1건만,
+     `branch_monthly_vacation`은 0행으로 원상복구 확인
+     - **왜 저장된 49건까지 지웠는지**(사용자 질문·확인 거쳐 진행) — 9월
+       공휴일 검증과 달리, 이번엔 트리거 신호(가짜 템플릿)도 승계 근거
+       (가짜 2025-08 시드)도 전부 검증용으로 지어낸 것이라 저장
+       메커니즘은 실물 검증됐어도 **값 자체는 실데이터가 아님**. 특히
+       강동E=방학O로 남겨두면, 나중에 진짜 8월 방학O/X 템플릿이 올라와도
+       프리필 우선순위 1번(이번 라운드 기존 결정값)이 이 가짜 `manual`
+       행을 최우선으로 읽어 **엉뚱한 서식이 붙는** 실제 위험이 있었음
 9. **별도 커밋**: `pptx_generator.py:49` `_HOLIDAY_OPERATING` 하드코딩 제거
    → `cfg['operates_on_holidays']` 참조로 교체(소비 지점 990/1008/1023/1034행).
    49개 원 전부에 영향 가는 파일이라 스키마 안정 확인 후 착수하기로 분리

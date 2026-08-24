@@ -15,6 +15,7 @@ import DietNotificationPanel, { type DietNotification } from '@/components/board
 import BranchProfileAlert from '@/components/erp/BranchProfileAlert'
 import HolidayConfirmPopup, { checkHolidaysBeforeGenerate } from './HolidayConfirmPopup'
 import BranchHolidayExceptionPopup, { checkBranchExceptionsNeeded } from './BranchHolidayExceptionPopup'
+import VacationAssignmentPopup, { checkVacationAssignmentNeeded } from './VacationAssignmentPopup'
 import { UPLOAD_ROLES, ROLES } from '@/lib/roles'
 import { getYearOptions } from '@/lib/diet-utils'
 
@@ -134,6 +135,9 @@ function DietAutomationContent() {
   // 원별 공휴일 예외 팝업(② 아코디언) — HolidayConfirmPopup에서 '전 원 휴무'로
   // 분류한 날짜가 있을 때만 연다. 마찬가지로 context로 다음 동작이 갈린다
   const [branchExceptionPopup, setBranchExceptionPopup] =
+    useState<{ context: 'pre-generate' | 'revisit' } | null>(null)
+  // 원별 방학 양식(O/X) 배정 팝업(④) — 이 연월에 방학O/X 템플릿이 있을 때만 연다
+  const [vacationPopup, setVacationPopup] =
     useState<{ context: 'pre-generate' | 'revisit' } | null>(null)
   const [downloadStatus, setDownloadStatus] = useState<'idle'|'downloading'|'error'>('idle')
   const [genError,   setGenError]   = useState<string | null>(null)
@@ -350,13 +354,26 @@ function DietAutomationContent() {
   }
 
   // ── 원별 공휴일 예외 확인(② 아코디언) 게이트 ────────────────────────
-  // 공휴일 분류(①)가 끝난 뒤 항상 이 함수를 거쳐 폼 생성으로 간다.
-  // '전 원 휴무' 대상 날짜가 있을 때만 팝업을 열고, 없으면 곧바로 진행한다
+  // 공휴일 분류(①)가 끝난 뒤 항상 이 함수를 거쳐 방학 배정 게이트로 간다.
+  // '전 원 휴무' 대상 날짜가 있을 때만 팝업을 열고, 없으면 곧바로 다음 게이트로
   // — 대부분의 달은 대상이 없어 조용히 통과되는 게 정상 동작이다.
   async function proceedToFormGeneration() {
     const needsBranchCheck = await checkBranchExceptionsNeeded(pptxYear, pptxMonth)
     if (needsBranchCheck) {
       setBranchExceptionPopup({ context: 'pre-generate' })
+      return
+    }
+    await proceedToVacationCheck()
+  }
+
+  // ── 원별 방학 양식(O/X) 배정(④) 게이트 ──────────────────────────────
+  // 원별 공휴일 예외 확인이 끝난 뒤 항상 이 함수를 거쳐 폼 생성으로 간다.
+  // 이 연월에 방학O/X 템플릿이 있을 때만 팝업을 열고, 없으면 곧바로 진행한다
+  // — 방학 양식 자체가 없는 달(대부분)은 조용히 통과되는 게 정상 동작이다.
+  async function proceedToVacationCheck() {
+    const needsVacationCheck = await checkVacationAssignmentNeeded(pptxYear, pptxMonth)
+    if (needsVacationCheck) {
+      setVacationPopup({ context: 'pre-generate' })
       return
     }
     await handleGenerateForm()
@@ -921,8 +938,15 @@ function DietAutomationContent() {
               })}
             </div>
             {/* ④ 다시 열기 진입점 — 실수로 닫거나 잘못 저장했을 때 되돌아갈 길.
-                공휴일 분류(①)와 원별 예외(②)는 별개 화면이라 진입점도 각각 둔다 */}
+                공휴일 분류(①)·원별 예외(②)·방학 배정(④)은 별개 화면이라 진입점도 각각 둔다 */}
             <div className="text-right mt-2 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setVacationPopup({ context: 'revisit' })}
+                className="text-[11px] text-gray-400 hover:text-[#8B1E3F] underline underline-offset-2"
+              >
+                방학 배정 확인
+              </button>
               <button
                 type="button"
                 onClick={() => setBranchExceptionPopup({ context: 'revisit' })}
@@ -961,7 +985,20 @@ function DietAutomationContent() {
               onClose={() => setBranchExceptionPopup(null)}
               onDone={() => {
                 setBranchExceptionPopup(null)
-                if (branchExceptionPopup.context === 'pre-generate') handleGenerateForm()
+                if (branchExceptionPopup.context === 'pre-generate') proceedToVacationCheck()
+              }}
+            />
+          )}
+
+          {vacationPopup && (
+            <VacationAssignmentPopup
+              year={pptxYear}
+              month={pptxMonth}
+              context={vacationPopup.context}
+              onClose={() => setVacationPopup(null)}
+              onDone={() => {
+                setVacationPopup(null)
+                if (vacationPopup.context === 'pre-generate') handleGenerateForm()
               }}
             />
           )}
