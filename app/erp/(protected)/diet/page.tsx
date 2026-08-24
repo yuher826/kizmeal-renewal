@@ -14,6 +14,7 @@ import { createClient } from '@/lib/supabase'
 import DietNotificationPanel, { type DietNotification } from '@/components/board/DietNotificationPanel'
 import BranchProfileAlert from '@/components/erp/BranchProfileAlert'
 import HolidayConfirmPopup, { checkHolidaysBeforeGenerate } from './HolidayConfirmPopup'
+import BranchHolidayExceptionPopup, { checkBranchExceptionsNeeded } from './BranchHolidayExceptionPopup'
 import { UPLOAD_ROLES, ROLES } from '@/lib/roles'
 import { getYearOptions } from '@/lib/diet-utils'
 
@@ -130,6 +131,10 @@ function DietAutomationContent() {
   // 공휴일 확인 팝업 — null이면 닫힘. context로 저장 후 동작(다음 단계 진행 vs 그냥 닫기)이 갈린다
   const [holidayPopup, setHolidayPopup] = useState<{ context: 'pre-generate' | 'revisit' } | null>(null)
   const [holidayCheckBusy, setHolidayCheckBusy] = useState(false)
+  // 원별 공휴일 예외 팝업(② 아코디언) — HolidayConfirmPopup에서 '전 원 휴무'로
+  // 분류한 날짜가 있을 때만 연다. 마찬가지로 context로 다음 동작이 갈린다
+  const [branchExceptionPopup, setBranchExceptionPopup] =
+    useState<{ context: 'pre-generate' | 'revisit' } | null>(null)
   const [downloadStatus, setDownloadStatus] = useState<'idle'|'downloading'|'error'>('idle')
   const [genError,   setGenError]   = useState<string | null>(null)
   const [genResults, setGenResults] = useState<GenerationResults | null>(null)
@@ -338,10 +343,23 @@ function DietAutomationContent() {
       // 설계와 동일) — alert로 확실히 눈에 띄게 한 뒤 계속 진행
       if (error) alert(`⚠️ ${error}`)
       else if (summary) showToast(summary)   // ⑥ 변경 없음 요약
-      await handleGenerateForm()
+      await proceedToFormGeneration()
     } finally {
       setHolidayCheckBusy(false)
     }
+  }
+
+  // ── 원별 공휴일 예외 확인(② 아코디언) 게이트 ────────────────────────
+  // 공휴일 분류(①)가 끝난 뒤 항상 이 함수를 거쳐 폼 생성으로 간다.
+  // '전 원 휴무' 대상 날짜가 있을 때만 팝업을 열고, 없으면 곧바로 진행한다
+  // — 대부분의 달은 대상이 없어 조용히 통과되는 게 정상 동작이다.
+  async function proceedToFormGeneration() {
+    const needsBranchCheck = await checkBranchExceptionsNeeded(pptxYear, pptxMonth)
+    if (needsBranchCheck) {
+      setBranchExceptionPopup({ context: 'pre-generate' })
+      return
+    }
+    await handleGenerateForm()
   }
 
   // ── 빈 폼 생성 (GitHub Actions 트리거) ─────────────────────────────
@@ -902,8 +920,16 @@ function DietAutomationContent() {
                 )
               })}
             </div>
-            {/* ④ 다시 열기 진입점 — 실수로 닫거나 잘못 저장했을 때 되돌아갈 길 */}
-            <div className="text-right mt-2">
+            {/* ④ 다시 열기 진입점 — 실수로 닫거나 잘못 저장했을 때 되돌아갈 길.
+                공휴일 분류(①)와 원별 예외(②)는 별개 화면이라 진입점도 각각 둔다 */}
+            <div className="text-right mt-2 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setBranchExceptionPopup({ context: 'revisit' })}
+                className="text-[11px] text-gray-400 hover:text-[#8B1E3F] underline underline-offset-2"
+              >
+                원별 예외 확인
+              </button>
               <button
                 type="button"
                 onClick={() => setHolidayPopup({ context: 'revisit' })}
@@ -922,7 +948,20 @@ function DietAutomationContent() {
               onClose={() => setHolidayPopup(null)}
               onConfirmed={() => {
                 setHolidayPopup(null)
-                handleGenerateForm()
+                proceedToFormGeneration()
+              }}
+            />
+          )}
+
+          {branchExceptionPopup && (
+            <BranchHolidayExceptionPopup
+              year={pptxYear}
+              month={pptxMonth}
+              context={branchExceptionPopup.context}
+              onClose={() => setBranchExceptionPopup(null)}
+              onDone={() => {
+                setBranchExceptionPopup(null)
+                if (branchExceptionPopup.context === 'pre-generate') handleGenerateForm()
               }}
             />
           )}
