@@ -3,18 +3,16 @@
 > 이 파일은 항상 **"지금 상태"만** 담는다. 매 세션 끝에 최신 상태로 덮어쓴다.
 > 과거 이력은 `git log HANDOFF.md`로 본다.
 
-**최종 갱신:** 2026-08-24 (원별 예외 아코디언·방학 O/X 배정 UI 둘 다
-구현+실물 검증 완료 후, 템플릿 관리 화면 착수하려다 **더 급한 문제
-2개 발견**: ① 현재 유일한 실템플릿이 `year`/`month`가 NULL이라
-`template_resolver.py` 필터에 안 걸려 실제 생성엔 영향 없음(레거시로
-라벨만 달기로 결정, 삭제 보류) ② `diet_templates` 활성 템플릿 트리거가
-테이블 전체 1개만 허용해 방학O/X 동시 active가 구조적으로 불가능
-(어제 만든 방학 배정 UI가 이 상태론 실전에서 못 돌아감). **트리거
-수정 마이그레이션 초안 작성 완료**
-(`supabase/migrations/fix_diet_templates_active_trigger_260824.sql`) —
-**아직 Supabase 미실행, 커밋 전 상태.** 다음 세션 순서: ①이 마이그레이션
-검토·실행 → ②업로드 폼에 연/월/방학O·X 선택 추가 → ③목록 UI 연월별
-그룹핑 → ④v1 레거시 라벨 표시)
+**최종 갱신:** 2026-08-25 (`diet_templates` 활성 템플릿 트리거 마이그레이션
+**검토·보완·실행·실물검증 전부 완료**. 초안(8/24) 대비 추가된 것: `org_id`
+축 신설(멀티테넌시 대비, 조직 2개 이상일 때 서로의 템플릿을 꺼버리는 사고
+예방), `SET search_path = public`(Supabase 린터 대응). "단일 active" 범위를
+테이블 전체 → `(org_id, year, month, vacation_variant)` 조합으로 축소해
+방학O/X 동시 active가 이제 가능함 — 2099년 샌드박스로 시나리오 4종
+실물 검증 후 원상복구 완료. 같은 날 `year`/`month` 반쪽 채움을 막는 CHECK
+제약(`diet_templates_year_month_pair`)도 실행 완료. 다음 세션 순서:
+①업로드 폼에 연/월/방학O·X 선택 추가 → ②목록 UI 연월별 그룹핑 →
+③v1에 "레거시(효과없음)" 라벨 표시)
 
 ---
 
@@ -1019,6 +1017,29 @@ SQL Editor는 마지막에 열었던 프로젝트를 기억하므로, **실행 �
 
 ---
 
+## ⚠️ 반복 함정 — DB에 있는 컬럼이 레포 DDL엔 없을 수 있다
+
+2026-08-25 확인: `diet_templates` 실제 컬럼 15개 중 **5개**
+(`year`, `month`, `group_tag`, `validation_result`, `org_id`)가
+레포 어느 마이그레이션 파일에도 ADD COLUMN 기록이 없다.
+- 원본 `diet_template_tables.sql` → 9개 컬럼만 정의
+- `add_holiday_exceptions_260820.sql` → `vacation_variant` 하나만 추가
+
+기존 함정("레포에 SQL 파일이 있다 ≠ 실제 DB에 있다")의 **정반대 방향**이다.
+스키마를 레포만 보고 판단하면 없는 컬럼을 참조하는 코드를 쓰거나(런타임
+에러), 반대로 있는 컬럼을 못 보고 지나친다(오늘 `org_id`가 그럴 뻔했다).
+
+→ 스키마 관련 작업 전에는 반드시 DB를 직접 조회할 것:
+   ```sql
+   SELECT column_name, data_type, is_nullable, column_default
+     FROM information_schema.columns
+    WHERE table_name = '...' ORDER BY ordinal_position;
+   ```
+   ※ 결과가 15행이면 화면에 다 안 보일 수 있다. 스크롤하거나
+     `column_name IN (...)` 으로 좁혀서 볼 것.
+
+---
+
 ## ⚠️ 반복 함정 — sync/confirm처럼 "일부 컬럼만 갱신"은 upsert row 공유 금지
 
 **2026-08-20, `holidays/route.ts` 실물 검증 중 실제로 재현된 사고.**
@@ -1320,7 +1341,8 @@ dev`가 내부에서 spawn한 자식 `node.exe` 프로세스가 살아남는 경
 
 ### 템플릿 관리 화면(year/month/vacation_variant 업로드 UI) 착수 전 조사 — 2026-08-24
 
-**아직 코드 변경 없음. SQL 마이그레이션 초안만 작성, 실행은 다음 세션으로 미룸(유대표 결정).**
+**코드 변경 없음(의도된 범위 — 이번 조사는 스키마·트리거 정비까지만).
+SQL 마이그레이션은 2026-08-25에 검토·보완·실행·실물검증 전부 완료.**
 
 착수하려고 `/erp/diet/templates` + `template_resolver.py`를 대조하다가
 당초 알려진 것보다 범위가 큰 문제 2개를 발견함:
@@ -1345,21 +1367,39 @@ dev`가 내부에서 spawn한 자식 `node.exe` 프로세스가 살아남는 경
   방학O 활성화 시 같은 달 방학X가 트리거에 의해 자동으로 꺼짐.
   **이 트리거를 안 고치면 어제 만든 방학 O/X 배정 UI(8번)가 실전에서
   못 돌아간다.**
-  → **초안 작성 완료, 실행은 다음 세션**:
-  `supabase/migrations/fix_diet_templates_active_trigger_260824.sql`
+  → **초안 작성**: `supabase/migrations/fix_diet_templates_active_trigger_260824.sql`
   — 트리거 함수를 "같은 `(year, month, vacation_variant)` 조합 안에서만
   단일 active"로 좁힘. `IS NOT DISTINCT FROM`으로 NULL(레거시 행)끼리는
   기존처럼 "통틀어 1개만" 동작을 그대로 보존, year/month가 채워진 새
   행들만 그 값 기준으로 정확히 묶이게 함
-  - ⚠️ **레포에 있다 ≠ DB에 반영됐다** — 이 파일은 초안이며 **아직
-    Supabase에 실행하지 않았다.** 다음 세션에 검토 후 SQL Editor에서
-    실행할 것(프로젝트 `kizmeal-renewal`, 위 "반복 함정" 항목 확인).
-    실행 완료되면 이 항목에 "→ Supabase에서 실행 완료" 추가할 것
-- **다음 세션 순서**: ① 위 트리거 마이그레이션 실행·확인 → ② 업로드
-  폼에 연도(`getYearOptions()` 재사용)·월·방학O/X/무관 선택 추가 →
-  ③ 목록 UI를 연월별로 그룹핑(현재는 "활성 1개 vs 나머지" 이분법이라
-  여러 달·variant가 동시에 active인 새 모델을 못 담음) → ④ v1에
-  "레거시(효과없음)" 라벨 표시
+  → **Supabase에서 실행 완료 (2026-08-25)**. 검토 중 초안 대비 `org_id`
+  축(멀티테넌시 대비)과 `SET search_path = public`(린터 대응)을 추가했다.
+  검증 스크립트: `supabase/migrations/verify_diet_templates_trigger_260825.sql`
+  - **검증 결과 요약(2099년 샌드박스, 전부 ✅)**:
+    1) 같은 달 방학O·방학X 동시 active 공존 확인(핵심 목적 달성)
+    2) 같은 (연,월,variant) 안에서는 여전히 단일 active(방학O만 교체,
+       방학X 무변동)
+    3) UPDATE 경로도 INSERT와 동일하게 동작(껐다 켜도 옆 variant 무변동)
+    4) 다른 달끼리 비간섭(2099-11이 2099-12에 영향 없음)
+    5) 레거시(year/month NULL) 그룹은 종전대로 "통틀어 1개만" 동작 보존
+    6) 정리 후 원상복구 스냅샷 일치, 잔여 테스트행 0
+  - 같은 날 `diet_templates_year_month_pair` CHECK 제약도 실행 완료
+    (`supabase/migrations/add_diet_templates_year_month_pair_check_260825.sql`)
+    — year/month 반쪽 채움 방어
+- **다음 세션 순서**: ① 업로드 폼에 연도(`getYearOptions()` 재사용)·
+  월·방학O/X/무관 선택 추가 → ② 목록 UI를 연월별로 그룹핑(현재는
+  "활성 1개 vs 나머지" 이분법이라 여러 달·variant가 동시에 active인 새
+  모델을 못 담음) → ③ v1에 "레거시(효과없음)" 라벨 표시
+  - **코드 변경은 지금 당장 불필요** — 트리거 범위가 넓어졌지만 현재
+    실템플릿이 v1(NULL/NULL) 1건뿐이고 레거시 그룹은 종전대로 단일
+    active가 유지되므로 기존 UI 동작에 변화 없음. 목록 UI의 "활성 1개
+    vs 나머지" 이분법은 여러 달·variant가 동시에 active가 되는
+    **다음 작업(①②)에서** 깨진다.
+  - 업로드 폼은 **연·월을 반드시 함께** 저장해야 한다. 한쪽만 채우면
+    `diet_templates_year_month_pair` CHECK에 걸려 INSERT가 거부된다
+    (의도된 동작).
+  - `group_tag`를 나중에 실제로 살릴 때는 **트리거도 함께 수정**해야
+    한다. 안 그러면 계열별 템플릿이 서로를 꺼버린다.
 - **이번엔 범위에 안 넣기로 한 것**: `group_tag`(원 계열별 템플릿) 축.
   `resolve_template_set()`이 아직 이 컬럼을 안 읽어서(dead column,
   향후 확장용으로 추정) 이번 작업과 무관 — 손대지 않음
