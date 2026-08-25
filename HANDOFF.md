@@ -19,6 +19,78 @@
 
 ---
 
+## ⚠️ 미해결 — RLS 미적용 2건 (2026-08-25 발견) — ★다음 세션 최우선
+
+### 1. 사실관계
+
+- `pg_tables` 조회 결과 public 스키마 52개 테이블 중 `rowsecurity=false`가
+  정확히 2개: **`admins`, `diet_review_items`.** 나머지 50개는 `true`
+- 두 테이블 모두 정책은 존재한다. `ENABLE ROW LEVEL SECURITY`만 빠진
+  상태 → 정책이 붙어 있어도 RLS가 꺼져 있으면 전부 무시된다
+- `admins`는 직원 계정 테이블(이메일·role·auth_id)이고, 모든 ERP API가
+  이 테이블로 권한을 확인한다. anon 키는 브라우저 번들에 노출되므로
+  실질적으로 무방비다
+- ※ 조사 초기에 `branches`/`diet_templates`도 anon으로 읽힌다고 봤으나,
+  `pg_tables` 확인 결과 둘 다 `rowsecurity=true`였다. RLS는 켜져 있고
+  정책이 관대한 것으로 보인다 — 별개 사안으로 분리
+
+### 2. ★켜기 전에 반드시 해결해야 할 것 3가지 (그냥 켜면 프로덕션 정지)
+
+- **a) `admins_super_admin_all`이 재귀다** —
+  `USING (EXISTS (SELECT 1 FROM admins admins_1 WHERE admins_1.auth_id = auth.uid() ...))`
+  `admins` 정책 안에서 `admins`를 읽는다. RLS 켜면
+  `"infinite recursion detected in policy"`로 모든 ERP API가 즉시 죽는다
+- **b) `is_admin()` 함수 본문 미확인** —
+  `admins_select_all_admins`가 이 함수를 쓴다. 함수가 내부에서 `admins`를
+  읽고 `SECURITY DEFINER`가 아니면 이것도 재귀다. 확인 필요
+- **c) `diet_review_items`의 `admins_all` 정책에 컬럼 오류** —
+  `WHERE admins.id = auth.uid()`인데 다른 정책들은 전부
+  `auth_id = auth.uid()`다. `admins.id`는 테이블 PK, `auth_id`가 인증
+  ID. 켜는 순간 아무도 매칭 안 돼 식단 검토 화면이 빈 화면이 된다
+
+### 3. 안전한 적용 절차 (다음 세션)
+
+1. `is_admin()` 본문 확인(`pg_get_functiondef`)
+2. 재귀 회피 방식 결정 — `SECURITY DEFINER` 헬퍼 함수로 감싸는 것이 정석
+3. `diet_review_items` 정책의 `id` → `auth_id` 수정
+4. `BEGIN; ALTER TABLE ... ENABLE RLS; SET LOCAL role authenticated;
+   SET LOCAL request.jwt.claims=...; SELECT count(*) ...; ROLLBACK;`
+   로 트랜잭션 안에서 시험(`ROLLBACK`이라 DB에 안 남음)
+5. 시험 통과 후 실제 적용 + 즉시 실물 확인(로그인/식단검토 화면)
+6. 되돌리기: `ALTER TABLE ... DISABLE ROW LEVEL SECURITY`
+
+### 4. 우선순위 판단
+
+급하지 않다(이 상태가 이미 오래 지속됨). 다만 `admins` 노출은 직원 정보라
+**다음 세션 최우선 과제로 둘 것.** 시간이 충분한 세션에 착수할 것 —
+잘못 켜면 전원 로그인 불가가 된다.
+
+---
+
+## ⚠️ 미해결 — ERP director 권한 갭 (같은 조사에서 발견, 2026-08-25)
+
+- ERP 메뉴 8개 중 `allowedRoles`가 있는 건 "관리자 관리" 1개뿐
+- `layout.tsx`는 `is_active` + `access_scope`만 보고 `role`은 안 봄
+- API 다수가 `admins.is_active`만 확인하고 `role` 컬럼을 select조차 안 함
+- `director`(허이사, 읽기 전용)가 실제로 가능한 쓰기 작업 위험도순:
+  1. 원 담당자 계정 이메일 변경 + 비밀번호 초기화 조합 → 계정 탈취 경로
+  2. 원 계정 정지 / 원 운영상태 변경 → 가용성 장애
+  3. 템플릿 업로드/활성화/삭제
+  4. 원 프로파일 생성/수정
+  5. 고객사 공지 작성/수정
+- ★방어선은 3겹(메뉴 노출 / API 게이트 / RLS)이며 `allowedRoles`는 UX일
+  뿐 보안이 아니다. URL 직접 입력으로 우회된다
+- 착수 시 1순위는 `account/email` + `account/reset` 라우트
+
+### 정정
+
+"deploy route.ts에서 manager 일반배포 권한 제거 필요"는 **잘못된
+기록이었다.** 현재 `DEPLOY_ROLES=['nutritionist_ck']`로 manager는 이미
+권한이 없다. HANDOFF 전문을 재검색했으나 해당 문구 자체를 찾지 못해
+삭제할 대상이 없었다 — 다른 세션의 구두 논의였거나 착오로 추정.
+
+---
+
 ## ⏸️ 보류 — 크레오 임시계약 종료 (2026-08-20)
 
 크레오(송파·대치 등) 임시계약이 종료됨에 따라 **크레오 계정/이메일 관련
