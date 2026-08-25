@@ -124,20 +124,21 @@ def generate():
                 branch_uuid  = branch_id_map.get(branch_full_name) or ''
                 branch_uuid8 = branch_uuid[:8] or branch_full_name
                 out_pptx = os.path.join(output_dir, f'{branch_uuid8}_{year}{month:02d}.pptx')
-                tpl_path, tpl_source = pick_template(
+                tpl_path, tpl_source, tpl_used = pick_template(
                     tpl_set, TEMPLATE_PATH,
                     vacation_map.get(branch_uuid), branch_full_name,
                 )
                 # 정상 매칭은 조용히 집계만, none 폴백은 원별로 로그.
                 # 로컬 폴백 경고는 pick_template()이 이미 찍었으므로 여기선 집계만.
-                if tpl_source in ('로컬(업로드없음)', '로컬(방학양식 미비)'):
+                # tpl_used는 pick_template이 실제로 고른 variant를 그대로 준
+                # 값이라 tpl_set을 다시 훑어 경로로 역추적할 필요가 없다.
+                if tpl_used in ('로컬(업로드없음)', '로컬(방학양식 미비)'):
                     _tpl_tally['로컬폴백'] = _tpl_tally.get('로컬폴백', 0) + 1
                 elif 'none폴백' in tpl_source:
                     _tpl_tally['none'] = _tpl_tally.get('none', 0) + 1
                     print(f'  [템플릿] {branch_full_name}: {tpl_source}')
                 else:
-                    _used = next((k for k, (p, _s) in tpl_set.items() if p == tpl_path), '?')
-                    _tpl_tally[_used] = _tpl_tally.get(_used, 0) + 1
+                    _tpl_tally[tpl_used] = _tpl_tally.get(tpl_used, 0) + 1
                 try:
                     gen_pptx(cfg, menu_data, tpl_path, out_pptx, date_map=date_map)
                     raw_results.append({
@@ -607,20 +608,21 @@ def generate_from_json():
                 branch_uuid  = cfg['branch_uuid']
                 branch_uuid8 = branch_uuid[:8]
                 out_pptx = os.path.join(output_dir, f'{branch_uuid8}_{year}{month:02d}.pptx')
-                tpl_path, tpl_source = pick_template(
+                tpl_path, tpl_source, tpl_used = pick_template(
                     tpl_set, TEMPLATE_PATH,
                     vacation_map.get(branch_uuid), branch_full_name,
                 )
                 # 정상 매칭은 조용히 집계만, none 폴백은 원별로 로그.
                 # 로컬 폴백 경고는 pick_template()이 이미 찍었으므로 여기선 집계만.
-                if tpl_source in ('로컬(업로드없음)', '로컬(방학양식 미비)'):
+                # tpl_used는 pick_template이 실제로 고른 variant를 그대로 준
+                # 값이라 tpl_set을 다시 훑어 경로로 역추적할 필요가 없다.
+                if tpl_used in ('로컬(업로드없음)', '로컬(방학양식 미비)'):
                     _tpl_tally['로컬폴백'] = _tpl_tally.get('로컬폴백', 0) + 1
                 elif 'none폴백' in tpl_source:
                     _tpl_tally['none'] = _tpl_tally.get('none', 0) + 1
                     print(f'  [템플릿] {branch_full_name}: {tpl_source}')
                 else:
-                    _used = next((k for k, (p, _s) in tpl_set.items() if p == tpl_path), '?')
-                    _tpl_tally[_used] = _tpl_tally.get(_used, 0) + 1
+                    _tpl_tally[tpl_used] = _tpl_tally.get(tpl_used, 0) + 1
                 try:
                     gen_pptx(cfg, adapted_menu, tpl_path, out_pptx, date_map=date_map)
                     raw_results.append({

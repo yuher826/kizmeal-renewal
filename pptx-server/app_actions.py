@@ -438,20 +438,21 @@ def main():
                 storage_path = f'{YEAR}/{MONTH:02d}/{fname}'
 
                 # 원별 방학 배정으로 양식 선택 (평월은 variant가 하나뿐)
-                tpl_path, tpl_source = pick_template(
+                tpl_path, tpl_source, tpl_used = pick_template(
                     tpl_set, TEMPLATE_PATH,
                     vacation_map.get(branch_uuid), short_code,
                 )
                 # 정상 매칭은 조용히 집계만, none 폴백은 원별로 로그.
                 # 로컬 폴백 경고는 pick_template()이 이미 찍었으므로 여기선 집계만.
-                if tpl_source in ('로컬(업로드없음)', '로컬(방학양식 미비)'):
+                # tpl_used는 pick_template이 실제로 고른 variant를 그대로 준
+                # 값이라 tpl_set을 다시 훑어 경로로 역추적할 필요가 없다.
+                if tpl_used in ('로컬(업로드없음)', '로컬(방학양식 미비)'):
                     tpl_tally['로컬폴백'] = tpl_tally.get('로컬폴백', 0) + 1
                 elif 'none폴백' in tpl_source:
                     tpl_tally['none'] = tpl_tally.get('none', 0) + 1
                     print(f'  [템플릿] {short_code}: {tpl_source}')
                 else:
-                    _used = next((k for k, (p, _s) in tpl_set.items() if p == tpl_path), '?')
-                    tpl_tally[_used] = tpl_tally.get(_used, 0) + 1
+                    tpl_tally[tpl_used] = tpl_tally.get(tpl_used, 0) + 1
 
                 try:
                     gen_pptx(

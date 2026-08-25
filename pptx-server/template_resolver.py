@@ -152,7 +152,14 @@ def pick_template(tpl_set, local_fallback_path, has_vacation=None, branch_name='
     원 하나가 쓸 템플릿 경로를 고른다.
 
     has_vacation: True=방학O / False=방학X / None=미설정(평월이거나 배정 누락)
-    반환: (경로, 출처설명)
+    반환: (경로, 출처설명, 사용된 variant)
+
+    "사용된 variant"는 `VARIANT_ON`/`VARIANT_OFF`/`VARIANT_NONE` 중 하나거나,
+    로컬로 빠졌으면 `'로컬(업로드없음)'`/`'로컬(방학양식 미비)'` 문자열 그대로다.
+    호출부가 tpl_set을 다시 훑어 경로 문자열로 variant를 역추적하지 않도록
+    — 두 variant가 우연히 같은 경로를 갖게 되면 그 역추적이 조용히
+    틀릴 수 있다 — pick_template이 이미 아는 값을 그대로 준다
+    (2026-08-25, 배정 집계 정확도 개선).
 
     우선순위 — 원하는 variant → 'none' → 로컬 폴백.
 
@@ -164,7 +171,7 @@ def pick_template(tpl_set, local_fallback_path, has_vacation=None, branch_name='
     달에 비방학 원이 방학O를 받는 사고 경로가 있었다.
     """
     if not tpl_set:
-        return local_fallback_path, '로컬(업로드없음)'
+        return local_fallback_path, '로컬(업로드없음)', '로컬(업로드없음)'
 
     has_vacation_axis = VARIANT_ON in tpl_set or VARIANT_OFF in tpl_set
 
@@ -193,12 +200,12 @@ def pick_template(tpl_set, local_fallback_path, has_vacation=None, branch_name='
         if variant in tpl_set:
             path, source = tpl_set[variant]
             if pos == 0:
-                return path, source
+                return path, source, variant
             # pos > 0 은 order 길이가 2일 때만 있고, 그때 order[1]은 항상
             # VARIANT_NONE — 원하는 방학 variant가 없어 none으로 대신 쓰는
             # 경우다. 호출부가 이 경우만 골라 로그를 남길 수 있도록
-            # 출처 문자열에 표시해 둔다.
-            return path, f'{source} (none폴백·기대={order[0]})'
+            # 출처 문자열에 표시해 둔다("사용된 variant" 자체는 none 그대로).
+            return path, f'{source} (none폴백·기대={order[0]})', variant
 
     # 원하는 variant도 none도 준비되지 않음 — 반대편 variant는 절대 쓰지
     # 않고 로컬로 빠진다.
@@ -209,7 +216,7 @@ def pick_template(tpl_set, local_fallback_path, has_vacation=None, branch_name='
     # 그 기준선보다 명백히 나쁘다.
     print(f'  [템플릿] ⚠️ 방학 양식 미비 → 로컬 폴백: {branch_name or "(이름없음)"}'
           f' (기대 variant={order[0]}, 준비된 variant={sorted(tpl_set)})')
-    return local_fallback_path, '로컬(방학양식 미비)'
+    return local_fallback_path, '로컬(방학양식 미비)', '로컬(방학양식 미비)'
 
 
 def cleanup_template_set(tpl_set, local_fallback_path):
