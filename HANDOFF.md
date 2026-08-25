@@ -1391,6 +1391,32 @@ SQL 마이그레이션은 2026-08-25에 검토·보완·실행·실물검증 전
   - 같은 날 `diet_templates_year_month_pair` CHECK 제약도 실행 완료
     (`supabase/migrations/add_diet_templates_year_month_pair_check_260825.sql`)
     — year/month 반쪽 채움 방어
+- **★업로드 폼 착수 전 코드 조사(2026-08-25 오전) — 다음 작업 전 기록**:
+  - **권한 게이트에 역할 필터가 없다** — API 3곳(`route.ts`/`[id]/route.ts`/
+    `activate/route.ts`) 전부 `admins.is_active=true`만 확인하고 `role`
+    컬럼은 안 본다. `lib/erp-nav.ts`의 "템플릿 관리" 항목도 `allowedRoles`가
+    없어 전 역할에 노출(대조: 같은 파일 "관리자 관리" 항목은
+    `allowedRoles: ADMIN_CREATE_ROLES` 지정돼 있음). 즉 `director`(허이사,
+    읽기전용 취지)도 업로드·활성화·삭제가 전부 가능 — 권한 설계와 어긋남.
+    이번 작업 범위 밖이나 정리 대상으로 기록.
+  - **version은 테이블 전체 `MAX(version)+1` 전역 일련번호**다(그 달 안의
+    번호 아님). 락·유니크 제약이 없어 동시 업로드 시 충돌 가능성이 있다.
+    급하지 않으므로 아래 "기타 미해결"에 기록.
+  - **`validation_result`는 저장만 되고 화면엔 전혀 안 보인다** — POST
+    응답 JSON엔 포함되지만 프론트 `DietTemplate` 인터페이스에 필드가 없고,
+    GET 목록도 이 컬럼을 select 안 한다. 검증 실패해도 업로드는 그대로
+    진행됨(막는 코드 없음).
+  - **board/erp는 중복 구현이 아니다** — `app/board/admin/diet/templates/page.tsx`는
+    `router.replace('/erp/diet/templates')` 4줄짜리 리다이렉트뿐이고, 실제
+    화면·API는 `/erp/diet/templates` + `app/api/board/diet/templates/route.ts`
+    1벌뿐(API 경로명에 `board`가 남아있는 것뿐).
+- **★업로드 폼 작업 방향 확정(2026-08-25)**:
+  - **version은 전역 일련번호로 그대로 둔다** — 목록 UI를 연월로
+    그룹핑할 것이므로 화면이 version에 의존하지 않는다. 지금 바꾸면 v1의
+    "버전 1"이라는 의미가 소급해서 깨진다.
+  - **`validation_result`는 "표시만" 한다. 업로드를 막지 않는다** —
+    디자이너 원본은 이름표가 없는 게 정상 상태라, 검증 실패를 업로드
+    차단 조건으로 쓰면 정상적인 업로드까지 막힌다.
 - **다음 세션 순서**: ① 업로드 폼에 연도(`getYearOptions()` 재사용)·
   월·방학O/X/무관 선택 추가 → ② 목록 UI를 연월별로 그룹핑(현재는
   "활성 1개 vs 나머지" 이분법이라 여러 달·variant가 동시에 active인 새
@@ -1408,6 +1434,34 @@ SQL 마이그레이션은 2026-08-25에 검토·보완·실행·실물검증 전
 - **이번엔 범위에 안 넣기로 한 것**: `group_tag`(원 계열별 템플릿) 축.
   `resolve_template_set()`이 아직 이 컬럼을 안 읽어서(dead column,
   향후 확장용으로 추정) 이번 작업과 무관 — 손대지 않음
+
+### pick_template() 방학 variant 오배정 수정 — 2026-08-25 (커밋 `3d4a81d`, `f8be067`)
+
+`template_resolver.py`의 `pick_template()`이 자기 주석과 정반대로 동작하고
+있었다. 157~163행 주석은 "없는 그림이 빠지는 쪽이 엉뚱한 방학 그림이 붙는
+쪽보다 덜 틀리다"고 선언하는데, 5줄 아래 order 배열이 반대편 variant까지
+폴백 후보에 넣고 있었다 — 방학O만 업로드되고 방학X가 아직 안 올라온 달에
+비방학 원이 방학O를 받는 경로가 있었다.
+
+- **수정**: order 배열에서 반대편 variant 제거(`True→(ON,NONE)` /
+  `False→(OFF,NONE)`), `else` 분기는 `(NONE,)`으로 축소. 옛 177행
+  "남은 것 아무거나" 폴백을 로컬 폴백으로 교체(`'로컬(방학양식 미비)'` —
+  `'로컬(업로드없음)'`과 구분됨) + 경고 로그. 호출부 3곳에서 버리던 출처
+  설명을 받아 이상 신호만 로그하고(정상 매칭=무로그, none 폴백=원별 로그,
+  로컬 폴백=경고) 배치 끝에 variant별 배정 요약 1줄을 출력. 반환값을
+  2-튜플→3-튜플로 확장해(`(경로, 출처, 사용된 variant)`) 호출부가 경로
+  문자열로 variant를 역추적하던 코드도 제거(`f8be067`)
+- **로그 읽는 법**: Actions/Render 로그에서 원 하나하나는 원하는 variant를
+  정상적으로 받으면 아무것도 안 찍힌다. `none`으로 폴백된 원만 원별로
+  한 줄, 로컬로 빠진 원은 경고로 한 줄. 배치 끝에
+  `[템플릿] 배정 요약 — 방학O N원 / 방학X N원 / none N원 / 로컬폴백 N원`
+  이 항상 한 줄 찍힌다.
+- **★검증 한계** — 방학 템플릿이 아직 DB에 없어 실물 생성으로는 이 코드
+  경로에 닿지 않는다. `pick_template()`을 순수 함수로 직접 호출해 18가지
+  조합을 확인했을 뿐이다(전부 통과). **방학O/X 템플릿이 처음 실제로
+  올라가는 달에 반드시 실물로 재검증할 것** — Actions 로그의
+  "[템플릿] 배정 요약" 한 줄과 "방학 양식 미비 → 로컬 폴백" 경고 유무를
+  확인할 것.
 
 ⚠️ **모델**: 스키마·데이터모델 설계 단계는 **Opus**, 확정 후 구현은 Sonnet 복귀.
 
@@ -1609,6 +1663,11 @@ SQL 마이그레이션은 2026-08-25에 검토·보완·실행·실물검증 전
 
 ## 기타 미해결 (급하지 않음, 존재만 기록)
 
+- **`diet_templates.version` 전역 카운터 동시성 미보호** — 업로드 시
+  `SELECT MAX(version) ... LIMIT 1` 후 `+1`해서 INSERT
+  (`app/api/board/diet/templates/route.ts:192-199`). 락·유니크 제약이
+  없어 동시에 두 번 업로드하면 같은 version이 나올 수 있다.
+  2026-08-25 업로드 폼 착수 전 조사에서 발견, 급하지 않음.
 - **`weekly_menus.branch_id`를 `branches.id`로 잘못 조회하는 버그**
   - `app/api/branch-profiles/[id]/route.ts:65,73`
   - ~~`app/board/(customer)/dashboard/page.tsx:96`~~ → 권팀장 요청 5번
