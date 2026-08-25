@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback, useRef } from 'react'
+import { getYearOptions } from '@/lib/diet-utils'
 
 interface StyleJson {
   headerColor: string; accentColor: string; sectionBgColor: string
@@ -9,10 +10,38 @@ interface StyleJson {
   rawColors: string[]; rawFonts: string[]
 }
 
+// diet_templates.vacation_variant CHECK 제약과 동일해야 한다
+type VacationVariant = 'none' | 'vacation_on' | 'vacation_off'
+
+const VACATION_VARIANT_LABEL: Record<VacationVariant, string> = {
+  none:         '무관(평월)',
+  vacation_on:  '방학O',
+  vacation_off: '방학X',
+}
+
+// route.ts의 TemplateValidation과 동일한 모양(서버 파일에서 export 안 하고
+// 있어 StyleJson처럼 화면 쪽에도 그대로 미러링). 레거시 행은 컬럼 DEFAULT가
+// '{}'라 필드가 비어 있을 수 있으므로 전부 optional로 선언한다.
+interface SlideValidation {
+  slide: string
+  valid: boolean
+  names_found: Record<string, boolean>
+  missing: string[]
+}
+interface TemplateValidation {
+  valid?: boolean
+  slide_count?: number
+  slides?: SlideValidation[]
+  summary?: string
+}
+
 interface DietTemplate {
   id: string; version: number; name: string; file_path: string
   style_json: StyleJson; is_active: boolean
   created_at: string; note?: string
+  year: number | null; month: number | null
+  vacation_variant: VacationVariant
+  validation_result: TemplateValidation | null
 }
 
 const DEFAULT_STYLE: StyleJson = {
@@ -70,6 +99,11 @@ export default function DietTemplatesPage() {
   const [file,      setFile]            = useState<File | null>(null)
   const [name,      setName]            = useState('')
   const [note,      setNote]            = useState('')
+  // 연·월 기본값 — 다른 식단 화면(app/erp/(protected)/diet/page.tsx)의
+  // pptxYear/pptxMonth와 동일하게 "현재 연·월"을 기본값으로 쓴다.
+  const [uploadYear,  setUploadYear]  = useState(() => new Date().getFullYear())
+  const [uploadMonth, setUploadMonth] = useState(() => new Date().getMonth() + 1)
+  const [uploadVariant, setUploadVariant] = useState<VacationVariant>('none')
   const [dragging,  setDragging]        = useState(false)
   const [toast,     setToast]           = useState('')
   const [preview,   setPreview]         = useState<{ tmpl: DietTemplate; styles: StyleJson } | null>(null)
@@ -101,12 +135,15 @@ export default function DietTemplatesPage() {
   }, [])
 
   async function handleUpload() {
-    if (!file || !name.trim()) return
+    if (!file || !name.trim() || !uploadYear || !uploadMonth) return
     setUploading(true)
     const fd = new FormData()
     fd.append('file', file)
     fd.append('name', name.trim())
     fd.append('note', note.trim())
+    fd.append('year', String(uploadYear))
+    fd.append('month', String(uploadMonth))
+    fd.append('vacation_variant', uploadVariant)
 
     const res = await fetch('/api/board/diet/templates', { method: 'POST', body: fd })
     const json = await res.json()
@@ -263,7 +300,34 @@ export default function DietTemplatesPage() {
               placeholder="예: 헤더 색상 변경, 폰트 업데이트"
               className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#2D6A4F]" />
           </div>
-          <button type="button" onClick={handleUpload} disabled={!file || !name.trim() || uploading}
+          <div>
+            <label className="text-xs font-bold text-gray-500 mb-1.5 block">
+              적용 연·월 <span className="text-red-500">*</span>
+            </label>
+            <p className="text-xs text-gray-400 mb-1.5">
+              연·월이 없는 템플릿은 활성화해도 생성에 쓰이지 않습니다(레거시 v1과 동일한 문제).
+            </p>
+            <div className="flex gap-2">
+              <select value={uploadYear} onChange={e => setUploadYear(Number(e.target.value))}
+                className="flex-1 px-4 py-2.5 rounded-xl border border-gray-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#2D6A4F]">
+                {getYearOptions(uploadYear).map(y => <option key={y} value={y}>{y}년</option>)}
+              </select>
+              <select value={uploadMonth} onChange={e => setUploadMonth(Number(e.target.value))}
+                className="flex-1 px-4 py-2.5 rounded-xl border border-gray-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#2D6A4F]">
+                {Array.from({ length: 12 }, (_, i) => i + 1).map(m => <option key={m} value={m}>{m}월</option>)}
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className="text-xs font-bold text-gray-500 mb-1.5 block">방학 구분</label>
+            <select value={uploadVariant} onChange={e => setUploadVariant(e.target.value as VacationVariant)}
+              className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#2D6A4F]">
+              {(Object.keys(VACATION_VARIANT_LABEL) as VacationVariant[]).map(v => (
+                <option key={v} value={v}>{VACATION_VARIANT_LABEL[v]}</option>
+              ))}
+            </select>
+          </div>
+          <button type="button" onClick={handleUpload} disabled={!file || !name.trim() || !uploadYear || !uploadMonth || uploading}
             className="w-full bg-[#2D6A4F] hover:bg-[#1B4332] disabled:bg-gray-300 text-white font-bold py-3 rounded-xl transition-colors flex items-center justify-center gap-2">
             {uploading ? <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"/>분석 중...</> : '업로드 및 스타일 분석'}
           </button>
