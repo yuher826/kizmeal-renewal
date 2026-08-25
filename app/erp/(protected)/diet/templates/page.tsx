@@ -44,6 +44,65 @@ interface DietTemplate {
   validation_result: TemplateValidation | null
 }
 
+// ── 연·월 그룹핑 (2026-08-25 재구성) ─────────────────────────────────────
+// 기존엔 "활성 1개(상단) + 나머지(하단)" 이분법이었다. 같은 달에 방학O·
+// 방학X가 동시에 active일 수 있는 새 모델에서는 이게 깨진다 —
+// templates.find(t=>t.is_active)가 하나만 집고, 나머지 활성 템플릿은
+// is_active=true라서 !t.is_active 필터에도 안 걸려 화면에서 통째로
+// 사라진다. 1차 축을 연·월로 바꾸고 활성 여부는 행 배지로만 표시한다.
+interface TemplateGroup {
+  key: string             // '2026-08' 형태, 레거시는 'legacy'
+  year: number | null
+  month: number | null
+  templates: DietTemplate[]
+}
+
+// GET route.ts가 이미 year DESC NULLS LAST → month DESC NULLS LAST →
+// version DESC로 정렬해서 준다 — 그래서 templates를 순서대로 훑으며
+// Map에 넣기만 해도 레거시(year/month NULL) 그룹이 자연히 맨 끝에 온다.
+// 이 함수가 별도로 재정렬하지 않는 이유는 그 정렬 규칙 하나만 신뢰의
+// 근원(source of truth)으로 두기 위함 — 여기서 또 정렬하면 두 곳이
+// 어긋날 때 뭐가 맞는지 알 수 없어진다.
+function groupTemplates(templates: DietTemplate[]): TemplateGroup[] {
+  const map = new Map<string, TemplateGroup>()
+  for (const t of templates) {
+    const key = t.year != null && t.month != null
+      ? `${t.year}-${String(t.month).padStart(2, '0')}`
+      : 'legacy'
+    let group = map.get(key)
+    if (!group) {
+      group = { key, year: t.year, month: t.month, templates: [] }
+      map.set(key, group)
+    }
+    group.templates.push(t)
+  }
+  return Array.from(map.values())
+}
+
+// 그룹 헤더에 표시할 "그 (연,월)에서 실제로 active인 variant 현황".
+// ★결론(배지)만 보여주면 판정 기준이 렌더링 코드 안에 묻힌다 — 근거
+// (방학O/방학X 각각의 active 여부)를 항상 같이 보여준다.
+// 이 표시는 pptx-server의 resolve_template_set()이 그 달 active 템플릿을
+// variant별로 모으는 것과 같은 기준이다 — 화면과 파이프라인이 같은 것을
+// 본다. 판정은 active인 것만 센다(비활성 템플릿은 파이프라인이 안 씀).
+function vacationStatus(group: TemplateGroup): { statusText: string; warnBadge: string | null } {
+  const activeVariants = new Set(group.templates.filter(t => t.is_active).map(t => t.vacation_variant))
+  const hasOn   = activeVariants.has('vacation_on')
+  const hasOff  = activeVariants.has('vacation_off')
+  const hasNone = activeVariants.has('none')
+
+  if (hasOn && hasOff) return { statusText: '방학O ✅ · 방학X ✅', warnBadge: null }
+  if (hasOn || hasOff) {
+    // 방학 축 중 하나만 active — 평월에 방학 그림이 붙거나 반대로 빠지는
+    // 사고(pick_template() 오배정 방지 작업, 3d4a81d)를 막았어도, "아예 안
+    // 올라옴" 자체는 화면에서 실무자가 직접 알아채야 한다.
+    return { statusText: `방학O ${hasOn ? '✅' : '❌'} · 방학X ${hasOff ? '✅' : '❌'}`, warnBadge: '⚠️ 쌍 미완성' }
+  }
+  // 평월(방학 없는 달)은 none 하나만 active인 게 정상 — 배지를 띄우지 않는다.
+  if (hasNone) return { statusText: '공용 ✅', warnBadge: null }
+  return { statusText: '', warnBadge: '⚠️ 활성 템플릿 없음' }
+}
+
 const DEFAULT_STYLE: StyleJson = {
   headerColor: '#1B4332', accentColor: '#2D6A4F',
   sectionBgColor: '#E8F5E9', headerBgColor: '#F8FDF8',
@@ -108,6 +167,7 @@ export default function DietTemplatesPage() {
   const [toast,     setToast]           = useState('')
   const [preview,   setPreview]         = useState<{ tmpl: DietTemplate; styles: StyleJson } | null>(null)
   const [pendingStyle, setPendingStyle] = useState<{ id: string; style: StyleJson } | null>(null)
+  const [legacyOpen, setLegacyOpen]     = useState(false)  // 레거시 그룹 기본 접힘
   const fileRef = useRef<HTMLInputElement>(null)
 
   const flash = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 4000) }
@@ -124,8 +184,9 @@ export default function DietTemplatesPage() {
 
   useEffect(() => { load() }, [load])
 
-  const active = templates.find(t => t.is_active)
-  const inactive = templates.filter(t => !t.is_active)
+  const groups      = groupTemplates(templates)
+  const monthGroups = groups.filter(g => g.key !== 'legacy')
+  const legacyGroup = groups.find(g => g.key === 'legacy')
 
   const onDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault(); setDragging(false)
@@ -175,6 +236,54 @@ export default function DietTemplatesPage() {
     flash('삭제되었습니다')
   }
 
+  // 그룹(연·월/레거시) 안의 템플릿 행 하나 — 기존에 있던 것(이름·버전·비고·
+  // 업로드일·미리보기/활성화/삭제)을 전부 유지하고 variant 라벨·활성 배지·
+  // 검증 결과를 추가했다. 검증 실패도 표시만 하고 업로드를 막지 않는다
+  // (디자이너 원본은 이름표가 없는 게 정상 — 이름표는 생성 파이프라인이
+  // 나중에 자동으로 붙인다). validation_result는 지금까지 DB에 저장만
+  // 되고 화면엔 전혀 안 보였다(GET select에도 없었다).
+  function renderRow(t: DietTemplate) {
+    const validation = t.validation_result
+    const validationLabel = validation?.summary ?? '검증 정보 없음'
+    const validationOk = validation?.valid === true
+    return (
+      <div key={t.id} className="px-6 py-3.5 flex items-center justify-between hover:bg-[#F8FDF8]">
+        <div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs font-bold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
+              {VACATION_VARIANT_LABEL[t.vacation_variant]}
+            </span>
+            {t.is_active && (
+              <span className="text-xs bg-[#2D6A4F] text-white px-2 py-0.5 rounded-full font-semibold">✅ 활성</span>
+            )}
+            <span className="text-sm font-semibold text-[#1C2B1E]">{t.name}</span>
+            <span className="text-xs text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded font-mono">v{t.version}</span>
+          </div>
+          {t.note && <p className="text-xs text-gray-400 mt-0.5">{t.note}</p>}
+          <p className="text-xs text-gray-400 mt-0.5">
+            업로드 {new Date(t.created_at).toLocaleDateString('ko-KR')}
+            {' · '}
+            <span className={validationOk ? 'text-[#2D6A4F]' : 'text-yellow-700'}>{validationLabel}</span>
+          </p>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <button onClick={() => setPreview({ tmpl: t, styles: { ...DEFAULT_STYLE, ...t.style_json } })}
+            className="text-xs text-gray-500 hover:text-[#2D6A4F] font-medium">미리보기</button>
+          {!t.is_active && (
+            <button onClick={() => activate(t.id)}
+              className="text-xs bg-[#E8F5E9] text-[#2D6A4F] font-semibold px-3 py-1.5 rounded-lg hover:bg-[#C8E6C9] transition-colors">
+              활성화
+            </button>
+          )}
+          {!t.is_active && (
+            <button onClick={() => deleteTemplate(t.id)}
+              className="text-xs text-red-400 hover:text-red-600 font-medium">삭제</button>
+          )}
+        </div>
+      </div>
+    )
+  }
+
   return (
     <main className="min-h-screen bg-[#F6FAF6] px-4 sm:px-6 py-6 sm:py-8">
       {toast && (
@@ -212,35 +321,6 @@ export default function DietTemplatesPage() {
       </div>
 
       <div className="space-y-5">
-
-        <div className="bg-white rounded-2xl border border-gray-100 p-6">
-          <h2 className="font-bold text-[#1C2B1E] mb-3">현재 사용 중인 템플릿</h2>
-          {loading ? (
-            <div className="h-16 bg-gray-50 rounded-xl animate-pulse" />
-          ) : active ? (
-            <div className="flex items-center justify-between bg-[#E8F5E9] border border-[#B7E4C7] rounded-xl px-4 py-3">
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-bold text-[#1B4332]">✅ {active.name}</span>
-                  <span className="text-xs bg-[#2D6A4F] text-white px-2 py-0.5 rounded-full font-semibold">v{active.version}</span>
-                </div>
-                {active.note && <p className="text-xs text-[#2D6A4F] mt-0.5">{active.note}</p>}
-                <p className="text-xs text-gray-400 mt-0.5">업로드: {new Date(active.created_at).toLocaleDateString('ko-KR')}</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setPreview({ tmpl: active, styles: { ...DEFAULT_STYLE, ...active.style_json } })}
-                className="text-xs bg-white border border-[#2D6A4F] text-[#2D6A4F] font-semibold px-3 py-1.5 rounded-lg hover:bg-[#F8FDF8] transition-colors"
-              >
-                미리보기
-              </button>
-            </div>
-          ) : (
-            <div className="bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-3 text-sm text-yellow-700">
-              활성화된 템플릿이 없습니다. 기본 키즈밀 스타일로 PDF가 생성됩니다.
-            </div>
-          )}
-        </div>
 
         {pendingStyle && (() => {
           const tmpl = templates.find(t => t.id === pendingStyle.id)
@@ -333,37 +413,59 @@ export default function DietTemplatesPage() {
           </button>
         </div>
 
-        {inactive.length > 0 && (
-          <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-100">
-              <h2 className="font-bold text-[#1C2B1E]">이전 버전 목록</h2>
-              <p className="text-xs text-gray-400 mt-0.5">롤백하려면 [활성화] 클릭</p>
-            </div>
-            <div className="divide-y divide-gray-50">
-              {inactive.map(t => (
-                <div key={t.id} className="px-6 py-3.5 flex items-center justify-between hover:bg-[#F8FDF8]">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-[#1C2B1E]">{t.name}</span>
-                      <span className="text-xs text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded font-mono">v{t.version}</span>
-                    </div>
-                    {t.note && <p className="text-xs text-gray-400 mt-0.5">{t.note}</p>}
-                    <p className="text-xs text-gray-400">{new Date(t.created_at).toLocaleDateString('ko-KR')}</p>
+        {loading ? (
+          <div className="h-16 bg-gray-50 rounded-xl animate-pulse" />
+        ) : templates.length === 0 ? (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-3 text-sm text-yellow-700">
+            업로드된 템플릿이 없습니다. 기본 키즈밀 스타일로 PDF가 생성됩니다.
+          </div>
+        ) : (
+          <>
+            {/* 연·월 그룹 — 실무자는 "8월 템플릿"을 찾지 "v7"을 찾지 않는다.
+                활성 여부는 축이 아니라 각 행의 배지로만 표시(위 groupTemplates/
+                vacationStatus 주석 참고) */}
+            {monthGroups.map(group => {
+              const { statusText, warnBadge } = vacationStatus(group)
+              return (
+                <div key={group.key} className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+                  <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-2 flex-wrap">
+                    <h2 className="font-bold text-[#1C2B1E]">{group.year}년 {group.month}월</h2>
+                    {statusText && <span className="text-xs text-gray-500">{statusText}</span>}
+                    {warnBadge && (
+                      <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded-full font-semibold">
+                        {warnBadge}
+                      </span>
+                    )}
                   </div>
-                  <div className="flex items-center gap-2">
-                    <button onClick={() => setPreview({ tmpl: t, styles: { ...DEFAULT_STYLE, ...t.style_json } })}
-                      className="text-xs text-gray-500 hover:text-[#2D6A4F] font-medium">미리보기</button>
-                    <button onClick={() => activate(t.id)}
-                      className="text-xs bg-[#E8F5E9] text-[#2D6A4F] font-semibold px-3 py-1.5 rounded-lg hover:bg-[#C8E6C9] transition-colors">
-                      활성화
-                    </button>
-                    <button onClick={() => deleteTemplate(t.id)}
-                      className="text-xs text-red-400 hover:text-red-600 font-medium">삭제</button>
+                  <div className="divide-y divide-gray-50">
+                    {group.templates.map(t => renderRow(t))}
                   </div>
                 </div>
-              ))}
-            </div>
-          </div>
+              )
+            })}
+
+            {/* 레거시(year/month NULL) — 맨 아래, 기본 접힘. 삭제는 보류 상태다
+                (유대표 결정 2026-08-24) */}
+            {legacyGroup && (
+              <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+                <button type="button" onClick={() => setLegacyOpen(v => !v)}
+                  className="w-full px-6 py-4 flex items-center justify-between text-left hover:bg-gray-50">
+                  <div>
+                    <h2 className="font-bold text-[#1C2B1E]">레거시 (효과없음) · {legacyGroup.templates.length}건</h2>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      연·월이 지정되지 않아 생성 파이프라인(resolve_template_set())이 참조하지 않습니다
+                    </p>
+                  </div>
+                  <span className="text-xs text-gray-400 font-medium shrink-0 ml-3">{legacyOpen ? '▲ 접기' : '▼ 펼치기'}</span>
+                </button>
+                {legacyOpen && (
+                  <div className="divide-y divide-gray-50 border-t border-gray-100">
+                    {legacyGroup.templates.map(t => renderRow(t))}
+                  </div>
+                )}
+              </div>
+            )}
+          </>
         )}
 
         <div className="bg-[#FFFBEB] border border-[#FDE68A] rounded-2xl px-5 py-4 text-xs text-gray-600 space-y-1">
