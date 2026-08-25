@@ -2,6 +2,11 @@ import type JSZip from 'jszip'
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import { getYearOptions } from '@/lib/diet-utils'
+
+// diet_templates.vacation_variant CHECK 제약과 동일해야 한다
+const VACATION_VARIANTS = ['none', 'vacation_on', 'vacation_off'] as const
+type VacationVariant = typeof VACATION_VARIANTS[number]
 
 export interface StyleJson {
   headerColor: string
@@ -159,9 +164,13 @@ export async function GET() {
     return NextResponse.json({ error: '관리자 권한이 필요합니다' }, { status: 403 })
   }
 
+  // 정렬: 연·월 내림차순(최신 달이 위) → 같은 (연,월) 안에서는 버전 내림차순.
+  // year가 NULL인 레거시 행은 nullsFirst:false로 맨 뒤로 보낸다.
   const { data, error } = await supabase
     .from('diet_templates')
-    .select('id, version, name, file_path, style_json, is_active, created_at, note')
+    .select('id, version, name, file_path, style_json, is_active, created_at, note, year, month, vacation_variant, validation_result')
+    .order('year',    { ascending: false, nullsFirst: false })
+    .order('month',   { ascending: false, nullsFirst: false })
     .order('version', { ascending: false })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -185,9 +194,49 @@ export async function POST(req: NextRequest) {
   const file = formData.get('file') as File | null
   const name = (formData.get('name') as string || '').trim()
   const note = (formData.get('note') as string || '').trim()
+  const yearRaw            = (formData.get('year')  as string) || ''
+  const monthRaw           = (formData.get('month') as string) || ''
+  const vacationVariantRaw = (formData.get('vacation_variant') as string || '').trim()
 
   if (!file) return NextResponse.json({ error: 'pptx 파일이 없습니다' }, { status: 400 })
   if (!name) return NextResponse.json({ error: '템플릿 이름을 입력하세요' }, { status: 400 })
+
+  // ── 연·월 필수 검증 ──────────────────────────────────────────────────
+  // resolve_template_set()(pptx-server)이 항상 구체적 year/month로 필터링
+  // 하므로, 연·월이 없는 템플릿은 업로드해도 영원히 사용되지 않는다
+  // (v1이 그 상태 — 2026-08-24에야 발견됨). 같은 실수를 새로 만들지 않는다.
+  // ★클라이언트 검증만 믿지 않는다 — 여기서 안 막으면 DB CHECK 제약
+  //   (diet_templates_year_month_pair)에 걸려 Postgres 에러가 그대로
+  //   500으로 튀어나와 실무자에게 알 수 없는 화면이 뜬다.
+  if (!yearRaw || !monthRaw) {
+    return NextResponse.json({ error: '연도와 월을 선택하세요' }, { status: 400 })
+  }
+  const year  = Number(yearRaw)
+  const month = Number(monthRaw)
+
+  // 연도 범위 — getYearOptions()를 인자 없이 호출해 "정상 범위"(작년~3년 후)를
+  // 얻는다. 여기 submitted year를 인자로 넘기면 함수가 그 값을 범위에 강제로
+  // 끼워넣어 검증이 항상 통과하는 함정이 있다(getYearOptions 자체 동작) —
+  // 반드시 인자 없이 호출한 결과와 비교할 것.
+  const validYears = getYearOptions()
+  if (!Number.isInteger(year) || !validYears.includes(year)) {
+    return NextResponse.json(
+      { error: `연도는 ${validYears[0]}~${validYears[validYears.length - 1]} 사이여야 합니다` },
+      { status: 400 },
+    )
+  }
+  if (!Number.isInteger(month) || month < 1 || month > 12) {
+    return NextResponse.json({ error: '월은 1~12 사이여야 합니다' }, { status: 400 })
+  }
+
+  // 방학 구분 — 값이 없으면 'none'(무관/평월)으로 처리, 있으면 3종 중 하나여야 함
+  let vacationVariant: VacationVariant = 'none'
+  if (vacationVariantRaw) {
+    if (!VACATION_VARIANTS.includes(vacationVariantRaw as VacationVariant)) {
+      return NextResponse.json({ error: '방학 구분 값이 올바르지 않습니다' }, { status: 400 })
+    }
+    vacationVariant = vacationVariantRaw as VacationVariant
+  }
 
   // 현재 최대 버전 조회
   const { data: maxRow } = await supabase
@@ -230,7 +279,12 @@ export async function POST(req: NextRequest) {
   }
 
   // Supabase Storage 업로드
-  const storagePath = `diet-templates/v${nextVersion}_${Date.now()}.pptx`
+  // 경로에 연/월/방학구분을 넣어 파일명만 보고도 Storage에서 추적 가능하게 함.
+  // ★ASCII만 쓴다 — 한글을 key에 넣으면 Supabase Storage가 InvalidKey를
+  //   던진다(HANDOFF 기록). Date.now()는 그대로 유지 — 같은 (연,월,variant)
+  //   조합을 재업로드해도 경로가 겹치지 않게 한다.
+  const monthPadded = String(month).padStart(2, '0')
+  const storagePath = `diet-templates/v${nextVersion}_${year}-${monthPadded}_${vacationVariant}_${Date.now()}.pptx`
   const fileBuffer = await file.arrayBuffer()
   const { error: uploadErr } = await supabase.storage
     .from('diet-templates')
@@ -252,6 +306,9 @@ export async function POST(req: NextRequest) {
       created_by:        user.id,
       note:              note || null,
       validation_result: validationResult,
+      year,
+      month,
+      vacation_variant:  vacationVariant,
     })
     .select()
     .single()
