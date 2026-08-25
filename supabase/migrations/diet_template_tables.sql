@@ -17,6 +17,13 @@ CREATE TABLE IF NOT EXISTS diet_templates (
 );
 
 -- 2. 활성 템플릿은 1개만 허용 (트리거)
+-- ⚠️ 이 트리거 함수는 2026-08-25에 대체되었다.
+--    "테이블 전체에서 1개만 active" → "(org_id, year, month, vacation_variant)
+--    조합 안에서만 1개만 active" 로 범위가 축소됨.
+--    → supabase/migrations/fix_diet_templates_active_trigger_260824.sql 참조
+--    이 파일의 아래 정의는 이력 보존용이며, 새 환경 구축 시 이 파일을
+--    실행했다면 반드시 위 마이그레이션도 이어서 실행할 것.
+--    (안 하면 방학O/X 템플릿 동시 active가 불가능해져 방학 배정 UI가 무력화됨)
 CREATE OR REPLACE FUNCTION set_single_active_template()
 RETURNS TRIGGER AS $$
 BEGIN
