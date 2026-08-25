@@ -31,7 +31,7 @@ from pptx_generator import generate as gen_pptx
 from read_excel import _embed_brackets, _inject_exception_to_banchan, convert_pptx, determine_type
 from supabase_uploader import SupabaseREST
 from template_resolver import (
-    cleanup_template_set, fetch_vacation_map, pick_template, resolve_template_set,
+    VARIANT_LABEL, cleanup_template_set, fetch_vacation_map, pick_template, resolve_template_set,
 )
 from validate_template import validate_template
 
@@ -423,6 +423,9 @@ def main():
     succeeded = 0
     failed    = 0
     lo_missing = False  # LibreOffice 미설치 확인되면 True — 이후 변환 시도 자체를 건너뜀
+    # variant('vacation_on'/'vacation_off'/'none') 또는 '로컬폴백' → 사용 원 수.
+    # 2026-08-25 — 방학 variant 오배정 방지 작업의 배정 요약용.
+    tpl_tally = {}
 
     try:
         for batch_start in range(0, len(branch_cfgs), _BATCH):
@@ -435,10 +438,20 @@ def main():
                 storage_path = f'{YEAR}/{MONTH:02d}/{fname}'
 
                 # 원별 방학 배정으로 양식 선택 (평월은 variant가 하나뿐)
-                tpl_path, _ = pick_template(
+                tpl_path, tpl_source = pick_template(
                     tpl_set, TEMPLATE_PATH,
                     vacation_map.get(branch_uuid), short_code,
                 )
+                # 정상 매칭은 조용히 집계만, none 폴백은 원별로 로그.
+                # 로컬 폴백 경고는 pick_template()이 이미 찍었으므로 여기선 집계만.
+                if tpl_source in ('로컬(업로드없음)', '로컬(방학양식 미비)'):
+                    tpl_tally['로컬폴백'] = tpl_tally.get('로컬폴백', 0) + 1
+                elif 'none폴백' in tpl_source:
+                    tpl_tally['none'] = tpl_tally.get('none', 0) + 1
+                    print(f'  [템플릿] {short_code}: {tpl_source}')
+                else:
+                    _used = next((k for k, (p, _s) in tpl_set.items() if p == tpl_path), '?')
+                    tpl_tally[_used] = tpl_tally.get(_used, 0) + 1
 
                 try:
                     gen_pptx(
@@ -487,6 +500,15 @@ def main():
                     upsert_branch_row(branch_uuid, 'error', '')
                     failed += 1
             gc.collect()
+
+        # 배정 요약 — 방학O/방학X/none/로컬폴백을 항상 한 줄로 (0건도 표시해
+        # 이상을 바로 알아챌 수 있게 한다)
+        _tally_order = list(VARIANT_LABEL) + ['로컬폴백']
+        _tally_parts = [f'{VARIANT_LABEL.get(k, k)} {tpl_tally.get(k, 0)}원' for k in _tally_order]
+        _tally_leftover = {k: v for k, v in tpl_tally.items() if k not in _tally_order}
+        if _tally_leftover:
+            _tally_parts += [f'{k} {v}원' for k, v in sorted(_tally_leftover.items())]
+        print(f'  [템플릿] 배정 요약 — {" / ".join(_tally_parts)}')
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
         cleanup_template_set(tpl_set, TEMPLATE_PATH)

@@ -49,6 +49,13 @@ VARIANT_NONE = 'none'
 VARIANT_ON   = 'vacation_on'
 VARIANT_OFF  = 'vacation_off'
 
+#: variant → 한글 라벨 (호출부의 배정 요약 로그용, 2026-08-25)
+VARIANT_LABEL = {
+    VARIANT_ON:   '방학O',
+    VARIANT_OFF:  '방학X',
+    VARIANT_NONE: 'none',
+}
+
 
 def fetch_vacation_map(client, year, month):
     """
@@ -147,7 +154,14 @@ def pick_template(tpl_set, local_fallback_path, has_vacation=None, branch_name='
     has_vacation: True=방학O / False=방학X / None=미설정(평월이거나 배정 누락)
     반환: (경로, 출처설명)
 
-    우선순위 — 원하는 variant → 'none' → 남은 아무 것 → 로컬 폴백.
+    우선순위 — 원하는 variant → 'none' → 로컬 폴백.
+
+    ⚠️ 2026-08-25 수정 — 반대편 variant(방학O를 원하는데 방학X만 준비된
+    경우 등)는 폴백 후보에서 뺐다. 아래 "방학 배정 없음" 분기가 선언하는
+    원칙("없는 그림이 빠지는 쪽이 엉뚱한 방학 그림이 붙는 쪽보다 덜
+    틀리다")을 이 order 배열도 지키게 하기 위함이다. 예전엔 order에
+    반대편까지 들어 있어서, 방학O만 업로드되고 방학X가 아직 안 올라온
+    달에 비방학 원이 방학O를 받는 사고 경로가 있었다.
     """
     if not tpl_set:
         return local_fallback_path, '로컬(업로드없음)'
@@ -162,19 +176,40 @@ def pick_template(tpl_set, local_fallback_path, has_vacation=None, branch_name='
         print(f'  [템플릿] ⚠️ 방학 배정 없음 → 방학X로 처리: {branch_name or "(이름없음)"}')
         has_vacation = False
 
+    # 원하는 variant → none. 반대편 variant는 넣지 않는다(위 docstring 참고).
     if has_vacation is True:
-        order = (VARIANT_ON, VARIANT_NONE, VARIANT_OFF)
+        order = (VARIANT_ON, VARIANT_NONE)
     elif has_vacation is False:
-        order = (VARIANT_OFF, VARIANT_NONE, VARIANT_ON)
+        order = (VARIANT_OFF, VARIANT_NONE)
     else:
-        order = (VARIANT_NONE, VARIANT_OFF, VARIANT_ON)
+        # ★155행 has_vacation_axis 정의상 이 분기에 도달했다면 tpl_set엔
+        #   none만 있을 수 있다(ON/OFF가 있었다면 위에서 이미 False로
+        #   바뀌었을 것). 그래도 OFF/ON을 남겨두면 나중에 155행 로직이
+        #   바뀔 때 조용히 구멍이 된다 — none 하나로 좁혀 만에 하나의
+        #   경우도 로컬 폴백으로 안전하게 빠지게 한다.
+        order = (VARIANT_NONE,)
 
-    for variant in order:
+    for pos, variant in enumerate(order):
         if variant in tpl_set:
-            return tpl_set[variant]
+            path, source = tpl_set[variant]
+            if pos == 0:
+                return path, source
+            # pos > 0 은 order 길이가 2일 때만 있고, 그때 order[1]은 항상
+            # VARIANT_NONE — 원하는 방학 variant가 없어 none으로 대신 쓰는
+            # 경우다. 호출부가 이 경우만 골라 로그를 남길 수 있도록
+            # 출처 문자열에 표시해 둔다.
+            return path, f'{source} (none폴백·기대={order[0]})'
 
-    # order에 없는 값이 들어온 경우(스키마 확장 등) — 남은 것 아무거나
-    return next(iter(tpl_set.values()))
+    # 원하는 variant도 none도 준비되지 않음 — 반대편 variant는 절대 쓰지
+    # 않고 로컬로 빠진다.
+    # 로컬(6월 양식)은 그 달 배치와 안 맞을 수 있지만, 지금 이 순간 모든
+    # 원이 이미 로컬을 쓰고 있다(v1의 year/month가 NULL이라
+    # resolve_template_set()의 필터에 안 걸림 — HANDOFF "신규 발견" 참고).
+    # 즉 후퇴가 아니라 현재 기준선이고, 반대편 방학 그림 오배정은
+    # 그 기준선보다 명백히 나쁘다.
+    print(f'  [템플릿] ⚠️ 방학 양식 미비 → 로컬 폴백: {branch_name or "(이름없음)"}'
+          f' (기대 variant={order[0]}, 준비된 variant={sorted(tpl_set)})')
+    return local_fallback_path, '로컬(방학양식 미비)'
 
 
 def cleanup_template_set(tpl_set, local_fallback_path):

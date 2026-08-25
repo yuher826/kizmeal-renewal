@@ -93,7 +93,7 @@ def generate():
         from pptx_generator import generate as gen_pptx
         from supabase_uploader import get_supabase_client
         from template_resolver import (
-            fetch_vacation_map, pick_template, resolve_template_set,
+            VARIANT_LABEL, fetch_vacation_map, pick_template, resolve_template_set,
         )
 
         menu_data, branches, date_map = load_excel(excel_path)
@@ -115,16 +115,29 @@ def generate():
 
         _BATCH = 5
         raw_results = []
+        # variant('vacation_on'/'vacation_off'/'none') 또는 '로컬폴백' → 사용 원 수.
+        # 2026-08-25 — 방학 variant 오배정 방지 작업의 배정 요약용.
+        _tpl_tally = {}
         for batch_start in range(0, len(branches), _BATCH):
             for cfg in branches[batch_start:batch_start + _BATCH]:
                 branch_full_name = cfg['name']
                 branch_uuid  = branch_id_map.get(branch_full_name) or ''
                 branch_uuid8 = branch_uuid[:8] or branch_full_name
                 out_pptx = os.path.join(output_dir, f'{branch_uuid8}_{year}{month:02d}.pptx')
-                tpl_path, _ = pick_template(
+                tpl_path, tpl_source = pick_template(
                     tpl_set, TEMPLATE_PATH,
                     vacation_map.get(branch_uuid), branch_full_name,
                 )
+                # 정상 매칭은 조용히 집계만, none 폴백은 원별로 로그.
+                # 로컬 폴백 경고는 pick_template()이 이미 찍었으므로 여기선 집계만.
+                if tpl_source in ('로컬(업로드없음)', '로컬(방학양식 미비)'):
+                    _tpl_tally['로컬폴백'] = _tpl_tally.get('로컬폴백', 0) + 1
+                elif 'none폴백' in tpl_source:
+                    _tpl_tally['none'] = _tpl_tally.get('none', 0) + 1
+                    print(f'  [템플릿] {branch_full_name}: {tpl_source}')
+                else:
+                    _used = next((k for k, (p, _s) in tpl_set.items() if p == tpl_path), '?')
+                    _tpl_tally[_used] = _tpl_tally.get(_used, 0) + 1
                 try:
                     gen_pptx(cfg, menu_data, tpl_path, out_pptx, date_map=date_map)
                     raw_results.append({
@@ -141,6 +154,15 @@ def generate():
                         'error_msg':   str(exc),
                     })
             gc.collect()
+
+        # 배정 요약 — 방학O/방학X/none/로컬폴백을 항상 한 줄로 (0건도 표시해
+        # 이상을 바로 알아챌 수 있게 한다)
+        _tally_order = list(VARIANT_LABEL) + ['로컬폴백']
+        _tally_parts = [f'{VARIANT_LABEL.get(k, k)} {_tpl_tally.get(k, 0)}원' for k in _tally_order]
+        _tally_leftover = {k: v for k, v in _tpl_tally.items() if k not in _tally_order}
+        if _tally_leftover:
+            _tally_parts += [f'{k} {v}원' for k, v in sorted(_tally_leftover.items())]
+        print(f'  [템플릿] 배정 요약 — {" / ".join(_tally_parts)}')
 
         # Supabase Storage 업로드
         import supabase_uploader
@@ -559,7 +581,7 @@ def generate_from_json():
         from pptx_generator import generate as gen_pptx
         from supabase_uploader import get_supabase_client
         from template_resolver import (
-            fetch_vacation_map, pick_template, resolve_template_set,
+            VARIANT_LABEL, fetch_vacation_map, pick_template, resolve_template_set,
         )
 
         # 업로드 템플릿 우선 사용 (발견① — app_actions.py와 동일 로직, template_resolver 공용)
@@ -576,16 +598,29 @@ def generate_from_json():
 
         _BATCH = 5
         raw_results = []
+        # variant('vacation_on'/'vacation_off'/'none') 또는 '로컬폴백' → 사용 원 수.
+        # 2026-08-25 — 방학 variant 오배정 방지 작업의 배정 요약용.
+        _tpl_tally = {}
         for batch_start in range(0, len(branch_cfgs), _BATCH):
             for cfg in branch_cfgs[batch_start:batch_start + _BATCH]:
                 branch_full_name = cfg['name']
                 branch_uuid  = cfg['branch_uuid']
                 branch_uuid8 = branch_uuid[:8]
                 out_pptx = os.path.join(output_dir, f'{branch_uuid8}_{year}{month:02d}.pptx')
-                tpl_path, _ = pick_template(
+                tpl_path, tpl_source = pick_template(
                     tpl_set, TEMPLATE_PATH,
                     vacation_map.get(branch_uuid), branch_full_name,
                 )
+                # 정상 매칭은 조용히 집계만, none 폴백은 원별로 로그.
+                # 로컬 폴백 경고는 pick_template()이 이미 찍었으므로 여기선 집계만.
+                if tpl_source in ('로컬(업로드없음)', '로컬(방학양식 미비)'):
+                    _tpl_tally['로컬폴백'] = _tpl_tally.get('로컬폴백', 0) + 1
+                elif 'none폴백' in tpl_source:
+                    _tpl_tally['none'] = _tpl_tally.get('none', 0) + 1
+                    print(f'  [템플릿] {branch_full_name}: {tpl_source}')
+                else:
+                    _used = next((k for k, (p, _s) in tpl_set.items() if p == tpl_path), '?')
+                    _tpl_tally[_used] = _tpl_tally.get(_used, 0) + 1
                 try:
                     gen_pptx(cfg, adapted_menu, tpl_path, out_pptx, date_map=date_map)
                     raw_results.append({
@@ -602,6 +637,15 @@ def generate_from_json():
                         'error_msg':   str(exc),
                     })
             gc.collect()
+
+        # 배정 요약 — 방학O/방학X/none/로컬폴백을 항상 한 줄로 (0건도 표시해
+        # 이상을 바로 알아챌 수 있게 한다)
+        _tally_order = list(VARIANT_LABEL) + ['로컬폴백']
+        _tally_parts = [f'{VARIANT_LABEL.get(k, k)} {_tpl_tally.get(k, 0)}원' for k in _tally_order]
+        _tally_leftover = {k: v for k, v in _tpl_tally.items() if k not in _tally_order}
+        if _tally_leftover:
+            _tally_parts += [f'{k} {v}원' for k, v in sorted(_tally_leftover.items())]
+        print(f'  [템플릿] 배정 요약 — {" / ".join(_tally_parts)}')
 
         # Supabase Storage 업로드
         import supabase_uploader
