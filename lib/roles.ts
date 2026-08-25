@@ -48,6 +48,15 @@ export const ADMIN_CREATE_ROLES: string[] = [
   ROLES.MANAGER,
 ]
 
+/** 원 담당자 계정 관리(생성·이메일변경·비번초기화·초대재발송·계정정지·운영상태) 허용 역할 */
+// ⚠️ ADMIN_CREATE_ROLES를 재사용하지 않는다 — 지금은 값이 같지만
+//    관심사가 다르다(관리자 계정 생성 vs 원 담당자 계정 관리). 하나를
+//    바꾸면 다른 하나까지 딸려 바뀌는 사고를 막기 위해 별도 상수로 둔다.
+export const BRANCH_ACCOUNT_ROLES: string[] = [
+  ROLES.SUPER_ADMIN,
+  ROLES.MANAGER,
+]
+
 /** 매니저가 생성할 수 있는 하위 역할 (super_admin·manager 제외한 나머지 전부) */
 export const MANAGER_CREATABLE_ROLES: string[] = Object.values(ROLES).filter(
   r => r !== ROLES.SUPER_ADMIN && r !== ROLES.MANAGER

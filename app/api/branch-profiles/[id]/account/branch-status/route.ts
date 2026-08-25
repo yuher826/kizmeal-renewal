@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase-server'
 import { getSupabaseAdmin } from '@/lib/supabase-admin'
+import { BRANCH_ACCOUNT_ROLES } from '@/lib/roles'
 
 // 원 운영 상태(branches.status) — check-contract-expiry cron이 이 값 그대로 읽으므로
 // 레거시(app/api/admin/branch/route.ts)와 동일한 값 집합을 유지해야 함
@@ -10,7 +11,7 @@ type BranchOpStatus = (typeof VALID_STATUSES)[number]
 async function getAdmin(supabase: ReturnType<typeof createClient>) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
-  const { data } = await supabase.from('admins').select('id, name').eq('auth_id', user.id).maybeSingle()
+  const { data } = await supabase.from('admins').select('id, name, role').eq('auth_id', user.id).maybeSingle()
   return data
 }
 
@@ -59,6 +60,12 @@ export async function PUT(
     const supabase = createClient()
     const admin = await getAdmin(supabase)
     if (!admin) return NextResponse.json({ error: '접근 권한이 없습니다' }, { status: 403 })
+    // 원 운영상태 변경은 쓰기 작업 — role 확인. GET(조회)은 매일 자동 점검
+    // 배치와 무관하게 화면 표시용이라 읽기 전용 역할도 되어야 하므로
+    // 게이트를 걸지 않는다(위 GET 참고).
+    if (!BRANCH_ACCOUNT_ROLES.includes(admin.role ?? '')) {
+      return NextResponse.json({ error: '원 담당자 계정 관리 권한이 없습니다' }, { status: 403 })
+    }
 
     if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
       return NextResponse.json({ error: '서버 설정 오류. 관리자에게 문의하세요.' }, { status: 500 })

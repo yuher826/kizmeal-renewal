@@ -95,10 +95,15 @@ function BranchAccountSection({
   profileId,
   profile,
   showToast,
+  canManage,
 }: {
   profileId: string
   profile: BranchProfileDetail
   showToast: (msg: string, type: 'success' | 'error') => void
+  // ⚠️ 버튼 숨김은 UX일 뿐 보안이 아니다 — URL 직접 호출로 우회된다.
+  //    실질 방어선은 API 게이트(account/*/route.ts의 BRANCH_ACCOUNT_ROLES
+  //    확인)다. 여기서 숨겨도 API를 안 막으면 의미가 없다.
+  canManage: boolean
 }) {
   const [info, setInfo] = useState<BranchAccountInfo | null>(null)
   const [loading, setLoading] = useState(true)
@@ -265,7 +270,7 @@ function BranchAccountSection({
             <div className="bg-amber-50 border border-amber-200 text-amber-700 text-xs rounded-lg px-3 py-2.5">
               ⚠️ 기본정보를 먼저 입력하세요 (누락: {missingBasicInfo.join(', ')})
             </div>
-          ) : (
+          ) : canManage ? (
             <>
               <input
                 type="email"
@@ -285,7 +290,7 @@ function BranchAccountSection({
                 {isInviting ? <><Loader2 size={15} className="animate-spin" />발송 중...</> : '초대 이메일 발송'}
               </button>
             </>
-          )}
+          ) : null}
         </div>
       ) : (
         /* ── 계정 있음 ── */
@@ -344,60 +349,64 @@ function BranchAccountSection({
             <p className="text-xs text-slate-400 mt-1">KOS ID: {info.kos_id}</p>
           )}
 
-          {/* 버튼 영역 */}
-          <div className="flex flex-wrap gap-2 mt-3">
-            {info.status === 'pending' && (
-              <button
-                onClick={handleResend}
-                disabled={actionLoading === 'resend'}
-                className="border border-amber-200 text-amber-600 hover:bg-amber-50 text-sm rounded-lg px-3 py-2 transition-colors disabled:opacity-60 flex items-center gap-1.5"
-              >
-                {actionLoading === 'resend' && <Loader2 size={13} className="animate-spin" />}
-                초대 재발송
-              </button>
-            )}
-
-            {info.status === 'active' && (
-              <>
+          {/* 버튼 영역 — canManage(BRANCH_ACCOUNT_ROLES)만. director 등 읽기
+              전용 역할은 위 조회(GET)는 그대로 되고 이 버튼들만 안 보인다 */}
+          {canManage && (
+            <div className="flex flex-wrap gap-2 mt-3">
+              {info.status === 'pending' && (
                 <button
-                  onClick={handlePasswordReset}
-                  disabled={actionLoading === 'reset'}
-                  className="border border-slate-200 text-slate-600 hover:bg-slate-50 text-sm rounded-lg px-3 py-2 transition-colors disabled:opacity-60 flex items-center gap-1.5"
+                  onClick={handleResend}
+                  disabled={actionLoading === 'resend'}
+                  className="border border-amber-200 text-amber-600 hover:bg-amber-50 text-sm rounded-lg px-3 py-2 transition-colors disabled:opacity-60 flex items-center gap-1.5"
                 >
-                  {actionLoading === 'reset' && <Loader2 size={13} className="animate-spin" />}
-                  비밀번호 초기화
+                  {actionLoading === 'resend' && <Loader2 size={13} className="animate-spin" />}
+                  초대 재발송
                 </button>
-                <button
-                  onClick={() => { setEmailEditMode(true); setPendingNewEmail(info.email ?? '') }}
-                  disabled={emailEditMode}
-                  className="border border-slate-200 text-slate-600 hover:bg-slate-50 text-sm rounded-lg px-3 py-2 transition-colors disabled:opacity-60"
-                >
-                  이메일 변경
-                </button>
-                <button
-                  onClick={() => setConfirmDeactivate(true)}
-                  disabled={!!actionLoading}
-                  className="border border-red-200 text-red-500 hover:bg-red-50 text-sm rounded-lg px-3 py-2 transition-colors disabled:opacity-60"
-                >
-                  계정 비활성화
-                </button>
-              </>
-            )}
+              )}
 
-            {info.status === 'inactive' && (
-              <button
-                onClick={() => handleToggleStatus('activate')}
-                disabled={actionLoading === 'activate'}
-                className="border border-emerald-200 text-emerald-600 hover:bg-emerald-50 text-sm rounded-lg px-3 py-2 transition-colors disabled:opacity-60 flex items-center gap-1.5"
-              >
-                {actionLoading === 'activate' && <Loader2 size={13} className="animate-spin" />}
-                계정 재활성화
-              </button>
-            )}
-          </div>
+              {info.status === 'active' && (
+                <>
+                  <button
+                    onClick={handlePasswordReset}
+                    disabled={actionLoading === 'reset'}
+                    className="border border-slate-200 text-slate-600 hover:bg-slate-50 text-sm rounded-lg px-3 py-2 transition-colors disabled:opacity-60 flex items-center gap-1.5"
+                  >
+                    {actionLoading === 'reset' && <Loader2 size={13} className="animate-spin" />}
+                    비밀번호 초기화
+                  </button>
+                  <button
+                    onClick={() => { setEmailEditMode(true); setPendingNewEmail(info.email ?? '') }}
+                    disabled={emailEditMode}
+                    className="border border-slate-200 text-slate-600 hover:bg-slate-50 text-sm rounded-lg px-3 py-2 transition-colors disabled:opacity-60"
+                  >
+                    이메일 변경
+                  </button>
+                  <button
+                    onClick={() => setConfirmDeactivate(true)}
+                    disabled={!!actionLoading}
+                    className="border border-red-200 text-red-500 hover:bg-red-50 text-sm rounded-lg px-3 py-2 transition-colors disabled:opacity-60"
+                  >
+                    계정 비활성화
+                  </button>
+                </>
+              )}
 
-          {/* 비활성화 확인 모달 */}
-          {confirmDeactivate && (
+              {info.status === 'inactive' && (
+                <button
+                  onClick={() => handleToggleStatus('activate')}
+                  disabled={actionLoading === 'activate'}
+                  className="border border-emerald-200 text-emerald-600 hover:bg-emerald-50 text-sm rounded-lg px-3 py-2 transition-colors disabled:opacity-60 flex items-center gap-1.5"
+                >
+                  {actionLoading === 'activate' && <Loader2 size={13} className="animate-spin" />}
+                  계정 재활성화
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* 비활성화 확인 모달 — 버튼과 같은 조건(canManage)으로 숨긴다.
+              트리거 버튼만 숨기고 모달을 남기면 도달 불가능한 죽은 코드가 된다 */}
+          {canManage && confirmDeactivate && (
             <div
               className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
               onClick={() => setConfirmDeactivate(false)}
@@ -460,10 +469,15 @@ function BranchOperationStatusSection({
   profileId,
   branchName,
   showToast,
+  canManage,
 }: {
   profileId: string
   branchName: string
   showToast: (msg: string, type: 'success' | 'error') => void
+  // ⚠️ 버튼 숨김은 UX일 뿐 보안이 아니다 — URL 직접 호출로 우회된다.
+  //    실질 방어선은 API 게이트(account/branch-status/route.ts의
+  //    BRANCH_ACCOUNT_ROLES 확인)다.
+  canManage: boolean
 }) {
   const [status, setStatus] = useState<BranchStatus | null>(null)
   const [loading, setLoading] = useState(true)
@@ -553,33 +567,39 @@ function BranchOperationStatusSection({
         <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${cfg.cls}`}>{cfg.label}</span>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <select
-          value={status}
-          onChange={e => updateStatus(e.target.value as BranchStatus)}
-          disabled={saving}
-          className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500 disabled:opacity-60"
-        >
-          <option value="new">신규</option>
-          <option value="active">활성</option>
-          <option value="vacation">방학</option>
-          <option value="expired">만료</option>
-          <option value="inactive">비활성</option>
-        </select>
-
-        {status !== 'inactive' && (
-          <button
-            onClick={() => setConfirmDeactivate(true)}
+      {/* 상태 변경 UI — canManage(BRANCH_ACCOUNT_ROLES)만. director 등 읽기
+          전용 역할은 위 배지(cfg.label)로 조회는 그대로 되고 이 select/
+          비활성화 버튼만 안 보인다 */}
+      {canManage && (
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            value={status}
+            onChange={e => updateStatus(e.target.value as BranchStatus)}
             disabled={saving}
-            className="border border-red-200 text-red-500 hover:bg-red-50 text-sm rounded-lg px-3 py-2 transition-colors disabled:opacity-60"
+            className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500 disabled:opacity-60"
           >
-            비활성화
-          </button>
-        )}
-      </div>
+            <option value="new">신규</option>
+            <option value="active">활성</option>
+            <option value="vacation">방학</option>
+            <option value="expired">만료</option>
+            <option value="inactive">비활성</option>
+          </select>
 
-      {/* 비활성화 확인 모달 */}
-      {confirmDeactivate && (
+          {status !== 'inactive' && (
+            <button
+              onClick={() => setConfirmDeactivate(true)}
+              disabled={saving}
+              className="border border-red-200 text-red-500 hover:bg-red-50 text-sm rounded-lg px-3 py-2 transition-colors disabled:opacity-60"
+            >
+              비활성화
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* 비활성화 확인 모달 — 버튼과 같은 조건(canManage)으로 숨긴다.
+          트리거 버튼만 숨기고 모달을 남기면 도달 불가능한 죽은 코드가 된다 */}
+      {canManage && confirmDeactivate && (
         <div
           className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
           onClick={() => setConfirmDeactivate(false)}
@@ -619,9 +639,14 @@ function BranchOperationStatusSection({
 interface Props {
   id: string
   isSuperAdmin: boolean
+  // 원 담당자 계정 관리(초대·이메일변경·비번초기화·재발송·정지, 원 운영상태
+  // 변경) 버튼 노출 여부. isSuperAdmin과 관심사가 달라 별도 prop으로 둔다
+  // (lib/roles.ts BRANCH_ACCOUNT_ROLES 참고 — ADMIN_CREATE_ROLES와 값은
+  // 같지만 재사용하지 않은 이유와 동일).
+  canManageBranchAccount: boolean
 }
 
-export default function BranchProfileDetailClient({ id, isSuperAdmin }: Props) {
+export default function BranchProfileDetailClient({ id, isSuperAdmin, canManageBranchAccount }: Props) {
   const [profile, setProfile] = useState<BranchProfileDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
@@ -788,7 +813,12 @@ export default function BranchProfileDetailClient({ id, isSuperAdmin }: Props) {
         </div>
 
         {/* 담당자 계정 */}
-        <BranchAccountSection profileId={id} profile={profile} showToast={showToast} />
+        <BranchAccountSection
+          profileId={id}
+          profile={profile}
+          showToast={showToast}
+          canManage={canManageBranchAccount}
+        />
 
         {/* 원 운영 상태 — 계정이 연결(branch_id 존재)된 원만 표시 */}
         {profile.branch_id && (
@@ -796,6 +826,7 @@ export default function BranchProfileDetailClient({ id, isSuperAdmin }: Props) {
             profileId={id}
             branchName={profile.branch_full_name ?? profile.display_name ?? titleName}
             showToast={showToast}
+            canManage={canManageBranchAccount}
           />
         )}
       </div>
