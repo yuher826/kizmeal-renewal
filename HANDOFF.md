@@ -1017,26 +1017,31 @@ SQL Editor는 마지막에 열었던 프로젝트를 기억하므로, **실행 �
 
 ---
 
-## ⚠️ 반복 함정 — DB에 있는 컬럼이 레포 DDL엔 없을 수 있다
+## ⚠️ 반복 함정 — 마이그레이션 파일명 규칙이 두 가지다
 
-2026-08-25 확인: `diet_templates` 실제 컬럼 15개 중 **5개**
-(`year`, `month`, `group_tag`, `validation_result`, `org_id`)가
-레포 어느 마이그레이션 파일에도 ADD COLUMN 기록이 없다.
-- 원본 `diet_template_tables.sql` → 9개 컬럼만 정의
-- `add_holiday_exceptions_260820.sql` → `vacation_variant` 하나만 추가
+`supabase/migrations` 안에 이름 계열이 두 가지 섞여 있다:
+- ① 타임스탬프 접두사형 — `20260623000000_extend_diet_templates_and_logs.sql`
+- ② 접두사 없는 이름형 — `add_holiday_exceptions_260820.sql`,
+  `diet_template_tables.sql` 등
 
-기존 함정("레포에 SQL 파일이 있다 ≠ 실제 DB에 있다")의 **정반대 방향**이다.
-스키마를 레포만 보고 판단하면 없는 컬럼을 참조하는 코드를 쓰거나(런타임
-에러), 반대로 있는 컬럼을 못 보고 지나친다(오늘 `org_id`가 그럴 뻔했다).
+파일명을 추측해서 grep/조회하면 **한쪽 계열을 통째로 놓친다.**
 
-→ 스키마 관련 작업 전에는 반드시 DB를 직접 조회할 것:
-   ```sql
-   SELECT column_name, data_type, is_nullable, column_default
-     FROM information_schema.columns
-    WHERE table_name = '...' ORDER BY ordinal_position;
-   ```
-   ※ 결과가 15행이면 화면에 다 안 보일 수 있다. 스크롤하거나
-     `column_name IN (...)` 으로 좁혀서 볼 것.
+**2026-08-25에 실제로 이 사고가 났다** — `diet_templates`의
+`year`/`month`/`group_tag`/`validation_result`/`org_id` 5개 컬럼이
+"레포 어느 마이그레이션에도 없다"고 기록했으나(이 문서와
+`fix_diet_templates_active_trigger_260824.sql`에 남아 있었음, 2026-08-26
+정정), 실제로는 ①계열 파일 `20260623000000_extend_diet_templates_and_logs.sql`
+(커밋 `098631e`, 2026-06-23)이 이 5개를 전부 `ADD COLUMN` 하고 있었다.
+원인은 파일명 추측 조회만 하고 **폴더를 나열하지 않은 것.**
+
+→ 스키마 이력을 확인할 때는 파일명을 추측하지 말고 폴더 전체를 나열할 것:
+```sh
+ls supabase/migrations
+grep -rn "ADD COLUMN" supabase/migrations
+```
+
+→ **여전히 유효한 원칙**: 스키마 판단은 DB 직접 조회가 최종 근거다
+(`information_schema.columns`). 레포는 이력 파악용이다.
 
 ---
 

@@ -36,12 +36,17 @@
 --   vacation_variant text     NOT NULL (DEFAULT 'none')
 --   org_id           uuid     NULL 허용  (실행 시점 전 행 NULL)
 --
--- ⚠️ ★year/month/group_tag/validation_result/org_id 5개 컬럼은 레포 어느
---    마이그레이션 파일에도 ADD COLUMN 기록이 없다(원본 diet_template_tables.sql
---    은 9개 컬럼뿐, add_holiday_exceptions_260820.sql은 vacation_variant만
---    추가). DB엔 실재하나 DDL 이력이 유실된 상태다.
---    → 이 테이블 스키마를 레포만 보고 판단하지 말 것. 반드시 DB를 조회할 것.
+-- ⚠️★2026-08-26 정정★ — 아래는 2026-08-25 작성 당시 오기술이었다. year/month/
+--    group_tag/validation_result/org_id 5개 컬럼은 레포에 DDL 기록이 있다:
+--    `20260623000000_extend_diet_templates_and_logs.sql`(커밋 098631e,
+--    2026-06-23)이 이 5개를 전부 ADD COLUMN 한다. 원본 diet_template_tables.sql
+--    (9개 컬럼)과 add_holiday_exceptions_260820.sql(vacation_variant만)만 보고
+--    "레포에 없다"고 단정한 게 원인 — 타임스탬프 접두사형 파일명(위 파일처럼
+--    `20260623000000_` 로 시작)을 놓쳤다. 상세: HANDOFF.md "반복 함정 —
+--    마이그레이션 파일명 규칙이 두 가지다" 참고.
+--    → 그래도 유효한 원칙: 스키마 최종 근거는 DB 직접 조회(information_schema).
 --
+
 -- ── 수정 내용 ─────────────────────────────────────────────────────────
 -- "같은 (org_id, year, month, vacation_variant) 조합 안에서만 단일 active"
 -- 로 좁힌다.
