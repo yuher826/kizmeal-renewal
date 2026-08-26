@@ -44,6 +44,15 @@ interface DietTemplate {
   validation_result: TemplateValidation | null
 }
 
+// GET 응답에 실려 오는 호출자 권한 — 업로드/활성화(canManage)와 삭제
+// (canDelete)는 별개 축이다(삭제가 더 좁다). 이 페이지가 admins를 따로
+// 조회하지 않고 이 값만으로 버튼 disabled 여부를 판단한다.
+interface TemplatePermissions {
+  canManage: boolean
+  canDelete: boolean
+}
+const NO_PERMISSIONS: TemplatePermissions = { canManage: false, canDelete: false }
+
 // ── 연·월 그룹핑 (2026-08-25 재구성) ─────────────────────────────────────
 // 기존엔 "활성 1개(상단) + 나머지(하단)" 이분법이었다. 같은 달에 방학O·
 // 방학X가 동시에 active일 수 있는 새 모델에서는 이게 깨진다 —
@@ -153,6 +162,7 @@ function MiniPreview({ style }: { style: StyleJson }) {
 
 export default function DietTemplatesPage() {
   const [templates, setTemplates]       = useState<DietTemplate[]>([])
+  const [permissions, setPermissions]   = useState<TemplatePermissions>(NO_PERMISSIONS)
   const [loading,   setLoading]         = useState(true)
   const [uploading, setUploading]       = useState(false)
   const [file,      setFile]            = useState<File | null>(null)
@@ -178,6 +188,7 @@ export default function DietTemplatesPage() {
     if (res.ok) {
       const json = await res.json()
       setTemplates(json.templates || [])
+      setPermissions(json.permissions || NO_PERMISSIONS)
     }
     setLoading(false)
   }, [])
@@ -269,15 +280,19 @@ export default function DietTemplatesPage() {
         <div className="flex items-center gap-2 shrink-0">
           <button onClick={() => setPreview({ tmpl: t, styles: { ...DEFAULT_STYLE, ...t.style_json } })}
             className="text-xs text-gray-500 hover:text-[#2D6A4F] font-medium">미리보기</button>
+          {/* ★권한 없으면 숨기지 않고 disabled + 이유 안내 — 숨기면
+              "왜 버튼이 없지?" 문의가 발생한다. 이유를 화면이 말하게 한다. */}
           {!t.is_active && (
-            <button onClick={() => activate(t.id)}
-              className="text-xs bg-[#E8F5E9] text-[#2D6A4F] font-semibold px-3 py-1.5 rounded-lg hover:bg-[#C8E6C9] transition-colors">
+            <button onClick={() => activate(t.id)} disabled={!permissions.canManage}
+              title={permissions.canManage ? undefined : '템플릿 관리 담당자만 가능합니다'}
+              className="text-xs bg-[#E8F5E9] text-[#2D6A4F] font-semibold px-3 py-1.5 rounded-lg hover:bg-[#C8E6C9] transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-[#E8F5E9]">
               활성화
             </button>
           )}
           {!t.is_active && (
-            <button onClick={() => deleteTemplate(t.id)}
-              className="text-xs text-red-400 hover:text-red-600 font-medium">삭제</button>
+            <button onClick={() => deleteTemplate(t.id)} disabled={!permissions.canDelete}
+              title={permissions.canDelete ? undefined : '최고관리자만 가능합니다'}
+              className="text-xs text-red-400 hover:text-red-600 font-medium disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-red-400">삭제</button>
           )}
         </div>
       </div>
@@ -303,8 +318,9 @@ export default function DietTemplatesPage() {
             <div className="flex gap-3">
               <button onClick={() => setPreview(null)}
                 className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 rounded-xl text-sm">닫기</button>
-              <button onClick={() => { activate(preview.tmpl.id); setPreview(null) }}
-                className="flex-1 bg-[#2D6A4F] hover:bg-[#1B4332] text-white font-semibold py-3 rounded-xl text-sm">
+              <button onClick={() => { activate(preview.tmpl.id); setPreview(null) }} disabled={!permissions.canManage}
+                title={permissions.canManage ? undefined : '템플릿 관리 담당자만 가능합니다'}
+                className="flex-1 bg-[#2D6A4F] hover:bg-[#1B4332] text-white font-semibold py-3 rounded-xl text-sm disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-[#2D6A4F]">
                 이 디자인으로 적용
               </button>
             </div>
@@ -338,8 +354,9 @@ export default function DietTemplatesPage() {
                   className="flex-1 bg-white border border-blue-300 text-blue-700 font-semibold py-2.5 rounded-xl text-sm">
                   나중에 적용
                 </button>
-                <button onClick={() => activate(pendingStyle.id)}
-                  className="flex-1 bg-[#2D6A4F] hover:bg-[#1B4332] text-white font-bold py-2.5 rounded-xl text-sm">
+                <button onClick={() => activate(pendingStyle.id)} disabled={!permissions.canManage}
+                  title={permissions.canManage ? undefined : '템플릿 관리 담당자만 가능합니다'}
+                  className="flex-1 bg-[#2D6A4F] hover:bg-[#1B4332] text-white font-bold py-2.5 rounded-xl text-sm disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-[#2D6A4F]">
                   이 디자인으로 적용하기
                 </button>
               </div>
@@ -407,10 +424,17 @@ export default function DietTemplatesPage() {
               ))}
             </select>
           </div>
-          <button type="button" onClick={handleUpload} disabled={!file || !name.trim() || !uploadYear || !uploadMonth || uploading}
+          <button type="button" onClick={handleUpload}
+            disabled={!file || !name.trim() || !uploadYear || !uploadMonth || uploading || !permissions.canManage}
+            title={permissions.canManage ? undefined : '템플릿 관리 담당자만 가능합니다'}
             className="w-full bg-[#2D6A4F] hover:bg-[#1B4332] disabled:bg-gray-300 text-white font-bold py-3 rounded-xl transition-colors flex items-center justify-center gap-2">
             {uploading ? <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"/>분석 중...</> : '업로드 및 스타일 분석'}
           </button>
+          {/* ★숨기지 않고 이유를 화면이 말하게 한다 — 버튼이 disabled인
+              것만 보면 실무자는 "왜 안 되지"를 문의로 물어야 알 수 있다 */}
+          {!loading && !permissions.canManage && (
+            <p className="text-xs text-yellow-700 text-center">템플릿 관리 담당자만 가능합니다</p>
+          )}
         </div>
 
         {loading ? (
