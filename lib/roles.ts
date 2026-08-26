@@ -22,6 +22,14 @@ export const UPLOAD_ROLES: string[] = [
   ...NUTRITIONIST_ROLES,
 ]
 
+/**
+ * ⚠️ 이 역할 목록은 DB 정책에도 같은 값이 별도로 존재한다.
+ *    정책: diet_review_items_admin_access
+ *    파일: supabase/migrations/enable_rls_admins_diet_review_260826.sql
+ *    여기를 고치면 정책도 같이 고쳐야 한다. 한쪽만 고치면
+ *    service_role 경로에서는 멀쩡한데 anon 경로에서만 조용히 막힌다.
+ *    (현재 앱은 service_role로만 접근하므로 즉시 티가 나지 않는다)
+ */
 /** 검토 페이지 조회 허용 역할 */
 export const REVIEW_ALLOWED_ROLES: string[] = [
   'super_admin',
