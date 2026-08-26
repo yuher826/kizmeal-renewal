@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { getYearOptions } from '@/lib/diet-utils'
+import { canManageTemplates, canDeleteTemplate } from '@/lib/roles'
 
 // diet_templates.vacation_variant CHECK 제약과 동일해야 한다
 const VACATION_VARIANTS = ['none', 'vacation_on', 'vacation_off'] as const
@@ -36,11 +37,24 @@ function makeSupabase() {
   )
 }
 
-async function checkAdmin(supabase: ReturnType<typeof makeSupabase>): Promise<boolean> {
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return false
-  const { data } = await supabase.from('admins').select('id').eq('auth_id', user.id).eq('is_active', true).maybeSingle()
-  return !!data
+interface AdminRow {
+  id: string
+  role: string
+  can_manage_templates: boolean | null
+}
+
+// ★기존 checkAdmin()은 boolean만 반환했다. GET 응답에 호출자 권한(permissions)을
+// 실어 보내고 POST에서 role/can_manage_templates로 게이트하려면 admin 행
+// 자체가 필요해 반환 타입을 넓혔다 — GET의 "행이 없으면 403" 동작 자체는
+// 그대로다(분기 추가 없음, 반환값만 넓어짐).
+async function getAdmin(supabase: ReturnType<typeof makeSupabase>, userId: string): Promise<AdminRow | null> {
+  const { data } = await supabase
+    .from('admins')
+    .select('id, role, can_manage_templates')
+    .eq('auth_id', userId)
+    .eq('is_active', true)
+    .maybeSingle()
+  return data ?? null
 }
 
 /* ── pptx XML 파싱 헬퍼 ── */
@@ -160,9 +174,10 @@ async function validateTemplateZip(zip: JSZip): Promise<TemplateValidation> {
 /* ── GET: 템플릿 목록 ── */
 export async function GET() {
   const supabase = makeSupabase()
-  if (!(await checkAdmin(supabase))) {
-    return NextResponse.json({ error: '관리자 권한이 필요합니다' }, { status: 403 })
-  }
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: '관리자 권한이 필요합니다' }, { status: 403 })
+  const admin = await getAdmin(supabase, user.id)
+  if (!admin) return NextResponse.json({ error: '관리자 권한이 필요합니다' }, { status: 403 })
 
   // 정렬: 연·월 내림차순(최신 달이 위) → 같은 (연,월) 안에서는 버전 내림차순.
   // year가 NULL인 레거시 행은 nullsFirst:false로 맨 뒤로 보낸다.
@@ -174,7 +189,15 @@ export async function GET() {
     .order('version', { ascending: false })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ templates: data || [] })
+  // ★2차 방어선(UI)이 버튼 disabled 여부를 판단할 근거. 페이지가 admins를
+  // 따로 조회하지 않도록 GET 응답에 호출자 권한을 함께 실어 보낸다.
+  return NextResponse.json({
+    templates: data || [],
+    permissions: {
+      canManage: canManageTemplates(admin),
+      canDelete: canDeleteTemplate(admin),
+    },
+  })
 }
 
 /* ── POST: 새 템플릿 업로드 ── */
@@ -182,7 +205,12 @@ export async function POST(req: NextRequest) {
   const supabase = makeSupabase()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: '로그인이 필요합니다' }, { status: 401 })
-  if (!(await checkAdmin(supabase))) return NextResponse.json({ error: '관리자 권한이 필요합니다' }, { status: 403 })
+  const admin = await getAdmin(supabase, user.id)
+  if (!admin) return NextResponse.json({ error: '관리자 권한이 필요합니다' }, { status: 403 })
+  // ★1차 방어선(API) — 템플릿 담당은 role이 아니라 배정(can_manage_templates)이다
+  if (!canManageTemplates(admin)) {
+    return NextResponse.json({ error: '템플릿 관리 담당자만 가능합니다' }, { status: 403 })
+  }
 
   let formData: FormData
   try {

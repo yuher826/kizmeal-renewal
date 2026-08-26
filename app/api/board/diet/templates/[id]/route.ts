@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import { canDeleteTemplate } from '@/lib/roles'
 
 function makeSupabase() {
   const store = cookies()
@@ -25,9 +26,15 @@ export async function DELETE(
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: '로그인이 필요합니다' }, { status: 401 })
 
+  // ★role만 select하면 삭제 게이트를 판단할 수 없다 — 넓혀서 조회한다
   const { data: admin } = await supabase
-    .from('admins').select('id').eq('auth_id', user.id).eq('is_active', true).maybeSingle()
+    .from('admins').select('id, role, can_manage_templates').eq('auth_id', user.id).eq('is_active', true).maybeSingle()
   if (!admin) return NextResponse.json({ error: '관리자 권한이 필요합니다' }, { status: 403 })
+  // ★1차 방어선(API) — 삭제는 super_admin만. 담당자(can_manage_templates)도
+  //   불가 — hard delete라 잘못 지우면 되돌릴 수 없다(soft delete는 별도 과제)
+  if (!canDeleteTemplate(admin)) {
+    return NextResponse.json({ error: '템플릿 삭제는 최고관리자만 가능합니다' }, { status: 403 })
+  }
 
   const { id } = params
   if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })

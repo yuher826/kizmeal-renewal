@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import { canManageTemplates } from '@/lib/roles'
 
 function makeSupabase() {
   const store = cookies()
@@ -25,9 +26,15 @@ export async function PATCH(
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: '로그인이 필요합니다' }, { status: 401 })
 
+  // ★role만 select하면 can_manage_templates가 undefined가 되어 담당
+  //   영양사까지 403이 난다 — 반드시 두 컬럼을 함께 넓혀서 조회한다
   const { data: admin } = await supabase
-    .from('admins').select('id').eq('auth_id', user.id).eq('is_active', true).maybeSingle()
+    .from('admins').select('id, role, can_manage_templates').eq('auth_id', user.id).eq('is_active', true).maybeSingle()
   if (!admin) return NextResponse.json({ error: '관리자 권한이 필요합니다' }, { status: 403 })
+  // ★1차 방어선(API) — 템플릿 담당은 role이 아니라 배정(can_manage_templates)이다
+  if (!canManageTemplates(admin)) {
+    return NextResponse.json({ error: '템플릿 관리 담당자만 가능합니다' }, { status: 403 })
+  }
 
   const { id } = params
   if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
