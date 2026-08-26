@@ -24,51 +24,62 @@
 
 ---
 
-## ⚠️ 미해결 — RLS 미적용 2건 (2026-08-25 발견) — ★다음 세션 최우선
+## ✅ 해결 — RLS 미적용 2건 (2026-08-25 발견 → 2026-08-26 해결)
 
-### 1. 사실관계
+`enable_rls_admins_diet_review_260826.sql` 실행 완료. `admins`,
+`diet_review_items` 두 테이블 모두 `rowsecurity=true`로 전환.
 
-- `pg_tables` 조회 결과 public 스키마 52개 테이블 중 `rowsecurity=false`가
-  정확히 2개: **`admins`, `diet_review_items`.** 나머지 50개는 `true`
-- 두 테이블 모두 정책은 존재한다. `ENABLE ROW LEVEL SECURITY`만 빠진
-  상태 → 정책이 붙어 있어도 RLS가 꺼져 있으면 전부 무시된다
-- `admins`는 직원 계정 테이블(이메일·role·auth_id)이고, 모든 ERP API가
-  이 테이블로 권한을 확인한다. anon 키는 브라우저 번들에 노출되므로
-  실질적으로 무방비다
-- ※ 조사 초기에 `branches`/`diet_templates`도 anon으로 읽힌다고 봤으나,
-  `pg_tables` 확인 결과 둘 다 `rowsecurity=true`였다. RLS는 켜져 있고
-  정책이 관대한 것으로 보인다 — 별개 사안으로 분리
+### 정정 (어제 기록 중)
 
-### 2. ★켜기 전에 반드시 해결해야 할 것 3가지 (그냥 켜면 프로덕션 정지)
+`is_admin()`은 **`SECURITY DEFINER`라 재귀가 아니었다.** 어제 "b) 본문
+미확인"으로 남겨둔 우려는 기우였음 — 확인 결과 함수 자체가 이미 재귀를
+회피하는 구조였다. **실제 blocker는 `admins_super_admin_all` 정책
+하나뿐**이었다(정책 본문이 직접 `admins`를 서브쿼리로 읽는 구조).
+`is_super_admin()` 헬퍼 함수(`SECURITY DEFINER`)로 감싸 해결.
 
-- **a) `admins_super_admin_all`이 재귀다** —
-  `USING (EXISTS (SELECT 1 FROM admins admins_1 WHERE admins_1.auth_id = auth.uid() ...))`
-  `admins` 정책 안에서 `admins`를 읽는다. RLS 켜면
-  `"infinite recursion detected in policy"`로 모든 ERP API가 즉시 죽는다
-- **b) `is_admin()` 함수 본문 미확인** —
-  `admins_select_all_admins`가 이 함수를 쓴다. 함수가 내부에서 `admins`를
-  읽고 `SECURITY DEFINER`가 아니면 이것도 재귀다. 확인 필요
-- **c) `diet_review_items`의 `admins_all` 정책에 컬럼 오류** —
-  `WHERE admins.id = auth.uid()`인데 다른 정책들은 전부
-  `auth_id = auth.uid()`다. `admins.id`는 테이블 PK, `auth_id`가 인증
-  ID. 켜는 순간 아무도 매칭 안 돼 식단 검토 화면이 빈 화면이 된다
+### 어제 기록에 없던 것
 
-### 3. 안전한 적용 절차 (다음 세션)
+`diet_review_items`의 `admins_all` 정책은 어제 "컬럼 오류(`id` vs
+`auth_id`)"만 적혀 있었는데, **역할 배열 자체도 불완전**했다.
+`nutritionist_ck`/`nutritionist_consignment`가 빠져 있어 컬럼을 고쳤어도
+두 역할은 여전히 매칭 안 되는 상태였을 것. `current_admin_role()` 헬퍼로
+바꾸며 역할 배열을 `diet_review_items_admin_access` 정책에 새로 포함시킴.
 
-1. `is_admin()` 본문 확인(`pg_get_functiondef`)
-2. 재귀 회피 방식 결정 — `SECURITY DEFINER` 헬퍼 함수로 감싸는 것이 정석
-3. `diet_review_items` 정책의 `id` → `auth_id` 수정
-4. `BEGIN; ALTER TABLE ... ENABLE RLS; SET LOCAL role authenticated;
-   SET LOCAL request.jwt.claims=...; SELECT count(*) ...; ROLLBACK;`
-   로 트랜잭션 안에서 시험(`ROLLBACK`이라 DB에 안 남음)
-5. 시험 통과 후 실제 적용 + 즉시 실물 확인(로그인/식단검토 화면)
-6. 되돌리기: `ALTER TABLE ... DISABLE ROW LEVEL SECURITY`
+### ★새 사실 — RLS를 켜도 앱 동작은 안 바뀐다
 
-### 4. 우선순위 판단
+`diet_review_items`는 **앱이 전부 `service_role`로 접근한다.**
+`diet-review`/`deploy`/`resubmit` 3개 라우트 모두
+`db = serviceKey ? admin : supabase` 패턴이라, `service_role` 키가 있으면
+RLS를 완전히 우회한다. 즉 **정책은 방어선이지 실제 동작 경로가 아니다** —
+이번 RLS 활성화로 화면 동작이 달라질 여지 자체가 없었다(그래서 안전하게
+켤 수 있었던 것이기도 함).
 
-급하지 않다(이 상태가 이미 오래 지속됨). 다만 `admins` 노출은 직원 정보라
-**다음 세션 최우선 과제로 둘 것.** 시간이 충분한 세션에 착수할 것 —
-잘못 켜면 전원 로그인 불가가 된다.
+`admins`도 마찬가지로 **쓰기는 전부 `service_role`**(`admin`/`branch/route.ts`
+계열)이고, **읽기만 anon 계열 클라이언트**를 거친다. 따라서 이번 RLS는
+"anon 키로 직원 테이블을 직접 조회하는 경로"를 막는 것이 실질 효과이고,
+ERP 자체 API 동작에는 영향이 없다.
+
+### 검증 결과
+
+로그인 / 식단 검토(6월 49건 목록) / 관리자 관리(6명 목록) **전부 정상
+통과.** 브라우저 실물 확인 완료.
+
+---
+
+## ⚠️ 미해결 — RLS 활성화로 새로 드러난 관심사 2건 (2026-08-26)
+
+- **a) `admins_select_all_admins`가 최소권한이 아니다** —
+  이 정책이 `is_admin()` 기반이라 "활성 관리자면 누구나 전 직원 행을
+  읽는다." `director`/영양사 등 낮은 권한 역할도 전 직원의 이메일·`auth_id`가
+  조회된다. **anon 차단은 이번에 됐지만, 내부 역할 간 최소권한 분리는
+  아직 안 됐다.** 별도 과제로 분리
+- **b) 역할 배열이 두 곳에 따로 존재한다** —
+  `lib/roles.ts`의 역할 상수와 RLS 정책의 역할 배열(`current_admin_role()
+  in (...)`)이 서로 다른 파일에 독립적으로 존재한다. 나중에 `roles.ts`를
+  고칠 때 정책도 같이 고쳐야 한다는 걸 아무도 기억 못 할 위험이 있다.
+  이번에 `current_admin_role()` 함수로 한 겹 감쌌지만, **배열 값 자체는
+  여전히 이중관리** — 근본 해결(예: 함수가 `roles.ts`와 동일한 소스를
+  참조하도록 하는 것)은 안 됨
 
 ---
 
