@@ -77,6 +77,26 @@ export const MANAGER_FORCED_SCOPE = 'erp_only'
 export const isNutritionist = (role: string): boolean =>
   NUTRITIONIST_ROLES.includes(role)
 
+/**
+ * 템플릿 관리(업로드/활성화) 가능 여부.
+ * ★role이 아니라 admins.can_manage_templates 플래그로 판단한다 — 템플릿
+ *   담당은 "직무"가 아니라 "배정"이다. 영양사는 여러 명이지만 템플릿을
+ *   올리는 담당자는 따로 있다. role 기반으로 막으면 영양사 계정이 늘어날
+ *   때마다 권한이 자동으로 따라붙어 아무도 모르게 넓어진다.
+ * super_admin은 담당자 부재(퇴사·휴가 등) 시 대체 경로로 항상 통과시킨다.
+ */
+export const canManageTemplates = (a: { role: string; can_manage_templates?: boolean | null }): boolean =>
+  a.role === ROLES.SUPER_ADMIN || a.can_manage_templates === true
+
+/**
+ * 템플릿 삭제 가능 여부 — super_admin만.
+ * ★DELETE를 이렇게 좁힌 것은 임시 조치다. 정식 해법은 soft delete
+ *   (deleted_at 컬럼)이며, hard delete를 아무나(담당자 포함) 할 수 있게
+ *   두면 과거 배포분을 재현할 방법이 없어진다. 별도 과제로 HANDOFF에 있음.
+ */
+export const canDeleteTemplate = (a: { role: string }): boolean =>
+  a.role === ROLES.SUPER_ADMIN
+
 /** 역할 → 한글 라벨 (공통) */
 export const ROLE_LABEL: Record<string, string> = {
   super_admin:              '슈퍼관리자',
