@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase-server'
+import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import type { BranchProfileDetail } from '@/types/branch-profile'
 import { BRANCH_PROFILE_EDIT_ROLES } from '@/lib/roles'
 
@@ -189,7 +190,7 @@ export async function PUT(
     if (!user) return NextResponse.json({ error: '인증이 필요합니다' }, { status: 401 })
 
     const { data: adminData } = await supabase
-      .from('admins').select('id, role').eq('auth_id', user.id).maybeSingle()
+      .from('admins').select('id, role, name').eq('auth_id', user.id).maybeSingle()
     if (!adminData) return NextResponse.json({ error: '접근 권한이 없습니다' }, { status: 403 })
     if (!BRANCH_PROFILE_EDIT_ROLES.includes(adminData.role ?? ''))
       return NextResponse.json({ error: '원 프로파일 수정 권한이 없습니다' }, { status: 403 })
@@ -252,6 +253,27 @@ export async function PUT(
     }
     stripEmptyDefaultColumns(updateData)
 
+    // 감사 기록용 — 변경 전 값을 update 직전에 읽어 변경된 필드명만 산출
+    const { data: before } = await supabase
+      .from('branch_profiles')
+      .select('*')
+      .eq('id', params.id)
+      .maybeSingle()
+
+    const changedFields: string[] = []
+    if (before) {
+      for (const key of Object.keys(updateData)) {
+        if (key === 'updated_at') continue
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const beforeValue = (before as any)[key]
+        const afterValue = updateData[key]
+        const same = typeof beforeValue === 'object' || typeof afterValue === 'object'
+          ? JSON.stringify(beforeValue) === JSON.stringify(afterValue)
+          : beforeValue === afterValue
+        if (!same) changedFields.push(key)
+      }
+    }
+
     const { data: updated, error: updateError } = await supabase
       .from('branch_profiles')
       .update(updateData)
@@ -265,6 +287,24 @@ export async function PUT(
         { error: `저장 중 오류가 발생했습니다 (${updateError.code}: ${updateError.message})` },
         { status: 500 }
       )
+    }
+
+    // 감사 기록 (기존 admin_created/admin_updated와 동일 패턴)
+    // 값은 남기지 않고 변경된 필드명만 남긴다 — 배포 이메일 등 개인정보가
+    // 로그 테이블에 축적되는 것을 막기 위함
+    if (changedFields.length > 0) {
+      try {
+        const supabaseAdmin = getSupabaseAdmin()
+        await supabaseAdmin.from('audit_logs').insert({
+          actor_id:    adminData.id,
+          actor_type:  'admin',
+          actor_name:  adminData.name ?? '관리자',
+          action:      'branch_profile_updated',
+          target_type: 'branch_profile',
+          target_id:   params.id,
+          detail:      { fields: changedFields },
+        })
+      } catch { /* audit 실패는 무시 */ }
     }
 
     return NextResponse.json(updated)

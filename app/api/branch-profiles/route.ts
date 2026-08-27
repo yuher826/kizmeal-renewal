@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase-server'
+import { getSupabaseAdmin } from '@/lib/supabase-admin'
 import type { BranchProfileRow } from '@/types/branch-profile'
 import { BRANCH_PROFILE_CREATE_ROLES } from '@/lib/roles'
 
@@ -106,7 +107,7 @@ export async function POST(request: Request) {
     if (!user) return NextResponse.json({ error: '인증이 필요합니다' }, { status: 401 })
 
     const { data: adminData } = await supabase
-      .from('admins').select('id, role').eq('auth_id', user.id).maybeSingle()
+      .from('admins').select('id, role, name').eq('auth_id', user.id).maybeSingle()
     if (!adminData) return NextResponse.json({ error: '접근 권한이 없습니다' }, { status: 403 })
     if (!BRANCH_PROFILE_CREATE_ROLES.includes(adminData.role ?? ''))
       return NextResponse.json({ error: '원 등록 권한이 없습니다' }, { status: 403 })
@@ -175,6 +176,21 @@ export async function POST(request: Request) {
         { status: 500 }
       )
     }
+
+    // 감사 기록 (기존 admin_created/admin_updated와 동일 패턴)
+    // detail에는 식별용 두 필드만 남긴다 — 나머지 필드는 남기지 않음
+    try {
+      const supabaseAdmin = getSupabaseAdmin()
+      await supabaseAdmin.from('audit_logs').insert({
+        actor_id:    adminData.id,
+        actor_type:  'admin',
+        actor_name:  adminData.name ?? '관리자',
+        action:      'branch_profile_created',
+        target_type: 'branch_profile',
+        target_id:   created.id,
+        detail:      { short_code: created.short_code, display_name: created.display_name },
+      })
+    } catch { /* audit 실패는 무시 */ }
 
     return NextResponse.json(created, { status: 201 })
   } catch (err) {
