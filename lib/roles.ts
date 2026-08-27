@@ -65,6 +65,32 @@ export const BRANCH_ACCOUNT_ROLES: string[] = [
   ROLES.MANAGER,
 ]
 
+/**
+ * 원 프로파일 "수정" 허용 역할.
+ * ★영양사를 포함한 근거: 간식 구성·슬라이드 장수·영문 표기·배포 이메일은
+ *   원래 영양사가 49개 업장에 수동으로 채워 넣던 값이다. 실제 배포
+ *   실행자도 영양사다([[DEPLOY_ROLES]]). 자동화가 담당자를 바꾼 게 아니다.
+ * ★UPLOAD_ROLES와 값이 우연히 같지만 절대 재사용하지 말 것 — 관심사가
+ *   다르다(엑셀 업로드 vs 원 정보 수정). 재사용하면 한쪽 정책만 바꿀 때
+ *   다른 쪽이 조용히 따라 바뀐다. BRANCH_ACCOUNT_ROLES를
+ *   ADMIN_CREATE_ROLES와 분리한 것과 같은 이유다.
+ */
+export const BRANCH_PROFILE_EDIT_ROLES: string[] = [
+  ROLES.SUPER_ADMIN,
+  ROLES.MANAGER,
+  ...NUTRITIONIST_ROLES,
+]
+
+/**
+ * 원 프로파일 "신규 등록" 허용 역할.
+ * ★CREATE를 EDIT보다 좁힌 근거: 원 신규 등록은 계약 체결 행위이며
+ *   매니저 이상 영역이다.
+ */
+export const BRANCH_PROFILE_CREATE_ROLES: string[] = [
+  ROLES.SUPER_ADMIN,
+  ROLES.MANAGER,
+]
+
 /** 매니저가 생성할 수 있는 하위 역할 (super_admin·manager 제외한 나머지 전부) */
 export const MANAGER_CREATABLE_ROLES: string[] = Object.values(ROLES).filter(
   r => r !== ROLES.SUPER_ADMIN && r !== ROLES.MANAGER
