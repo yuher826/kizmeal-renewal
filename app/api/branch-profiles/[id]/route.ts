@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase-server'
 import type { BranchProfileDetail } from '@/types/branch-profile'
+import { BRANCH_PROFILE_EDIT_ROLES } from '@/lib/roles'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function calcComplete(p: any): boolean {
@@ -188,8 +189,10 @@ export async function PUT(
     if (!user) return NextResponse.json({ error: '인증이 필요합니다' }, { status: 401 })
 
     const { data: adminData } = await supabase
-      .from('admins').select('id').eq('auth_id', user.id).maybeSingle()
+      .from('admins').select('id, role').eq('auth_id', user.id).maybeSingle()
     if (!adminData) return NextResponse.json({ error: '접근 권한이 없습니다' }, { status: 403 })
+    if (!BRANCH_PROFILE_EDIT_ROLES.includes(adminData.role ?? ''))
+      return NextResponse.json({ error: '원 프로파일 수정 권한이 없습니다' }, { status: 403 })
 
     const body = await request.json()
 
