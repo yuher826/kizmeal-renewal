@@ -60,6 +60,9 @@ interface Props {
   isNew?: boolean
   onCancel?: () => void
   submitError?: string | null
+  // 원 프로파일 수정 권한(BRANCH_PROFILE_EDIT_ROLES). 기본값 true — 등록
+  // 화면도 같은 폼을 쓰는데 기본값을 false로 두면 등록 화면이 조용히 막힌다.
+  canEdit?: boolean
 }
 
 // PPTX 변경 감지 대상 필드
@@ -203,6 +206,7 @@ export default function BranchProfileForm({
   isNew,
   onCancel,
   submitError,
+  canEdit = true,
 }: Props) {
   const [form, setForm] = useState<FormState>(() => buildInitial(initialData))
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({})
@@ -316,6 +320,15 @@ export default function BranchProfileForm({
 
   return (
     <div className="pb-24">
+      {/* 권한 안내 — 입력 필드는 막지 않는다. 저장이 막혀 있어 실제 변경은
+          불가능하고, 아래 안내로 의도가 충분히 전달된다 (숨기지 않고
+          disabled + 사유 안내 원칙) */}
+      {!canEdit && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-700 text-sm rounded-lg px-4 py-3 mb-4">
+          ⚠️ 조회 전용입니다. 원 프로파일 수정 권한이 없습니다.
+        </div>
+      )}
+
       {/* ── 섹션 1: 기본 정보 ─────────────────────────────────── */}
       <div className="bg-white border border-slate-200 rounded-xl p-6 mb-4">
         <SectionHeader icon={<Building2 size={18} />} title="기본 정보" />
@@ -764,7 +777,8 @@ export default function BranchProfileForm({
         <button
           type="button"
           onClick={handleSave}
-          disabled={isSaving}
+          disabled={isSaving || !canEdit}
+          title={!canEdit ? '원 프로파일 수정 권한이 없습니다' : undefined}
           className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-70 flex items-center gap-2"
         >
           {isSaving ? (

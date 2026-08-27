@@ -644,9 +644,11 @@ interface Props {
   // (lib/roles.ts BRANCH_ACCOUNT_ROLES 참고 — ADMIN_CREATE_ROLES와 값은
   // 같지만 재사용하지 않은 이유와 동일).
   canManageBranchAccount: boolean
+  // 원 프로파일 수정 권한(BRANCH_PROFILE_EDIT_ROLES). 폼 저장 버튼에 전달한다.
+  canEditProfile: boolean
 }
 
-export default function BranchProfileDetailClient({ id, isSuperAdmin, canManageBranchAccount }: Props) {
+export default function BranchProfileDetailClient({ id, isSuperAdmin, canManageBranchAccount, canEditProfile }: Props) {
   const [profile, setProfile] = useState<BranchProfileDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
@@ -790,6 +792,7 @@ export default function BranchProfileDetailClient({ id, isSuperAdmin, canManageB
           isSaving={isSaving}
           isNew={false}
           submitError={saveError}
+          canEdit={canEditProfile}
         />
 
         {/* 식단표 직접 업로드 — 임시원(temporary) 전용 */}
