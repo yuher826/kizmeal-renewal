@@ -1,70 +1,36 @@
-'use client'
-
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft } from 'lucide-react'
-import BranchProfileForm from '@/components/erp/BranchProfileForm'
-import type { BranchProfileDetail } from '@/types/branch-profile'
+import { createClient } from '@/lib/supabase-server'
+import { BRANCH_PROFILE_CREATE_ROLES } from '@/lib/roles'
+import NewBranchProfileClient from './NewBranchProfileClient'
 
-export default function BranchProfileNewPage() {
-  const router = useRouter()
-  const [isSaving, setIsSaving] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+export default async function BranchProfileNewPage() {
+  const supabase = createClient()
 
-  async function handleSave(data: Partial<BranchProfileDetail>) {
-    setIsSaving(true)
-    setError(null)
-    try {
-      const res = await fetch('/api/branch-profiles', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      })
-      if (res.status === 409) {
-        setError('이미 사용 중인 약칭입니다. 다른 약칭을 입력해주세요.')
-        return
-      }
-      if (!res.ok) {
-        const err = await res.json()
-        setError(err.error ?? '등록에 실패했습니다')
-        return
-      }
-      const created = await res.json()
-      router.push(`/erp/branches/${created.id}`)
-    } catch {
-      setError('서버 오류가 발생했습니다')
-    } finally {
-      setIsSaving(false)
-    }
+  let canCreate = false
+  const { data: { user } } = await supabase.auth.getUser()
+  if (user) {
+    const { data: adminData } = await supabase
+      .from('admins')
+      .select('role')
+      .eq('auth_id', user.id)
+      .maybeSingle()
+    canCreate = BRANCH_PROFILE_CREATE_ROLES.includes(adminData?.role ?? '')
   }
 
-  return (
-    <main className="min-h-screen bg-[#F6FAF6] px-4 sm:px-6 py-6 sm:py-8">
-      {/* 헤더 */}
-      <div className="flex items-center gap-3 mb-6">
-        <Link
-          href="/erp/branches"
-          className="text-slate-400 hover:text-slate-700 transition-colors"
-          aria-label="목록으로"
-        >
-          <ArrowLeft size={20} />
-        </Link>
-        <h1 className="text-lg font-bold text-slate-900">원 프로파일 신규 등록</h1>
-      </div>
-
-      {error && (
-        <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700 mb-4">
-          {error}
+  // 등록 화면은 상세와 달리 조회할 내용이 없다 — 빈 폼을 띄워봐야 의미가
+  // 없으므로 상세 화면(disabled + 안내)과 달리 여기는 아예 숨긴다.
+  if (!canCreate) {
+    return (
+      <main className="min-h-screen bg-[#F6FAF6] px-4 sm:px-6 py-6 sm:py-8">
+        <div className="text-center py-20">
+          <p className="text-slate-500 mb-4">원 등록 권한이 없습니다.</p>
+          <Link href="/erp/branches" className="text-emerald-600 hover:underline text-sm">
+            ← 목록으로 돌아가기
+          </Link>
         </div>
-      )}
+      </main>
+    )
+  }
 
-      <BranchProfileForm
-        onSave={handleSave}
-        isSaving={isSaving}
-        isNew
-        submitError={error}
-      />
-    </main>
-  )
+  return <NewBranchProfileClient />
 }
