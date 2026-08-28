@@ -478,7 +478,7 @@ export default function DietTemplatesPage() {
           <div className="bg-blue-50 border border-blue-200 rounded-2xl p-5">
             <div className="flex items-center gap-2 mb-3">
               <span className="text-base">🆕</span>
-              <p className="font-bold text-blue-800">{pendingTemplate.name} — 미리보기 확인 후 적용하세요</p>
+              <p className="font-bold text-blue-800">{pendingTemplate.name} — 점검 결과 확인 후 적용하세요</p>
             </div>
             <div className="border border-blue-200 rounded-xl p-4 bg-white mb-4">
               <InspectionResultCard
@@ -649,6 +649,7 @@ export default function DietTemplatesPage() {
           <p>• [활성화]된 템플릿은 다음 PDF 생성부터 즉시 반영됩니다</p>
           <p>• 활성화된 템플릿은 삭제할 수 없습니다 (다른 버전 활성화 후 삭제)</p>
           <p>• 활성 템플릿이 없으면 기본 키즈밀 스타일로 자동 적용됩니다</p>
+          <p>• 양식은 디자이너가 매달 새로 주므로, 매달 등록하고 점검 결과를 확인해 주세요</p>
         </div>
 
       </div>
