@@ -142,3 +142,149 @@ export async function validateTemplateZip(zip: JSZip): Promise<TemplateValidatio
       : '검증 실패 — 일부 슬라이드에 이름표 누락',
   }
 }
+
+/* ── 구조 분석 ("양식 점검 결과" 화면용) ──
+   python-pptx가 아니라 JSZip으로 읽은 XML 문자열을 정규식으로 훑는다.
+   DOMParser는 브라우저 전용 API라 서버에서 못 돌기 때문에 안 쓴다 —
+   위 checkNamesInSlide/parseThemeXml과 같은 방식을 그대로 따른 것뿐,
+   새로운 제약이 아니다. */
+
+const DAY_LABELS = ['월', '화', '수', '목', '금']
+
+interface EmuBox {
+  x: number
+  y: number
+  cx: number
+  cy: number
+}
+
+export interface WideImageInfo {
+  widthEmu: number
+  leftEmu: number
+  topEmu: number
+  // 표 왼쪽 기준 "일(day)" 단위 위치 — 1일폭 = 표폭/5
+  dayOffset: number
+  dayWidthCount: number
+  // 표 세로 범위를 5등분해 계산한 근사 주차(1~5). 실제 주 경계(행 높이
+  // 합)와는 다를 수 있는 근사치 — "약 N주차"로만 쓸 것.
+  weekIndexApprox: number
+}
+
+export interface SlideStructure {
+  slide: string
+  rowCount: number | null
+  namesFound: Record<string, boolean>
+  missing: string[]
+  tableWidthEmu: number | null
+  tableLeftEmu: number | null
+  wideImages: WideImageInfo[]
+}
+
+export interface TemplateAnalysis {
+  slideCount: number
+  slides: SlideStructure[]
+}
+
+// <p:graphicFrame> 안 표의 위치·크기. 표는 a:xfrm이 아니라 p:xfrm을
+// 직접 자식으로 둔다(도형·그림의 a:xfrm과 태그 자체가 다름).
+function findTableBox(graphicFrameXml: string): EmuBox | null {
+  const xfrm = graphicFrameXml.match(/<p:xfrm[^>]*>([\s\S]*?)<\/p:xfrm>/)
+  if (!xfrm) return null
+  const off = xfrm[1].match(/<a:off x="(-?\d+)" y="(-?\d+)"\/?>/)
+  const ext = xfrm[1].match(/<a:ext cx="(-?\d+)" cy="(-?\d+)"\/?>/)
+  if (!off || !ext) return null
+  return { x: Number(off[1]), y: Number(off[2]), cx: Number(ext[1]), cy: Number(ext[2]) }
+}
+
+// <p:pic> 안 그림의 위치·크기. p:spPr 아래 a:xfrm에 들어있다.
+function findPicBox(picXml: string): EmuBox | null {
+  const xfrm = picXml.match(/<a:xfrm[^>]*>([\s\S]*?)<\/a:xfrm>/)
+  if (!xfrm) return null
+  const off = xfrm[1].match(/<a:off x="(-?\d+)" y="(-?\d+)"\/?>/)
+  const ext = xfrm[1].match(/<a:ext cx="(-?\d+)" cy="(-?\d+)"\/?>/)
+  if (!off || !ext) return null
+  return { x: Number(off[1]), y: Number(off[2]), cx: Number(ext[1]), cy: Number(ext[2]) }
+}
+
+/**
+ * pptx 슬라이드 하나에서 구조를 뽑는다 — 표 행 수, 이름표 4개, 표 폭
+ * 대비 80% 이상인 가로 그림 목록(위치·폭만, 의미는 판정하지 않는다).
+ * ★그룹(p:grpSp) 안 도형의 좌표는 슬라이드 절대좌표가 아니라 그룹 내부
+ *   좌표계다(HANDOFF 2026-08-28 실측 — 알레르기 박스가 이 함정에 걸린
+ *   사례). 방학·공휴일 그림은 실측상 전부 그룹 밖 최상위 p:pic이라 이
+ *   함수는 그룹 안까지는 내려가지 않는다 — 그룹 안에 있는 그림이면
+ *   좌표 계산이 틀어진다.
+ */
+function analyzeSlide(slideXml: string, slideName: string): SlideStructure {
+  const namesFound = checkNamesInSlide(slideXml)
+  const missing = REQUIRED_NAMES.filter((n) => !namesFound[n])
+
+  let rowCount: number | null = null
+  let tableBox: EmuBox | null = null
+  const frameMatch = slideXml.match(/<p:graphicFrame>[\s\S]*?<\/p:graphicFrame>/)
+  if (frameMatch && frameMatch[0].includes('<a:tbl>')) {
+    rowCount = Array.from(frameMatch[0].matchAll(/<a:tr\b/g)).length
+    tableBox = findTableBox(frameMatch[0])
+  }
+
+  const wideImages: WideImageInfo[] = []
+  if (tableBox) {
+    const dayWidth = tableBox.cx / 5
+    for (const block of Array.from(slideXml.matchAll(/<p:pic>[\s\S]*?<\/p:pic>/g))) {
+      const picBox = findPicBox(block[0])
+      if (!picBox) continue
+      if (picBox.cx < tableBox.cx * 0.8) continue // 80% 미만은 "큰 가로 그림"이 아님
+
+      const weekIndexApprox = Math.min(5, Math.max(1,
+        Math.ceil(((picBox.y - tableBox.y) / tableBox.cy) * 5) || 1,
+      ))
+      wideImages.push({
+        widthEmu: picBox.cx,
+        leftEmu: picBox.x,
+        topEmu: picBox.y,
+        dayOffset: (picBox.x - tableBox.x) / dayWidth,
+        dayWidthCount: picBox.cx / dayWidth,
+        weekIndexApprox,
+      })
+    }
+  }
+
+  return {
+    slide: slideName,
+    rowCount,
+    namesFound,
+    missing,
+    tableWidthEmu: tableBox?.cx ?? null,
+    tableLeftEmu: tableBox?.x ?? null,
+    wideImages,
+  }
+}
+
+export async function analyzeTemplate(zip: JSZip): Promise<TemplateAnalysis> {
+  const slideFiles = zip.file(/^ppt\/slides\/slide\d+\.xml$/)
+  const slides: SlideStructure[] = []
+  if (slideFiles) {
+    for (const f of slideFiles) {
+      const xml = await f.async('string')
+      slides.push(analyzeSlide(xml, f.name.split('/').pop() ?? f.name))
+    }
+  }
+  return { slideCount: slides.length, slides }
+}
+
+// 가로 그림 하나를 "가로 그림 1개 (약 4주차 위치, 월~금 폭)" 형태의
+// 사실 기술 문장으로 바꾼다. 요일 폭은 반올림한 근사치라 실제 크롭
+// 비율(영양사 수작업 오차로 19.71% 등 제각각)과는 다를 수 있다.
+// ★방학/추석/장식 같은 의미는 여기서 판정하지 않는다 — 그림 모양만
+//   으로는 구분할 수 없다는 게 실측으로 확인됐다(9월 오판 사례).
+export function describeWideImage(img: WideImageInfo): string {
+  const startIdx = Math.min(4, Math.max(0, Math.round(img.dayOffset)))
+  const spanCount = Math.min(5 - startIdx, Math.max(1, Math.round(img.dayWidthCount)))
+  const endIdx = startIdx + spanCount - 1
+  const dayLabel = spanCount >= 5
+    ? '월~금'
+    : startIdx === endIdx
+      ? DAY_LABELS[startIdx]
+      : `${DAY_LABELS[startIdx]}~${DAY_LABELS[endIdx]}`
+  return `가로 그림 1개 (약 ${img.weekIndexApprox}주차 위치, ${dayLabel} 폭)`
+}
