@@ -206,9 +206,17 @@ function findPicBox(picXml: string): EmuBox | null {
   return { x: Number(off[1]), y: Number(off[2]), cx: Number(ext[1]), cy: Number(ext[2]) }
 }
 
+// 가로 그림으로 볼 최소 폭 비율(표 폭 대비). 1일폭이 표폭의 20%이므로
+// 30%는 "2일 이상"에 해당한다. 2일짜리 추석 그림(9월 실측 37%)까지
+// 잡되, 1일짜리 장식·아이콘(19% 이하)은 걸러내는 선이다.
+// ★기존 80%는 너무 좁아 7월 부분방학 4일(75%)·9월 추석 2일(37%)을
+//   놓쳤다(2026-08-28 실측, HANDOFF 참고) — 30%로 낮췄다.
+const WIDE_IMAGE_MIN_RATIO = 0.3
+
 /**
  * pptx 슬라이드 하나에서 구조를 뽑는다 — 표 행 수, 이름표 4개, 표 폭
- * 대비 80% 이상인 가로 그림 목록(위치·폭만, 의미는 판정하지 않는다).
+ * 대비 WIDE_IMAGE_MIN_RATIO(30%) 이상인 가로 그림 목록(위치·폭만,
+ * 의미는 판정하지 않는다).
  * ★그룹(p:grpSp) 안 도형의 좌표는 슬라이드 절대좌표가 아니라 그룹 내부
  *   좌표계다(HANDOFF 2026-08-28 실측 — 알레르기 박스가 이 함정에 걸린
  *   사례). 방학·공휴일 그림은 실측상 전부 그룹 밖 최상위 p:pic이라 이
@@ -233,7 +241,7 @@ function analyzeSlide(slideXml: string, slideName: string): SlideStructure {
     for (const block of Array.from(slideXml.matchAll(/<p:pic>[\s\S]*?<\/p:pic>/g))) {
       const picBox = findPicBox(block[0])
       if (!picBox) continue
-      if (picBox.cx < tableBox.cx * 0.8) continue // 80% 미만은 "큰 가로 그림"이 아님
+      if (picBox.cx < tableBox.cx * WIDE_IMAGE_MIN_RATIO) continue // 30% 미만은 "큰 가로 그림"이 아님
 
       const weekIndexApprox = Math.min(5, Math.max(1,
         Math.ceil(((picBox.y - tableBox.y) / tableBox.cy) * 5) || 1,
