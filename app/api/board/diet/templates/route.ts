@@ -6,9 +6,8 @@ import { canManageTemplates, canDeleteTemplate } from '@/lib/roles'
 import {
   type StyleJson,
   type TemplateValidation,
-  parseThemeXml,
+  type TemplateAnalysis,
   buildStyleJson,
-  validateTemplateZip,
 } from '@/lib/template-analysis'
 
 // diet_templates.vacation_variant CHECK 제약과 동일해야 한다
@@ -81,7 +80,11 @@ export async function GET() {
   })
 }
 
-/* ── POST: 새 템플릿 업로드 ── */
+/* ── POST: 템플릿 확정 (브라우저 직접 업로드 2단계) ──
+   파일은 이미 브라우저가 prepare에서 받은 경로로 Storage에 직접 올렸다.
+   이 함수는 JSON(수 KB)만 받아 그 경로에 파일이 실제로 있는지 확인한
+   뒤 DB 행을 만든다. 기존 멀티파트 처리는 제거했다 — 경로를 둘로 두면
+   어느 쪽이 쓰이는지 모호해진다. */
 export async function POST(req: NextRequest) {
   const supabase = makeSupabase()
   const { data: { user } } = await supabase.auth.getUser()
@@ -93,40 +96,43 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: '템플릿 관리 담당자만 가능합니다' }, { status: 403 })
   }
 
-  let formData: FormData
+  let body: {
+    storagePath?: string
+    name?: string
+    note?: string
+    year?: number
+    month?: number
+    vacationVariant?: string
+    styleJson?: StyleJson
+    validationResult?: TemplateValidation
+    analysis?: TemplateAnalysis
+  }
   try {
-    formData = await req.formData()
+    body = await req.json()
   } catch {
-    return NextResponse.json({ error: '파일 파싱 실패' }, { status: 400 })
+    return NextResponse.json({ error: '요청 본문 파싱 실패' }, { status: 400 })
   }
 
-  const file = formData.get('file') as File | null
-  const name = (formData.get('name') as string || '').trim()
-  const note = (formData.get('note') as string || '').trim()
-  const yearRaw            = (formData.get('year')  as string) || ''
-  const monthRaw           = (formData.get('month') as string) || ''
-  const vacationVariantRaw = (formData.get('vacation_variant') as string || '').trim()
+  const storagePath = (body.storagePath || '').trim()
+  const name = (body.name || '').trim()
+  const note = (body.note || '').trim()
+  const year  = body.year
+  const month = body.month
+  const vacationVariantRaw = (body.vacationVariant || '').trim()
 
-  if (!file) return NextResponse.json({ error: 'pptx 파일이 없습니다' }, { status: 400 })
+  if (!storagePath) return NextResponse.json({ error: '업로드 경로가 없습니다' }, { status: 400 })
   if (!name) return NextResponse.json({ error: '템플릿 이름을 입력하세요' }, { status: 400 })
 
-  // ── 연·월 필수 검증 ──────────────────────────────────────────────────
+  // ── 연·월 필수 검증 (prepare와 동일 기준) ───────────────────────────────
   // resolve_template_set()(pptx-server)이 항상 구체적 year/month로 필터링
   // 하므로, 연·월이 없는 템플릿은 업로드해도 영원히 사용되지 않는다
   // (v1이 그 상태 — 2026-08-24에야 발견됨). 같은 실수를 새로 만들지 않는다.
   // ★클라이언트 검증만 믿지 않는다 — 여기서 안 막으면 DB CHECK 제약
   //   (diet_templates_year_month_pair)에 걸려 Postgres 에러가 그대로
   //   500으로 튀어나와 실무자에게 알 수 없는 화면이 뜬다.
-  if (!yearRaw || !monthRaw) {
+  if (!year || !month) {
     return NextResponse.json({ error: '연도와 월을 선택하세요' }, { status: 400 })
   }
-  const year  = Number(yearRaw)
-  const month = Number(monthRaw)
-
-  // 연도 범위 — getYearOptions()를 인자 없이 호출해 "정상 범위"(작년~3년 후)를
-  // 얻는다. 여기 submitted year를 인자로 넘기면 함수가 그 값을 범위에 강제로
-  // 끼워넣어 검증이 항상 통과하는 함정이 있다(getYearOptions 자체 동작) —
-  // 반드시 인자 없이 호출한 결과와 비교할 것.
   const validYears = getYearOptions()
   if (!Number.isInteger(year) || !validYears.includes(year)) {
     return NextResponse.json(
@@ -147,74 +153,44 @@ export async function POST(req: NextRequest) {
     vacationVariant = vacationVariantRaw as VacationVariant
   }
 
-  // 현재 최대 버전 조회
-  const { data: maxRow } = await supabase
-    .from('diet_templates')
-    .select('version')
-    .order('version', { ascending: false })
-    .limit(1)
-    .maybeSingle()
-  const nextVersion = (maxRow?.version || 0) + 1
-
-  // pptx 파싱 (JSZip)
-  let validationResult: TemplateValidation = {
-    valid: false, slide_count: 0, slides: [], summary: '검증 안 됨',
-  }
-  let styleJson: StyleJson = buildStyleJson({}, [])
-  try {
-    const JSZipModule = (await import('jszip')).default
-    const buffer = await file.arrayBuffer()
-    const zip = await JSZipModule.loadAsync(buffer)
-
-    let themeXml = ''
-    const themeFile = zip.file('ppt/theme/theme1.xml')
-    if (themeFile) themeXml = await themeFile.async('string')
-    else {
-      // fallback: search for any theme xml
-      const found = zip.file(/^ppt\/theme\/theme\d+\.xml$/)[0]
-      if (found) themeXml = await found.async('string')
-    }
-
-    if (themeXml) {
-      const { colors, fonts } = parseThemeXml(themeXml)
-      styleJson = buildStyleJson(colors, fonts)
-    }
-
-    // 이름표 검증 (파이썬 문지기와 같은 기준, 업로드 즉시 피드백)
-    validationResult = await validateTemplateZip(zip)
-  } catch (parseErr) {
-    console.error('pptx parse error:', parseErr)
-    // 파싱 실패 시 기본 스타일 사용 - 업로드는 계속 진행
-  }
-
-  // Supabase Storage 업로드
-  // 경로에 연/월/방학구분을 넣어 파일명만 보고도 Storage에서 추적 가능하게 함.
-  // ★ASCII만 쓴다 — 한글을 key에 넣으면 Supabase Storage가 InvalidKey를
-  //   던진다(HANDOFF 기록). Date.now()는 그대로 유지 — 같은 (연,월,variant)
-  //   조합을 재업로드해도 경로가 겹치지 않게 한다.
-  const monthPadded = String(month).padStart(2, '0')
-  const storagePath = `diet-templates/v${nextVersion}_${year}-${monthPadded}_${vacationVariant}_${Date.now()}.pptx`
-  const fileBuffer = await file.arrayBuffer()
-  const { error: uploadErr } = await supabase.storage
+  // ★클라이언트가 보낸 경로를 그대로 믿지 않는다 — 그 경로에 파일이 실제로
+  //   올라와 있는지 Storage에서 확인한 뒤에만 DB 행을 만든다. 안 하면
+  //   파일 없는 행이 생긴다. 존재 확인은 목록 조회(list)만 하므로 파일
+  //   전체를 다시 내려받지 않는다.
+  const pathParts = storagePath.split('/')
+  const fileName = pathParts.pop() || ''
+  const folder = pathParts.join('/')
+  const { data: listed, error: listErr } = await supabase.storage
     .from('diet-templates')
-    .upload(storagePath, fileBuffer, { contentType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', upsert: false })
+    .list(folder, { search: fileName, limit: 1 })
+  if (listErr || !listed?.some((f) => f.name === fileName)) {
+    return NextResponse.json({ error: '업로드된 파일을 찾을 수 없습니다. 다시 업로드해 주세요.' }, { status: 400 })
+  }
 
-  if (uploadErr) {
-    return NextResponse.json({ error: '파일 업로드 실패: ' + uploadErr.message }, { status: 500 })
+  // prepare가 발급한 경로에는 버전이 이미 박혀 있다(v{N}_...) — 별도로
+  // 다시 계산하지 않고 경로에서 그대로 읽어 단일 소스로 둔다.
+  const versionMatch = storagePath.match(/^diet-templates\/v(\d+)_/)
+  const version = versionMatch ? Number(versionMatch[1]) : 0
+
+  const styleJson: StyleJson = body.styleJson ?? buildStyleJson({}, [])
+  const validationResult: TemplateValidation = body.validationResult ?? {
+    valid: false, slide_count: 0, slides: [], summary: '검증 안 됨',
   }
 
   // DB 저장 (is_active = false — 관리자가 확인 후 직접 활성화)
+  // ★스키마 변경 없이 구조 분석(analysis) 결과를 validation_result
+  //   컬럼(JSONB)에 함께 담는다 — 새 컬럼 추가는 별도 판단이 필요하다.
   const { data: tmpl, error: dbErr } = await supabase
     .from('diet_templates')
     .insert({
-      version:           nextVersion,
+      version,
       name,
       file_path:         storagePath,
       style_json:        styleJson,
       is_active:         false,
       created_by:        user.id,
       note:              note || null,
-      validation_result: validationResult,
+      validation_result: body.analysis ? { ...validationResult, analysis: body.analysis } : validationResult,
       year,
       month,
       vacation_variant:  vacationVariant,
