@@ -2,13 +2,18 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { getYearOptions } from '@/lib/diet-utils'
-
-interface StyleJson {
-  headerColor: string; accentColor: string; sectionBgColor: string
-  headerBgColor: string; weekTitleColor: string; weekBorderColor: string
-  borderColor: string; fontFamily: string
-  rawColors: string[]; rawFonts: string[]
-}
+import { createClient } from '@/lib/supabase'
+import {
+  type StyleJson,
+  type TemplateValidation,
+  type TemplateAnalysis,
+  DEFAULT_STYLE,
+  parseThemeXml,
+  buildStyleJson,
+  validateTemplateZip,
+  analyzeTemplate,
+  describeWideImage,
+} from '@/lib/template-analysis'
 
 // diet_templates.vacation_variant CHECK 제약과 동일해야 한다
 type VacationVariant = 'none' | 'vacation_on' | 'vacation_off'
@@ -19,21 +24,9 @@ const VACATION_VARIANT_LABEL: Record<VacationVariant, string> = {
   vacation_off: '방학X',
 }
 
-// route.ts의 TemplateValidation과 동일한 모양(서버 파일에서 export 안 하고
-// 있어 StyleJson처럼 화면 쪽에도 그대로 미러링). 레거시 행은 컬럼 DEFAULT가
-// '{}'라 필드가 비어 있을 수 있으므로 전부 optional로 선언한다.
-interface SlideValidation {
-  slide: string
-  valid: boolean
-  names_found: Record<string, boolean>
-  missing: string[]
-}
-interface TemplateValidation {
-  valid?: boolean
-  slide_count?: number
-  slides?: SlideValidation[]
-  summary?: string
-}
+// route.ts POST 확정 시 analysis를 스키마 변경 없이 validation_result
+// (JSONB) 안에 함께 저장한다 — 레거시 행은 이 필드가 없을 수 있다.
+type StoredValidation = TemplateValidation & { analysis?: TemplateAnalysis }
 
 interface DietTemplate {
   id: string; version: number; name: string; file_path: string
@@ -41,7 +34,7 @@ interface DietTemplate {
   created_at: string; note?: string
   year: number | null; month: number | null
   vacation_variant: VacationVariant
-  validation_result: TemplateValidation | null
+  validation_result: StoredValidation | null
 }
 
 // GET 응답에 실려 오는 호출자 권한 — 업로드/활성화(canManage)와 삭제
@@ -112,49 +105,108 @@ function vacationStatus(group: TemplateGroup): { statusText: string; warnBadge: 
   return { statusText: '', warnBadge: '⚠️ 활성 템플릿 없음' }
 }
 
-const DEFAULT_STYLE: StyleJson = {
-  headerColor: '#1B4332', accentColor: '#2D6A4F',
-  sectionBgColor: '#E8F5E9', headerBgColor: '#F8FDF8',
-  weekTitleColor: '#2D6A4F', weekBorderColor: '#2D6A4F',
-  borderColor: '#ccc', fontFamily: "'Malgun Gothic', sans-serif",
-  rawColors: [], rawFonts: [],
+const NAME_LABEL: Record<string, string> = {
+  MENU_TABLE:   '메뉴표',
+  ORIGIN_BOX:   '원산지',
+  MATERIAL_BOX: '원재료',
+  ALLERGY_BOX:  '알레르기',
 }
 
-function MiniPreview({ style }: { style: StyleJson }) {
+// "양식 점검 결과" — 이 양식으로 식단표를 만들 수 있는지 자동으로 확인한
+// 결과를 항목마다 ✅/❌와 쉬운 한 줄 설명으로 보여준다.
+// ★예전 MiniPreview는 "2026년 7월"·"샘플 메뉴①②"가 하드코딩된 가짜
+//   미리보기였다(색상만 진짜였다). 실제 검증·구조 분석 데이터로 대체한다.
+function InspectionResultCard({ style, validation, analysis }: {
+  style: StyleJson
+  validation: TemplateValidation | null
+  analysis?: TemplateAnalysis | null
+}) {
   const s = { ...DEFAULT_STYLE, ...style }
-  const DAYS = ['월','화','수','목','금']
-  const SECTIONS = ['오전간식','오후간식','돌봄간식']
+  const hasAnalysis = !!analysis && analysis.slides.length > 0
+  const rowCounts = hasAnalysis
+    ? Array.from(new Set(analysis!.slides.map(sl => sl.rowCount).filter((n): n is number => n != null)))
+    : []
+  const wideImages = hasAnalysis
+    ? analysis!.slides.flatMap(sl => sl.wideImages.map(img => ({ slide: sl.slide, img })))
+    : []
+  const slideCountDisplay = hasAnalysis ? analysis!.slideCount : (validation?.slide_count ?? 0)
+  const failingSlides = validation ? validation.slides.filter(sl => !sl.valid) : []
+
   return (
-    <div style={{ fontFamily: s.fontFamily, fontSize: '9px', width: '100%' }}>
-      <div style={{ textAlign: 'center', marginBottom: 6 }}>
-        <div style={{ fontWeight: 700, fontSize: 13, color: s.headerColor }}>키즈밀 튼튼 식단 2026년 7월</div>
-        <div style={{ fontSize: 10, color: s.accentColor, marginTop: 1 }}>○○ 어린이집</div>
+    <div className="space-y-3">
+      <div>
+        <p className="font-bold text-[#1C2B1E] text-sm">📋 양식 점검 결과</p>
+        <p className="text-xs text-gray-500 mt-0.5">이 양식으로 식단표를 만들 수 있는지 자동으로 확인한 결과입니다.</p>
       </div>
-      <div style={{ fontWeight: 700, fontSize: 8, color: s.weekTitleColor, borderLeft: `2px solid ${s.weekBorderColor}`, paddingLeft: 3, marginBottom: 3 }}>1주</div>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 7 }}>
-        <thead>
-          <tr>
-            <th style={{ background: s.sectionBgColor, color: s.headerColor, border: `1px solid ${s.borderColor}`, padding: '2px 3px', fontWeight: 700, width: 40 }}>구분</th>
-            {DAYS.map(d => (
-              <th key={d} style={{ background: s.headerBgColor, border: `1px solid ${s.borderColor}`, padding: '2px 3px', fontWeight: 700 }}>{d}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {SECTIONS.map(sec => (
-            <tr key={sec}>
-              <td style={{ background: s.headerBgColor, color: s.accentColor, border: `1px solid ${s.borderColor}`, padding: '2px 3px', fontWeight: 600, whiteSpace: 'nowrap' }}>{sec}</td>
-              {DAYS.map(d => (
-                <td key={d} style={{ border: `1px solid ${s.borderColor}`, padding: '2px 3px', textAlign: 'center', color: '#333' }}>
-                  {d === '월' ? '샘플 메뉴①②' : '—'}
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <div style={{ marginTop: 4, fontSize: 6, color: '#666', borderTop: `1px solid ${s.borderColor}`, paddingTop: 3 }}>
-        ※ 알레르기: ①난류 ②우유 ③메밀 ④땅콩 ...
+
+      <div className="space-y-2.5 text-sm border-t border-gray-100 pt-3">
+        {/* 슬라이드 수 · 행 수 */}
+        <div className="flex items-start gap-2">
+          <span>{hasAnalysis ? '✅' : slideCountDisplay > 0 ? 'ℹ️' : '⚠️'}</span>
+          <div>
+            <p className="font-medium text-[#1C2B1E]">
+              슬라이드 {slideCountDisplay}장{rowCounts.length > 0 && ` · ${rowCounts.map(n => `${n}행`).join(' / ')}`}
+            </p>
+            <p className="text-xs text-gray-500">원마다 간식 칸 수가 달라 여러 종류가 필요합니다</p>
+          </div>
+        </div>
+
+        {/* 이름표 4개 */}
+        <div className="flex items-start gap-2">
+          <span>{validation == null ? 'ℹ️' : validation.valid ? '✅' : '❌'}</span>
+          <div className="flex-1">
+            <p className="font-medium text-[#1C2B1E]">이름표 4개 확인 (메뉴표·원산지·원재료·알레르기)</p>
+            {validation == null ? (
+              <p className="text-xs text-gray-500">검증 정보가 없습니다</p>
+            ) : validation.valid ? (
+              <p className="text-xs text-gray-500">메뉴가 들어갈 자리를 찾았습니다</p>
+            ) : (
+              <div className="mt-1 space-y-1">
+                {failingSlides.map(sl => {
+                  const labels = sl.missing.map(m => NAME_LABEL[m] ?? m).join('·')
+                  return (
+                    <p key={sl.slide} className="text-xs text-red-600">
+                      ❌ {sl.slide}에 {labels} 이름표가 없습니다
+                      <span className="block text-gray-500">→ 디자이너께 {labels} 안내 문구가 빠졌는지 확인해 주세요</span>
+                    </p>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* 가로 그림 */}
+        <div className="flex items-start gap-2">
+          <span>{wideImages.length > 0 ? '🖼️' : 'ℹ️'}</span>
+          <div>
+            {wideImages.length > 0 ? (
+              wideImages.map(({ slide, img }, i) => (
+                <div key={`${slide}-${i}`} className={i > 0 ? 'mt-1.5' : ''}>
+                  <p className="font-medium text-[#1C2B1E]">{slide} · {describeWideImage(img)}</p>
+                  <p className="text-xs text-gray-500">방학이나 연휴 안내 그림으로 보입니다. 디자이너가 넣은 것이 맞는지 확인해 주세요</p>
+                </div>
+              ))
+            ) : (
+              <p className="text-xs text-gray-500">가로로 긴 그림이 없습니다</p>
+            )}
+          </div>
+        </div>
+
+        {/* 색상·폰트 */}
+        <div className="flex items-start gap-2">
+          <span>✅</span>
+          <div className="flex-1">
+            <p className="font-medium text-[#1C2B1E]">색상·폰트 추출 완료</p>
+            <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+              {(style.rawColors.length ? style.rawColors.slice(0, 8) : [s.headerColor, s.accentColor, s.sectionBgColor]).map((c, i) => {
+                const hex = c.startsWith('#') ? c : `#${c}`
+                return <span key={i} title={hex} className="w-4 h-4 rounded-full border border-gray-200 inline-block" style={{ background: hex }} />
+              })}
+              <span className="text-xs text-gray-400 ml-1">{s.fontFamily.split(',')[0].replace(/'/g, '')}</span>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   )
@@ -164,8 +216,10 @@ export default function DietTemplatesPage() {
   const [templates, setTemplates]       = useState<DietTemplate[]>([])
   const [permissions, setPermissions]   = useState<TemplatePermissions>(NO_PERMISSIONS)
   const [loading,   setLoading]         = useState(true)
+  const [analyzing, setAnalyzing]       = useState(false)
   const [uploading, setUploading]       = useState(false)
   const [file,      setFile]            = useState<File | null>(null)
+  const [inspection, setInspection]     = useState<{ style: StyleJson; validation: TemplateValidation; analysis: TemplateAnalysis } | null>(null)
   const [name,      setName]            = useState('')
   const [note,      setNote]            = useState('')
   // 연·월 기본값 — 다른 식단 화면(app/erp/(protected)/diet/page.tsx)의
@@ -175,8 +229,8 @@ export default function DietTemplatesPage() {
   const [uploadVariant, setUploadVariant] = useState<VacationVariant>('none')
   const [dragging,  setDragging]        = useState(false)
   const [toast,     setToast]           = useState('')
-  const [preview,   setPreview]         = useState<{ tmpl: DietTemplate; styles: StyleJson } | null>(null)
-  const [pendingStyle, setPendingStyle] = useState<{ id: string; style: StyleJson } | null>(null)
+  const [preview,   setPreview]         = useState<DietTemplate | null>(null)
+  const [pendingId, setPendingId]       = useState<string | null>(null)
   const [legacyOpen, setLegacyOpen]     = useState(false)  // 레거시 그룹 기본 접힘
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -199,41 +253,122 @@ export default function DietTemplatesPage() {
   const monthGroups = groups.filter(g => g.key !== 'legacy')
   const legacyGroup = groups.find(g => g.key === 'legacy')
 
+  // 파일을 pptx 형식 그대로 브라우저에서 JSZip으로 열어 검증·스타일·구조
+  // 분석까지 전부 끝낸다(서버로는 아직 아무것도 안 보낸다). JSZip은
+  // 초기 번들을 키우지 않도록 dynamic import.
+  async function analyzeFile(f: File) {
+    setAnalyzing(true)
+    setInspection(null)
+    try {
+      const JSZipModule = (await import('jszip')).default
+      const buffer = await f.arrayBuffer()
+      const zip = await JSZipModule.loadAsync(buffer)
+
+      let themeXml = ''
+      const themeFile = zip.file('ppt/theme/theme1.xml')
+      if (themeFile) themeXml = await themeFile.async('string')
+      else {
+        const found = zip.file(/^ppt\/theme\/theme\d+\.xml$/)[0]
+        if (found) themeXml = await found.async('string')
+      }
+      let style: StyleJson = buildStyleJson({}, [])
+      if (themeXml) {
+        const { colors, fonts } = parseThemeXml(themeXml)
+        style = buildStyleJson(colors, fonts)
+      }
+
+      const validation = await validateTemplateZip(zip)
+      const analysis = await analyzeTemplate(zip)
+      setInspection({ style, validation, analysis })
+    } catch (err) {
+      flash('pptx 파일을 열지 못했습니다: ' + (err instanceof Error ? err.message : String(err)))
+    } finally {
+      setAnalyzing(false)
+    }
+  }
+
+  function pickFile(f: File | null) {
+    setFile(f)
+    setInspection(null)
+    if (f) analyzeFile(f)
+  }
+
   const onDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault(); setDragging(false)
     const f = e.dataTransfer.files[0]
-    if (f && (f.name.endsWith('.pptx') || f.name.endsWith('.ppt'))) setFile(f)
+    if (f && (f.name.endsWith('.pptx') || f.name.endsWith('.ppt'))) pickFile(f)
     else flash('pptx 파일만 지원합니다')
   }, [])
 
-  async function handleUpload() {
-    if (!file || !name.trim() || !uploadYear || !uploadMonth) return
+  // 직접 업로드 3단계: ①경로 발급(prepare) ②Storage에 파일 직접 업로드
+  // (Vercel 서버를 거치지 않음) ③확정(JSON, 수 KB). Vercel 서버리스
+  // 함수 요청 본문 상한(4.5MB)에 8MB대 pptx가 413으로 막히는 문제를
+  // 이렇게 피한다.
+  async function handleRegister() {
+    if (!file || !name.trim() || !uploadYear || !uploadMonth || !inspection) return
     setUploading(true)
-    const fd = new FormData()
-    fd.append('file', file)
-    fd.append('name', name.trim())
-    fd.append('note', note.trim())
-    fd.append('year', String(uploadYear))
-    fd.append('month', String(uploadMonth))
-    fd.append('vacation_variant', uploadVariant)
 
-    const res = await fetch('/api/board/diet/templates', { method: 'POST', body: fd })
-    const json = await res.json()
+    const prepRes = await fetch('/api/board/diet/templates/prepare', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ year: uploadYear, month: uploadMonth, vacationVariant: uploadVariant }),
+    })
+    const prepJson = await prepRes.json()
+    if (!prepRes.ok) { flash('등록 실패: ' + prepJson.error); setUploading(false); return }
+    const storagePath: string = prepJson.storagePath
+
+    const supabase = createClient()
+    // ★from()의 버킷명과 경로 앞 중복("diet-templates/" 폴더)은 서버
+    //   prepare가 발급한 경로 그대로 써야 한다 — 기존 파일과 규칙이 같다.
+    const { error: uploadErr } = await supabase.storage
+      .from('diet-templates')
+      .upload(storagePath, file, {
+        contentType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        upsert: false,
+      })
+    if (uploadErr) { flash('파일 업로드 실패: ' + uploadErr.message); setUploading(false); return }
+
+    const confirmRes = await fetch('/api/board/diet/templates', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        storagePath,
+        name: name.trim(),
+        note: note.trim(),
+        year: uploadYear,
+        month: uploadMonth,
+        vacationVariant: uploadVariant,
+        styleJson: inspection.style,
+        validationResult: inspection.validation,
+        analysis: inspection.analysis,
+      }),
+    })
+    const confirmJson = await confirmRes.json()
+
+    if (!confirmRes.ok) {
+      // ★확정이 실패하면 방금 Storage에 올린 파일이 고아로 남는다 —
+      //   지워서 정리한다. 지우기도 실패하면 경로를 화면에 보여줘 수동
+      //   정리가 가능하게 한다.
+      const { error: removeErr } = await supabase.storage.from('diet-templates').remove([storagePath])
+      flash(removeErr
+        ? `등록 실패: ${confirmJson.error} (업로드된 파일 삭제도 실패 — 경로: ${storagePath})`
+        : `등록 실패: ${confirmJson.error}`)
+      setUploading(false)
+      return
+    }
+
+    setPendingId(confirmJson.template.id)
+    setFile(null); setName(''); setNote(''); setInspection(null)
     setUploading(false)
-
-    if (!res.ok) { flash('업로드 실패: ' + json.error); return }
-
-    setPendingStyle({ id: json.template.id, style: json.style_json })
-    setFile(null); setName(''); setNote('')
     await load()
-    flash('업로드 완료! 미리보기를 확인하고 적용하세요.')
+    flash('등록 완료! 점검 결과를 확인하고 적용하세요.')
   }
 
   async function activate(id: string) {
     const res = await fetch(`/api/board/diet/templates/${id}/activate`, { method: 'PATCH' })
     const json = await res.json()
     if (!res.ok) { flash('활성화 실패: ' + json.error); return }
-    setPendingStyle(null)
+    setPendingId(null)
     await load()
     flash('✅ 템플릿이 활성화되었습니다. 다음 PDF 생성부터 적용됩니다.')
   }
@@ -249,10 +384,9 @@ export default function DietTemplatesPage() {
 
   // 그룹(연·월/레거시) 안의 템플릿 행 하나 — 기존에 있던 것(이름·버전·비고·
   // 업로드일·미리보기/활성화/삭제)을 전부 유지하고 variant 라벨·활성 배지·
-  // 검증 결과를 추가했다. 검증 실패도 표시만 하고 업로드를 막지 않는다
+  // 검증 결과를 추가했다. 검증 실패도 표시만 하고 등록을 막지 않는다
   // (디자이너 원본은 이름표가 없는 게 정상 — 이름표는 생성 파이프라인이
-  // 나중에 자동으로 붙인다). validation_result는 지금까지 DB에 저장만
-  // 되고 화면엔 전혀 안 보였다(GET select에도 없었다).
+  // 나중에 자동으로 붙인다).
   function renderRow(t: DietTemplate) {
     const validation = t.validation_result
     const validationLabel = validation?.summary ?? '검증 정보 없음'
@@ -278,8 +412,8 @@ export default function DietTemplatesPage() {
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <button onClick={() => setPreview({ tmpl: t, styles: { ...DEFAULT_STYLE, ...t.style_json } })}
-            className="text-xs text-gray-500 hover:text-[#2D6A4F] font-medium">미리보기</button>
+          <button onClick={() => setPreview(t)}
+            className="text-xs text-gray-500 hover:text-[#2D6A4F] font-medium">점검 결과</button>
           {/* ★권한 없으면 숨기지 않고 disabled + 이유 안내 — 숨기면
               "왜 버튼이 없지?" 문의가 발생한다. 이유를 화면이 말하게 한다. */}
           {!t.is_active && (
@@ -299,6 +433,8 @@ export default function DietTemplatesPage() {
     )
   }
 
+  const pendingTemplate = pendingId ? templates.find(t => t.id === pendingId) ?? null : null
+
   return (
     <main className="min-h-screen bg-[#F6FAF6] px-4 sm:px-6 py-6 sm:py-8">
       {toast && (
@@ -309,16 +445,16 @@ export default function DietTemplatesPage() {
 
       {preview && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-xl shadow-2xl">
-            <h2 className="font-bold text-[#1C2B1E] text-lg mb-1">{preview.tmpl.name}</h2>
-            <p className="text-xs text-gray-400 mb-4">v{preview.tmpl.version} · {new Date(preview.tmpl.created_at).toLocaleDateString('ko-KR')}</p>
+          <div className="bg-white rounded-2xl p-6 w-full max-w-xl shadow-2xl max-h-[85vh] overflow-y-auto">
+            <h2 className="font-bold text-[#1C2B1E] text-lg mb-1">{preview.name}</h2>
+            <p className="text-xs text-gray-400 mb-4">v{preview.version} · {new Date(preview.created_at).toLocaleDateString('ko-KR')}</p>
             <div className="border border-gray-200 rounded-xl p-4 bg-white mb-5">
-              <MiniPreview style={preview.styles} />
+              <InspectionResultCard style={preview.style_json} validation={preview.validation_result} analysis={preview.validation_result?.analysis} />
             </div>
             <div className="flex gap-3">
               <button onClick={() => setPreview(null)}
                 className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 rounded-xl text-sm">닫기</button>
-              <button onClick={() => { activate(preview.tmpl.id); setPreview(null) }} disabled={!permissions.canManage}
+              <button onClick={() => { activate(preview.id); setPreview(null) }} disabled={!permissions.canManage}
                 title={permissions.canManage ? undefined : '템플릿 관리 담당자만 가능합니다'}
                 className="flex-1 bg-[#2D6A4F] hover:bg-[#1B4332] text-white font-semibold py-3 rounded-xl text-sm disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-[#2D6A4F]">
                 이 디자인으로 적용
@@ -338,34 +474,35 @@ export default function DietTemplatesPage() {
 
       <div className="space-y-5">
 
-        {pendingStyle && (() => {
-          const tmpl = templates.find(t => t.id === pendingStyle.id)
-          return tmpl ? (
-            <div className="bg-blue-50 border border-blue-200 rounded-2xl p-5">
-              <div className="flex items-center gap-2 mb-3">
-                <span className="text-base">🆕</span>
-                <p className="font-bold text-blue-800">{tmpl.name} — 미리보기 확인 후 적용하세요</p>
-              </div>
-              <div className="border border-blue-200 rounded-xl p-4 bg-white mb-4">
-                <MiniPreview style={{ ...DEFAULT_STYLE, ...pendingStyle.style }} />
-              </div>
-              <div className="flex gap-3">
-                <button onClick={() => setPendingStyle(null)}
-                  className="flex-1 bg-white border border-blue-300 text-blue-700 font-semibold py-2.5 rounded-xl text-sm">
-                  나중에 적용
-                </button>
-                <button onClick={() => activate(pendingStyle.id)} disabled={!permissions.canManage}
-                  title={permissions.canManage ? undefined : '템플릿 관리 담당자만 가능합니다'}
-                  className="flex-1 bg-[#2D6A4F] hover:bg-[#1B4332] text-white font-bold py-2.5 rounded-xl text-sm disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-[#2D6A4F]">
-                  이 디자인으로 적용하기
-                </button>
-              </div>
+        {pendingTemplate && (
+          <div className="bg-blue-50 border border-blue-200 rounded-2xl p-5">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-base">🆕</span>
+              <p className="font-bold text-blue-800">{pendingTemplate.name} — 미리보기 확인 후 적용하세요</p>
             </div>
-          ) : null
-        })()}
+            <div className="border border-blue-200 rounded-xl p-4 bg-white mb-4">
+              <InspectionResultCard
+                style={pendingTemplate.style_json}
+                validation={pendingTemplate.validation_result}
+                analysis={pendingTemplate.validation_result?.analysis}
+              />
+            </div>
+            <div className="flex gap-3">
+              <button onClick={() => setPendingId(null)}
+                className="flex-1 bg-white border border-blue-300 text-blue-700 font-semibold py-2.5 rounded-xl text-sm">
+                나중에 적용
+              </button>
+              <button onClick={() => activate(pendingTemplate.id)} disabled={!permissions.canManage}
+                title={permissions.canManage ? undefined : '템플릿 관리 담당자만 가능합니다'}
+                className="flex-1 bg-[#2D6A4F] hover:bg-[#1B4332] text-white font-bold py-2.5 rounded-xl text-sm disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-[#2D6A4F]">
+                이 디자인으로 적용하기
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="bg-white rounded-2xl border border-gray-100 p-6 space-y-4">
-          <h2 className="font-bold text-[#1C2B1E]">새 템플릿 업로드</h2>
+          <h2 className="font-bold text-[#1C2B1E]">새 템플릿 등록</h2>
           <div
             onDragOver={e => { e.preventDefault(); setDragging(true) }}
             onDragLeave={() => setDragging(false)}
@@ -375,16 +512,30 @@ export default function DietTemplatesPage() {
               dragging ? 'border-[#2D6A4F] bg-[#E8F5E9]' : 'border-gray-200 hover:border-[#52B788] hover:bg-[#F8FDF8]'
             }`}
           >
-            <input ref={fileRef} type="file" accept=".pptx,.ppt" className="hidden" onChange={e => setFile(e.target.files?.[0] || null)} />
+            <input ref={fileRef} type="file" accept=".pptx,.ppt" className="hidden" onChange={e => pickFile(e.target.files?.[0] || null)} />
             <div className="text-4xl mb-2">{file ? '📊' : '📎'}</div>
             {file ? (
               <><p className="font-semibold text-[#1C2B1E] text-sm">{file.name}</p>
               <p className="text-xs text-gray-400">{(file.size / 1024).toFixed(0)} KB</p></>
             ) : (
               <><p className="font-semibold text-gray-600 text-sm">pptx 파일을 드래그하거나 클릭</p>
-              <p className="text-xs text-gray-400 mt-1">.pptx 파일만 지원 · 색상/폰트 자동 추출</p></>
+              <p className="text-xs text-gray-400 mt-1">.pptx 파일만 지원 · 색상/폰트/구조 자동 점검</p></>
             )}
           </div>
+
+          {analyzing && (
+            <div className="flex items-center justify-center gap-2 text-xs text-gray-500 py-2">
+              <span className="w-3.5 h-3.5 border-2 border-gray-300 border-t-[#2D6A4F] rounded-full animate-spin" />
+              양식을 점검하는 중...
+            </div>
+          )}
+
+          {inspection && !analyzing && (
+            <div className="border border-gray-200 rounded-xl p-4 bg-[#F8FDF8]">
+              <InspectionResultCard style={inspection.style} validation={inspection.validation} analysis={inspection.analysis} />
+            </div>
+          )}
+
           <div>
             <label className="text-xs font-bold text-gray-500 mb-1.5 block">버전 이름 <span className="text-red-500">*</span></label>
             <input type="text" value={name} onChange={e => setName(e.target.value)}
@@ -424,11 +575,11 @@ export default function DietTemplatesPage() {
               ))}
             </select>
           </div>
-          <button type="button" onClick={handleUpload}
-            disabled={!file || !name.trim() || !uploadYear || !uploadMonth || uploading || !permissions.canManage}
+          <button type="button" onClick={handleRegister}
+            disabled={!file || !name.trim() || !uploadYear || !uploadMonth || !inspection || analyzing || uploading || !permissions.canManage}
             title={permissions.canManage ? undefined : '템플릿 관리 담당자만 가능합니다'}
             className="w-full bg-[#2D6A4F] hover:bg-[#1B4332] disabled:bg-gray-300 text-white font-bold py-3 rounded-xl transition-colors flex items-center justify-center gap-2">
-            {uploading ? <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"/>분석 중...</> : '업로드 및 스타일 분석'}
+            {uploading ? <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"/>등록 중...</> : '이 양식으로 등록'}
           </button>
           {/* ★숨기지 않고 이유를 화면이 말하게 한다 — 버튼이 disabled인
               것만 보면 실무자는 "왜 안 되지"를 문의로 물어야 알 수 있다 */}
@@ -494,7 +645,7 @@ export default function DietTemplatesPage() {
 
         <div className="bg-[#FFFBEB] border border-[#FDE68A] rounded-2xl px-5 py-4 text-xs text-gray-600 space-y-1">
           <p className="font-bold text-yellow-800 mb-1.5">💡 템플릿 관리 안내</p>
-          <p>• pptx 파일에서 색상과 폰트를 자동으로 추출합니다</p>
+          <p>• pptx 파일에서 색상·폰트·구조(행 수, 이름표, 가로 그림)를 자동으로 점검합니다</p>
           <p>• [활성화]된 템플릿은 다음 PDF 생성부터 즉시 반영됩니다</p>
           <p>• 활성화된 템플릿은 삭제할 수 없습니다 (다른 버전 활성화 후 삭제)</p>
           <p>• 활성 템플릿이 없으면 기본 키즈밀 스타일로 자동 적용됩니다</p>
