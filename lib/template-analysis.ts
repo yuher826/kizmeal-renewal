@@ -296,3 +296,164 @@ export function describeWideImage(img: WideImageInfo): string {
       : `${DAY_LABELS[startIdx]}~${DAY_LABELS[endIdx]}`
   return `가로 그림 1개 (약 ${img.weekIndexApprox}주차 위치, ${dayLabel} 폭)`
 }
+
+/* ── 이름표 부여 "가능 여부" 판정 (A-2) ──
+   ★파일은 절대 수정하지 않는다 — 이름표를 실제로 붙이는 건
+   pptx-server/template_resolver.py _prepare_template()가 생성 직전에
+   이미 하고 있다(8/11 3단계 통합). 이 판정의 목적은 그 자동 부여가
+   "이 양식에서도 성공할지"를 업로드·적용 화면에서 미리 알려줘, 조용한
+   6월 로컬 폴백(발견①과 같은 형태)을 활성화 버튼을 누르기 전에
+   사람이 알아채게 하는 것뿐이다.
+   ★규칙은 pptx-server/template_namer.py와 반드시 동일해야 한다 —
+   여기서 임의로 기준을 바꾸면 화면 판정과 실제 생성 결과가 어긋난다. */
+
+// pptx-server/validate_template.py의 EXPECTED_COLS와 이중관리 중이다.
+// 한쪽만 바꾸면 화면은 "부여 가능"으로 통과인데 실제 생성 때는 검증
+// 실패로 로컬 폴백된다 — 두 값을 반드시 같이 맞출 것.
+const EXPECTED_TABLE_COLS = 6
+
+export interface NameabilitySlide {
+  slide: string
+  canApply: string[]
+  missing: string[]
+  alreadyNamed: string[]
+  currentNames: Record<string, string>
+  tableRows: number | null
+  tableCols: number | null
+  warnings: string[]
+}
+
+export interface TemplateNameability {
+  ok: boolean
+  slides: NameabilitySlide[]
+  summary: string
+}
+
+// 블록(<p:sp>…</p:sp> 등) 안 첫 cNvPr name. checkNamesInSlide와 같은
+// 정규식이지만 슬라이드 전체가 아니라 블록 하나로 범위를 좁혀 쓴다.
+function firstShapeName(blockXml: string): string | null {
+  const m = blockXml.match(/<[a-z]*:?cNvPr\b[^>]*\bname="([^"]*)"/)
+  return m ? m[1] : null
+}
+
+// 블록 안 <a:t>…</a:t> 텍스트 런을 전부 이어붙인다. 파이썬 _shape_text()
+// (text_frame.text)와 동일하게 "문단이 나뉘어도 이어진 문자열"로 판정.
+function blockText(blockXml: string): string {
+  return Array.from(blockXml.matchAll(/<a:t>([\s\S]*?)<\/a:t>/g)).map((m) => m[1]).join('')
+}
+
+const REQUIRED_NAME_SET: readonly string[] = REQUIRED_NAMES
+
+/**
+ * 슬라이드 하나에서 이름표 4개를 "붙일 수 있는지"만 판정한다(실제로
+ * 붙이지 않음). template_namer.py의 apply_names_to_slide와 같은 두 단계
+ * 순서를 따른다 — ①이미 이름표 붙은 도형을 먼저 전부 확정 ②그 다음
+ * 나머지 도형에서 텍스트로 후보를 찾는다. 순서를 바꾸면(한 패스로 합치면)
+ * XML 등장 순서에 따라 "이미 있는데 중복 경고"가 잘못 뜰 수 있다.
+ */
+export function checkNameabilityInSlide(slideXml: string): NameabilitySlide {
+  const canApply: string[] = []
+  const alreadyNamed: string[] = []
+  const currentNames: Record<string, string> = {}
+  const warnings: string[] = []
+  const used = new Set<string>()
+
+  // ── MENU_TABLE — <p:graphicFrame> 블록 중 <a:tbl> 포함, 면적 최대 ──
+  // ★기존 analyzeSlide의 .match()는 첫 번째 표만 본다. 여기서는 여러
+  //   표가 있을 수 있다는 전제로 matchAll을 쓴다.
+  let bestTable: { area: number; rows: number; cols: number; name: string | null } | null = null
+  let tableCount = 0
+  for (const block of Array.from(slideXml.matchAll(/<p:graphicFrame>[\s\S]*?<\/p:graphicFrame>/g))) {
+    const gf = block[0]
+    if (!gf.includes('<a:tbl>')) continue
+    tableCount++
+    const box = findTableBox(gf)
+    const area = box ? box.cx * box.cy : 0
+    const rows = Array.from(gf.matchAll(/<a:tr\b/g)).length
+    const cols = Array.from(gf.matchAll(/<a:gridCol\b/g)).length
+    const name = firstShapeName(gf)
+    if (!bestTable || area > bestTable.area) bestTable = { area, rows, cols, name }
+  }
+  if (tableCount > 1) {
+    warnings.push(`표 도형이 ${tableCount}개 발견됨 — 가장 큰 표를 MENU_TABLE로 선정`)
+  }
+
+  let tableRows: number | null = null
+  let tableCols: number | null = null
+  if (bestTable) {
+    tableRows = bestTable.rows
+    tableCols = bestTable.cols
+    canApply.push('MENU_TABLE')
+    used.add('MENU_TABLE')
+    if (bestTable.name) {
+      currentNames.MENU_TABLE = bestTable.name
+      if (bestTable.name === 'MENU_TABLE') alreadyNamed.push('MENU_TABLE')
+    }
+  }
+
+  // ── ORIGIN_BOX / MATERIAL_BOX / ALLERGY_BOX — <p:sp> 블록만 순회 ──
+  // ★<p:pic>은 순회하지 않는다 — 파이썬 _shape_text()는 has_text_frame이
+  //   있는 도형만 보는데 Picture는 텍스트 프레임이 없어 애초에 안 본다.
+  // ★그룹(grpSp) 안 <p:sp>도 이 정규식에 그대로 잡힌다(9월 양식 실측—
+  //   p:sp 중첩이 없어 non-greedy 절단이 안전함을 확인했다). ALLERGY_BOX가
+  //   그룹 안에 있으므로 이 동작이 꼭 필요하다.
+  const spBlocks = Array.from(slideXml.matchAll(/<p:sp>[\s\S]*?<\/p:sp>/g)).map((m) => m[0])
+
+  // 1단계: 이미 이름표가 붙은 도형을 먼저 전부 확정(파이썬의 upfront
+  // `used` 집합과 동일 — XML 등장 순서와 무관하게 먼저 반영한다)
+  for (const sp of spBlocks) {
+    const name = firstShapeName(sp)
+    if (name && name !== 'MENU_TABLE' && REQUIRED_NAME_SET.includes(name) && !used.has(name)) {
+      alreadyNamed.push(name)
+      canApply.push(name)
+      currentNames[name] = name
+      used.add(name)
+    }
+  }
+
+  // 2단계: 아직 없는 이름표를 텍스트로 탐색
+  for (const sp of spBlocks) {
+    const name = firstShapeName(sp)
+    if (name && REQUIRED_NAME_SET.includes(name)) continue // 이미 이름표 있는 도형은 건드리지 않음
+    const text = blockText(sp)
+    if (!text) continue
+    let target: string | null = null
+    if (text.includes('원산지 표기')) target = 'ORIGIN_BOX'
+    else if (text.includes('원재료') && text.includes('표시안내')) target = 'MATERIAL_BOX'
+    else if (text.includes('알레르기 표시')) target = 'ALLERGY_BOX'
+    if (!target) continue
+    if (used.has(target)) {
+      warnings.push(`${target} 후보 도형이 중복 발견됨 — 먼저 찾은 도형만 사용`)
+      continue
+    }
+    canApply.push(target)
+    used.add(target)
+    if (name) currentNames[target] = name
+  }
+
+  const missing = REQUIRED_NAMES.filter((n) => !used.has(n))
+
+  return { slide: '', canApply, missing, alreadyNamed, currentNames, tableRows, tableCols, warnings }
+}
+
+export async function checkTemplateNameability(zip: JSZip): Promise<TemplateNameability> {
+  const slideFiles = zip.file(/^ppt\/slides\/slide\d+\.xml$/)
+  const slides: NameabilitySlide[] = []
+  if (slideFiles) {
+    for (const f of slideFiles) {
+      const xml = await f.async('string')
+      const result = checkNameabilityInSlide(xml)
+      slides.push({ ...result, slide: f.name.split('/').pop() ?? f.name })
+    }
+  }
+  const ok = slides.length > 0 &&
+    slides.every((s) => s.missing.length === 0 && s.tableCols === EXPECTED_TABLE_COLS)
+
+  return {
+    ok,
+    slides,
+    summary: ok
+      ? `이름표 자동 부여 가능 — ${slides.length}개 슬라이드 모두 4개 전부 확인`
+      : '이름표 자동 부여 불가 — 일부 슬라이드에서 이름표를 찾지 못했습니다',
+  }
+}
