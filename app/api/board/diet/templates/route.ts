@@ -7,6 +7,7 @@ import {
   type StyleJson,
   type TemplateValidation,
   type TemplateAnalysis,
+  type TemplateNameability,
   buildStyleJson,
 } from '@/lib/template-analysis'
 
@@ -106,6 +107,7 @@ export async function POST(req: NextRequest) {
     styleJson?: StyleJson
     validationResult?: TemplateValidation
     analysis?: TemplateAnalysis
+    nameability?: TemplateNameability
   }
   try {
     body = await req.json()
@@ -178,8 +180,14 @@ export async function POST(req: NextRequest) {
   }
 
   // DB 저장 (is_active = false — 관리자가 확인 후 직접 활성화)
-  // ★스키마 변경 없이 구조 분석(analysis) 결과를 validation_result
-  //   컬럼(JSONB)에 함께 담는다 — 새 컬럼 추가는 별도 판단이 필요하다.
+  // ★스키마 변경 없이 구조 분석(analysis)·이름표 부여 가능 여부
+  //   (nameability) 결과를 validation_result 컬럼(JSONB)에 함께 담는다
+  //   — 새 컬럼 추가는 별도 판단이 필요하다.
+  const storedValidation = {
+    ...validationResult,
+    ...(body.analysis ? { analysis: body.analysis } : {}),
+    ...(body.nameability ? { nameability: body.nameability } : {}),
+  }
   const { data: tmpl, error: dbErr } = await supabase
     .from('diet_templates')
     .insert({
@@ -190,7 +198,7 @@ export async function POST(req: NextRequest) {
       is_active:         false,
       created_by:        user.id,
       note:              note || null,
-      validation_result: body.analysis ? { ...validationResult, analysis: body.analysis } : validationResult,
+      validation_result: storedValidation,
       year,
       month,
       vacation_variant:  vacationVariant,
@@ -200,5 +208,5 @@ export async function POST(req: NextRequest) {
 
   if (dbErr) return NextResponse.json({ error: dbErr.message }, { status: 500 })
 
-  return NextResponse.json({ template: tmpl, style_json: styleJson, validation_result: validationResult })
+  return NextResponse.json({ template: tmpl, style_json: styleJson, validation_result: storedValidation })
 }

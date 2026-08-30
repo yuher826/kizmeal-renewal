@@ -7,11 +7,13 @@ import {
   type StyleJson,
   type TemplateValidation,
   type TemplateAnalysis,
+  type TemplateNameability,
   DEFAULT_STYLE,
   parseThemeXml,
   buildStyleJson,
   validateTemplateZip,
   analyzeTemplate,
+  checkTemplateNameability,
   describeWideImage,
 } from '@/lib/template-analysis'
 
@@ -24,9 +26,10 @@ const VACATION_VARIANT_LABEL: Record<VacationVariant, string> = {
   vacation_off: '방학X',
 }
 
-// route.ts POST 확정 시 analysis를 스키마 변경 없이 validation_result
-// (JSONB) 안에 함께 저장한다 — 레거시 행은 이 필드가 없을 수 있다.
-type StoredValidation = TemplateValidation & { analysis?: TemplateAnalysis }
+// route.ts POST 확정 시 analysis/nameability를 스키마 변경 없이
+// validation_result(JSONB) 안에 함께 저장한다 — 레거시 행(이 기능
+// 도입 전 등록분)은 이 필드들이 없을 수 있다.
+type StoredValidation = TemplateValidation & { analysis?: TemplateAnalysis; nameability?: TemplateNameability }
 
 interface DietTemplate {
   id: string; version: number; name: string; file_path: string
@@ -116,10 +119,11 @@ const NAME_LABEL: Record<string, string> = {
 // 결과를 항목마다 ✅/❌와 쉬운 한 줄 설명으로 보여준다.
 // ★예전 MiniPreview는 "2026년 7월"·"샘플 메뉴①②"가 하드코딩된 가짜
 //   미리보기였다(색상만 진짜였다). 실제 검증·구조 분석 데이터로 대체한다.
-function InspectionResultCard({ style, validation, analysis }: {
+function InspectionResultCard({ style, validation, analysis, nameability }: {
   style: StyleJson
   validation: TemplateValidation | null
   analysis?: TemplateAnalysis | null
+  nameability?: TemplateNameability | null
 }) {
   const s = { ...DEFAULT_STYLE, ...style }
   const hasAnalysis = !!analysis && analysis.slides.length > 0
@@ -130,7 +134,15 @@ function InspectionResultCard({ style, validation, analysis }: {
     ? analysis!.slides.flatMap(sl => sl.wideImages.map(img => ({ slide: sl.slide, img })))
     : []
   const slideCountDisplay = hasAnalysis ? analysis!.slideCount : (validation?.slide_count ?? 0)
-  const failingSlides = validation ? validation.slides.filter(sl => !sl.valid) : []
+  // 이름표 4개 = "부여 가능 여부"(A-2) 판정. 실제로 이름표를 붙이는 건
+  // pptx-server가 생성 직전에 이미 한다 — 여기는 그게 이 양식에서도
+  // 성공할지 미리 보여주는 화면일 뿐이다.
+  const hasNameability = !!nameability
+  const failingNameSlides = hasNameability ? nameability!.slides.filter(sl => sl.missing.length > 0) : []
+  // 이름표는 4개 다 찾았는데도 ok가 false인 경우 = 표 열 수가 안 맞는
+  // 경우뿐이다(checkTemplateNameability의 ok 판정 기준 참고) — 몇 열이
+  // 정답인지는 lib 쪽 EXPECTED_TABLE_COLS 하나에서만 관리한다.
+  const hasColIssue = hasNameability && !nameability!.ok && failingNameSlides.length === 0
 
   return (
     <div className="space-y-3">
@@ -151,27 +163,45 @@ function InspectionResultCard({ style, validation, analysis }: {
           </div>
         </div>
 
-        {/* 이름표 4개 */}
+        {/* 이름표 4개 — "자동 부여 가능 여부" 판정(A-2). 디자이너 원본은
+            이름표가 없는 게 정상이라 "없음/실패"로 보이면 안 된다. */}
         <div className="flex items-start gap-2">
-          <span>{validation == null ? 'ℹ️' : validation.valid ? '✅' : '❌'}</span>
+          <span>{!hasNameability ? 'ℹ️' : nameability!.ok ? '✅' : '❌'}</span>
           <div className="flex-1">
-            <p className="font-medium text-[#1C2B1E]">이름표 4개 확인 (메뉴표·원산지·원재료·알레르기)</p>
-            {validation == null ? (
-              <p className="text-xs text-gray-500">검증 정보가 없습니다</p>
-            ) : validation.valid ? (
-              <p className="text-xs text-gray-500">메뉴가 들어갈 자리를 찾았습니다</p>
+            <p className="font-medium text-[#1C2B1E]">이름표 자동 부여 가능 여부 (메뉴표·원산지·원재료·알레르기)</p>
+            {!hasNameability ? (
+              <p className="text-xs text-gray-500">이름표 점검 정보 없음 (이 기능 도입 전 등록분)</p>
             ) : (
-              <div className="mt-1 space-y-1">
-                {failingSlides.map(sl => {
-                  const labels = sl.missing.map(m => NAME_LABEL[m] ?? m).join('·')
-                  return (
-                    <p key={sl.slide} className="text-xs text-red-600">
-                      ❌ {sl.slide}에 {labels} 이름표가 없습니다
-                      <span className="block text-gray-500">→ 디자이너께 {labels} 안내 문구가 빠졌는지 확인해 주세요</span>
-                    </p>
-                  )
-                })}
-              </div>
+              <>
+                <p className="text-xs text-gray-500">
+                  디자이너 원본에는 이름표가 없는 것이 정상입니다. 식단표를 만들 때 시스템이 자동으로 붙입니다.
+                </p>
+                {nameability!.ok ? (
+                  <p className="text-xs text-[#2D6A4F] mt-1">
+                    이름표 자동 부여 가능 — {nameability!.slides.length}개 슬라이드 모두 4개 전부 확인
+                    {' · '}
+                    {nameability!.slides.map(sl => `${sl.tableRows ?? '?'}행 ${sl.tableCols ?? '?'}열`).join(' / ')}
+                  </p>
+                ) : (
+                  <div className="mt-1 space-y-1">
+                    {failingNameSlides.map(sl => {
+                      const labels = sl.missing.map(m => NAME_LABEL[m] ?? m).join('·')
+                      return (
+                        <p key={sl.slide} className="text-xs text-red-600">
+                          ❌ {sl.slide}에서 {labels}를 찾지 못했습니다 (표 {sl.tableRows ?? '?'}행 {sl.tableCols ?? '?'}열)
+                          <span className="block text-gray-500">→ 해당 문구가 양식에서 바뀌었는지 디자이너께 확인 요청해 주세요</span>
+                        </p>
+                      )
+                    })}
+                    {hasColIssue && (
+                      <p className="text-xs text-red-600">
+                        ❌ 표 열 수가 예상과 다른 슬라이드가 있습니다
+                        <span className="block text-gray-500">→ 생성 시 검증에 실패해 6월 공용 양식으로 대체될 수 있습니다. 디자이너께 표 구조 확인 요청해 주세요</span>
+                      </p>
+                    )}
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>
@@ -219,7 +249,7 @@ export default function DietTemplatesPage() {
   const [analyzing, setAnalyzing]       = useState(false)
   const [uploading, setUploading]       = useState(false)
   const [file,      setFile]            = useState<File | null>(null)
-  const [inspection, setInspection]     = useState<{ style: StyleJson; validation: TemplateValidation; analysis: TemplateAnalysis } | null>(null)
+  const [inspection, setInspection]     = useState<{ style: StyleJson; validation: TemplateValidation; analysis: TemplateAnalysis; nameability: TemplateNameability } | null>(null)
   const [name,      setName]            = useState('')
   const [note,      setNote]            = useState('')
   // 연·월 기본값 — 다른 식단 화면(app/erp/(protected)/diet/page.tsx)의
@@ -279,7 +309,9 @@ export default function DietTemplatesPage() {
 
       const validation = await validateTemplateZip(zip)
       const analysis = await analyzeTemplate(zip)
-      setInspection({ style, validation, analysis })
+      // ★zip을 전혀 수정하지 않는 읽기 전용 판정이라 호출 순서는 무관하다.
+      const nameability = await checkTemplateNameability(zip)
+      setInspection({ style, validation, analysis, nameability })
     } catch (err) {
       flash('pptx 파일을 열지 못했습니다: ' + (err instanceof Error ? err.message : String(err)))
     } finally {
@@ -341,6 +373,7 @@ export default function DietTemplatesPage() {
         styleJson: inspection.style,
         validationResult: inspection.validation,
         analysis: inspection.analysis,
+        nameability: inspection.nameability,
       }),
     })
     const confirmJson = await confirmRes.json()
@@ -449,7 +482,7 @@ export default function DietTemplatesPage() {
             <h2 className="font-bold text-[#1C2B1E] text-lg mb-1">{preview.name}</h2>
             <p className="text-xs text-gray-400 mb-4">v{preview.version} · {new Date(preview.created_at).toLocaleDateString('ko-KR')}</p>
             <div className="border border-gray-200 rounded-xl p-4 bg-white mb-5">
-              <InspectionResultCard style={preview.style_json} validation={preview.validation_result} analysis={preview.validation_result?.analysis} />
+              <InspectionResultCard style={preview.style_json} validation={preview.validation_result} analysis={preview.validation_result?.analysis} nameability={preview.validation_result?.nameability} />
             </div>
             <div className="flex gap-3">
               <button onClick={() => setPreview(null)}
@@ -485,6 +518,7 @@ export default function DietTemplatesPage() {
                 style={pendingTemplate.style_json}
                 validation={pendingTemplate.validation_result}
                 analysis={pendingTemplate.validation_result?.analysis}
+                nameability={pendingTemplate.validation_result?.nameability}
               />
             </div>
             <div className="flex gap-3">
@@ -532,7 +566,7 @@ export default function DietTemplatesPage() {
 
           {inspection && !analyzing && (
             <div className="border border-gray-200 rounded-xl p-4 bg-[#F8FDF8]">
-              <InspectionResultCard style={inspection.style} validation={inspection.validation} analysis={inspection.analysis} />
+              <InspectionResultCard style={inspection.style} validation={inspection.validation} analysis={inspection.analysis} nameability={inspection.nameability} />
             </div>
           )}
 
