@@ -228,21 +228,34 @@ def _init_table_cells(table, sections):
     n_cols = len(table.columns)
     n_secs = len(sections)
 
-    # sections 기반으로 col1 셀에서 lunch/snack template 추출 (run 수 임계값 불사용)
+    # sections 기반으로 lunch/snack template 추출 (run 수 임계값 불사용).
+    # ★col1(월요일) 고정이 아니라 데이터 열 전체(col1~n_cols-1)를 순회한다★
+    # — 1일이 월요일이 아닌 달은 디자이너 양식의 월요일 칸이 비어 있어
+    # (9월 실측: 슬라이드1 중식 행 전부 col1 run수=0, 화요일인 col2에서야
+    # run이 나옴) col1만 보면 lunch_tmpl이 끝내 None이 되어 전 주차 중식이
+    # 초기화되지 않고 빈칸으로 남는다(HANDOFF "1일이 월요일이 아닌 달"
+    # 버그 참고). lunch_tmpl과 snack_tmpl은 각각 독립적으로 찾는다 —
+    # 어느 요일에 데이터가 있든 동작해야 한다.
     lunch_tmpl = None
     snack_tmpl = None
     for ri in range(len(table.rows)):
         sec = sections[ri % n_secs]
-        src_txBody = table.cell(ri, 1)._tc.find(f'{{{_NS_A}}}txBody')
-        if src_txBody is None:
+        if sec == 'lunch' and lunch_tmpl is not None:
             continue
-        n = len(src_txBody.findall(f'.//{{{_NS_A}}}r'))
-        if n == 0:
+        if sec != 'lunch' and snack_tmpl is not None:
             continue
-        if sec == 'lunch' and lunch_tmpl is None:
-            lunch_tmpl = copy.deepcopy(src_txBody)
-        elif sec != 'lunch' and snack_tmpl is None:
-            snack_tmpl = _normalize_snack_tmpl(copy.deepcopy(src_txBody))
+        for ci in range(1, n_cols):
+            src_txBody = table.cell(ri, ci)._tc.find(f'{{{_NS_A}}}txBody')
+            if src_txBody is None:
+                continue
+            n = len(src_txBody.findall(f'.//{{{_NS_A}}}r'))
+            if n == 0:
+                continue
+            if sec == 'lunch':
+                lunch_tmpl = copy.deepcopy(src_txBody)
+            else:
+                snack_tmpl = _normalize_snack_tmpl(copy.deepcopy(src_txBody))
+            break
         if lunch_tmpl is not None and snack_tmpl is not None:
             break
 
