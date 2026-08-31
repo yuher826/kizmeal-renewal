@@ -421,9 +421,15 @@ export default function DietTemplatesPage() {
   // (디자이너 원본은 이름표가 없는 게 정상 — 이름표는 생성 파이프라인이
   // 나중에 자동으로 붙인다).
   function renderRow(t: DietTemplate) {
-    const validation = t.validation_result
-    const validationLabel = validation?.summary ?? '검증 정보 없음'
-    const validationOk = validation?.valid === true
+    // ★옛 validation.summary(도입 전 "이름표 4개 확인" 검증 문구)를 그대로
+    //   쓰면 안 된다 — 디자이너 원본은 이름표가 없는 게 정상인데 옛 문구는
+    //   "검증 실패"로 읽혀 활성화를 주저하게 만든다. InspectionResultCard의
+    //   하위호환 분기와 같은 기준(nameability 유무)으로 통일한다.
+    const nameability = t.validation_result?.nameability
+    const validationLabel = nameability
+      ? nameability.summary
+      : '이름표 점검 정보 없음 (이 기능 도입 전 등록분)'
+    const validationOk = nameability?.ok === true
     return (
       <div key={t.id} className="px-6 py-3.5 flex items-center justify-between hover:bg-[#F8FDF8]">
         <div>
