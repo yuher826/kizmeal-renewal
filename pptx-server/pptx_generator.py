@@ -790,18 +790,34 @@ def _holiday_cell_rects(tbl_shape, sections, week_days):
     return rects
 
 
-def remove_holiday_cover_pics(slide, sections, week_days):
+def remove_holiday_cover_pics(slide, sections, week_days, branch_name):
     """공휴일 셀 위에 떠서 날짜를 가리는 양식 장식 PICTURE(예: 선거 도장 그림4)를
     동적 제거. B-2 라벨 제거의 그림(좌표) 버전.
 
     제거 조건 (전부 AND):
-      1) 최상위 PICTURE (slide.shapes 직접 순회 = 그룹 내부 미진입)
-      2) MENU_TABLE 보다 위 z-order (spTree 순서상 뒤 = 위)
-      3) bbox 가 공휴일 셀 영역과 겹침 (그림은 텍스트 없음 → 좌표 겹침으로 판정)
+      1) 공휴일에도 그 원이 운영한다(branch_name in _HOLIDAY_OPERATING)
+      2) 최상위 PICTURE (slide.shapes 직접 순회 = 그룹 내부 미진입)
+      3) MENU_TABLE 보다 위 z-order (spTree 순서상 뒤 = 위)
+      4) bbox 가 공휴일 셀 영역과 겹침 (그림은 텍스트 없음 → 좌표 겹침으로 판정)
     보존: 로고(그림27)·하단 클립보드(그림3)는 셀과 안 겹쳐 자동 보존.
           알레르기/원산지 박스는 PICTURE 아님 → 미대상.
     수집 후 일괄 remove.
+
+    ★조건1이 핵심이다(버그③ 수정, 2026-08-31). 원래 이 함수는 "6월
+    지방선거일 선거 도장 그림" 제거만 염두에 뒀다 — 그 칸에도 급식이
+    있어 날짜를 가리는 장식을 치워야 했다. 9월 추석은 정반대다 — 쉬는
+    날이라 디자이너가 넣은 "추석연휴" 안내 이미지가 남아 있어야 하는데,
+    이 함수가 장식으로 오인해 지워버려 47개 원에서 안내가 사라지고
+    날짜 숫자만 남는 사고가 났다(강동ECC 실배포본 그림31 vs 생성분
+    그림167 대조로 확인). ★그림 모양만으로는 "치워야 할 장식"과 "남겨야
+    할 안내"를 구분할 수 없다★(9월 추석 이미지를 방학 이미지로 오판했던
+    8/28 사례와 같은 원칙) — 그래서 그림이 아니라 "그 원이 그날 실제로
+    운영하는가"로 판정 기준을 바꿨다. _render_slide()가 셀 안 날짜/메뉴를
+    is_holiday + _HOLIDAY_OPERATING로 가르는 것과 같은 기준이다.
     """
+    if branch_name not in _HOLIDAY_OPERATING:
+        return
+
     # 표 도형 확보
     tbl_shape = None
     for sh in slide.shapes:
@@ -1391,8 +1407,11 @@ def generate(cfg, menu_data, template_path, out_path, date_map=None,
 
         _render_slide(table, plan_entry, week_days, cfg)
 
-        # 공휴일 셀 위에 떠서 날짜를 가리는 장식 그림(선거도장 등) 제거
-        remove_holiday_cover_pics(slide, sections, week_days)
+        # 공휴일 셀 위에 떠서 날짜를 가리는 장식 그림(선거도장 등) 제거.
+        # ★공휴일에도 운영하는 원(_HOLIDAY_OPERATING)만 지운다★ — 나머지
+        # 쉬는 원은 디자이너가 넣은 추석연휴 등 안내 이미지를 그대로 둬야
+        # 한다(버그③, 판정은 함수 안 _HOLIDAY_OPERATING 가드에서 함).
+        remove_holiday_cover_pics(slide, sections, week_days, cfg['name'])
 
     _fix_allergy_only(prs)
     _check_box_overlap(prs, branch_label=cfg.get('name', out_path))
