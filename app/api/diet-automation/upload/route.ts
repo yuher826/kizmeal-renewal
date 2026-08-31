@@ -128,8 +128,18 @@ function parseWeekSheet(
   const dateRow = rows[2] as unknown[]
   const rawDates = [dateRow[1], dateRow[2], dateRow[3], dateRow[4], dateRow[5]]
 
-  // 5주차 해당없음 판단 (B열 첫 번째 셀)
-  if (String(rawDates[0] ?? '').trim().includes('해당없음')) {
+  // 그 주차 전체가 해당없음인지 판단 — 5칸(월~금) 전부 비었거나
+  // '해당없음'일 때만 skip한다. ★B열(월요일) 하나만 보고 판단하면 안
+  // 된다★ — 1일이 월요일이 아닌 달(2026~2027 24개월 중 14개월 해당,
+  // 예: 9월 1주차는 월=해당없음이지만 화~금은 정상 데이터)에서
+  // 그 주차 전체가 통째로 날아간다(HANDOFF "1일이 월요일이 아닌 달"
+  // 버그 참고). 한 칸이라도 날짜가 있으면 그 주차는 살리고, parseDateCell이
+  // '해당없음' 칸을 null로 돌려주므로 그 요일만 자연히 빠진다.
+  const weekAllEmpty = rawDates.every(r => {
+    const s = String(r ?? '').trim()
+    return !s || s.includes('해당없음')
+  })
+  if (weekAllEmpty) {
     return { week_num: weekNum, is_skipped: true, days: [] }
   }
 
