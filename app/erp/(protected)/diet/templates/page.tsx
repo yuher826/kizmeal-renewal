@@ -451,8 +451,13 @@ export default function DietTemplatesPage() {
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          {/* ★옆 "활성화"와 같은 수준(px-3 py-1.5 rounded-lg)으로 패딩을
+              줘 클릭 영역을 넓히고 버튼임이 보이게 한다. 단 테두리만
+              쓰는 중립 회색으로 — 활성화(초록 배경)보다 눈에 띄면 안 된다. */}
           <button onClick={() => setPreview(t)}
-            className="text-xs text-gray-500 hover:text-[#2D6A4F] font-medium">점검 결과</button>
+            className="text-xs text-gray-500 font-semibold px-3 py-1.5 rounded-lg border border-gray-200 hover:border-[#2D6A4F] hover:text-[#2D6A4F] hover:bg-[#F8FDF8] transition-colors">
+            점검 결과
+          </button>
           {/* ★권한 없으면 숨기지 않고 disabled + 이유 안내 — 숨기면
               "왜 버튼이 없지?" 문의가 발생한다. 이유를 화면이 말하게 한다. */}
           {!t.is_active && (
