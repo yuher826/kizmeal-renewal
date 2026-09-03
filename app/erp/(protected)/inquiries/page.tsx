@@ -440,7 +440,7 @@ function CsManagementInner() {
   // ── 첫 로딩 완료 후: openGroups 초기화 + 첫 문의 자동 선택 ─────
   useEffect(() => {
     if (loading || didInit) return
-    // 미처리(unread)가 있는 그룹만 펼침
+    // 안 읽은 메시지가 있는 그룹만 펼침
     const open = new Set<string>()
     for (const g of groups) if (g.unreadCount > 0) open.add(g.tag)
     setOpenGroups(open)
@@ -516,7 +516,7 @@ function CsManagementInner() {
           {/* 통계 바 */}
           <div className="grid grid-cols-4 gap-2 p-3">
             {[
-              { key: 'pending'       as const, label: '미처리',      value: stats.pending,       color: 'text-red-600',    bg: 'bg-red-50',    activeBg: 'bg-red-100',    ring: 'ring-red-400' },
+              { key: 'pending'       as const, label: '대기중',      value: stats.pending,       color: 'text-red-600',    bg: 'bg-red-50',    activeBg: 'bg-red-100',    ring: 'ring-red-400' },
               { key: 'today'         as const, label: '오늘 신규',   value: stats.today,         color: 'text-blue-600',   bg: 'bg-blue-50',   activeBg: 'bg-blue-100',   ring: 'ring-blue-400' },
               { key: 'slaExceeded'   as const, label: 'SLA 초과',    value: stats.slaExceeded,   color: 'text-orange-600', bg: 'bg-orange-50', activeBg: 'bg-orange-100', ring: 'ring-orange-400' },
               { key: 'doneThisMonth' as const, label: '이번달 처리', value: stats.doneThisMonth, color: 'text-green-600',  bg: 'bg-green-50',  activeBg: 'bg-green-100',  ring: 'ring-green-400' },
@@ -564,7 +564,7 @@ function CsManagementInner() {
                     : 'bg-white border-gray-200 text-gray-600 hover:border-[#2D6A4F] hover:text-[#2D6A4F]'
                 }`}
               >
-                미처리만
+                ● 새 메시지만
               </button>
             </div>
 
