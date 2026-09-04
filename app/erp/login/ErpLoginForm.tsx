@@ -28,7 +28,7 @@ export default function ErpLoginForm({ next, message }: Props) {
         const uid = data.session.user.id
         const { data: adminRow } = await supabase
           .from('admins')
-          .select('id, access_scope, role, can_manage_templates')
+          .select('id, access_scope, role, can_manage_templates, can_handle_cs, can_write_notices')
           .eq('auth_id', uid)
           .maybeSingle()
         if (adminRow) {
@@ -69,7 +69,7 @@ export default function ErpLoginForm({ next, message }: Props) {
 
     const { data: adminData } = await supabase
       .from('admins')
-      .select('id, access_scope, role, can_manage_templates')
+      .select('id, access_scope, role, can_manage_templates, can_handle_cs, can_write_notices')
       .eq('auth_id', user.id)
       .maybeSingle()
 

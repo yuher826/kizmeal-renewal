@@ -16,6 +16,7 @@ const ROLE_BADGE: Record<string, { bg: string; text: string; label: string }> = 
   director:     { bg: 'bg-orange-100', text: 'text-orange-700', label: '디렉터' },
   nutritionist_ck:          { bg: 'bg-green-100', text: 'text-green-700', label: '영양사 (직영)' },
   nutritionist_consignment: { bg: 'bg-green-100', text: 'text-green-700', label: '영양사 (위탁)' },
+  staff:        { bg: 'bg-slate-100',  text: 'text-slate-600',  label: '직원' },
 }
 
 interface Props {

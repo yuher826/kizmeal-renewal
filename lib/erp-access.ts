@@ -4,17 +4,21 @@ import {
   REVIEW_ALLOWED_ROLES,
   BRANCH_PROFILE_CREATE_ROLES,
   canManageTemplates,
+  canHandleCs,
+  canWriteNotices,
 } from '@/lib/roles'
 
 /**
  * ERP 페이지 접근 판정에 필요한 admin 최소 형태.
- * role 단독이 아닌 이유 — `/erp/diet/templates`는 role이 아니라
- * can_manage_templates 플래그로 열린다. 앞으로 플래그가 2개
- * (can_handle_cs, can_write_notices) 더 붙을 예정이라 admin 객체로 받는다.
+ * role 단독이 아닌 이유 — `/erp/diet/templates`·`/erp/inquiries`·
+ * `/erp/notices`는 role이 아니라 플래그(can_manage_templates,
+ * can_handle_cs, can_write_notices)로도 열린다.
  */
 export type ErpAccessAdmin = {
   role: string
   can_manage_templates?: boolean | null
+  can_handle_cs?: boolean | null
+  can_write_notices?: boolean | null
 }
 
 /**
@@ -41,8 +45,14 @@ const RULES: Array<{ prefix: string; allow: (admin: ErpAccessAdmin) => boolean }
     prefix: '/erp/branches',
     allow: a => ['super_admin', 'manager', 'nutritionist_ck', 'nutritionist_consignment'].includes(a.role),
   },
-  { prefix: '/erp/notices', allow: a => ['super_admin', 'manager', 'director'].includes(a.role) },
-  { prefix: '/erp/inquiries', allow: a => ['super_admin', 'manager', 'director'].includes(a.role) },
+  {
+    prefix: '/erp/notices',
+    allow: a => ['super_admin', 'manager', 'director'].includes(a.role) || canWriteNotices(a),
+  },
+  {
+    prefix: '/erp/inquiries',
+    allow: a => ['super_admin', 'manager', 'director'].includes(a.role) || canHandleCs(a),
+  },
   { prefix: '/erp/files', allow: a => ['super_admin', 'manager', 'director'].includes(a.role) },
   { prefix: '/erp/admins', allow: a => ['super_admin', 'manager'].includes(a.role) },
   { prefix: '/erp/brands', allow: a => ['super_admin', 'manager'].includes(a.role) },
@@ -56,6 +66,7 @@ const LANDING_PREFERENCE: Record<string, string[]> = {
   director: [ROUTES.ERP_INQUIRIES, ROUTES.ERP_REVIEW, ROUTES.ERP_MY_PAGE],
   nutritionist_ck: [ROUTES.ERP_DIET, ROUTES.ERP_MY_PAGE],
   nutritionist_consignment: [ROUTES.ERP_DIET, ROUTES.ERP_MY_PAGE],
+  staff: [ROUTES.ERP_INQUIRIES, ROUTES.ERP_NOTICES, ROUTES.ERP_DIET_TEMPLATES, ROUTES.ERP_MY_PAGE],
 }
 
 /**

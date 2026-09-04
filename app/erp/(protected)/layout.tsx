@@ -13,7 +13,7 @@ export default async function ErpProtectedLayout({ children }: { children: React
 
   const { data: adminData } = await supabase
     .from('admins')
-    .select('id, auth_id, name, email, role, access_scope, is_active, can_manage_templates')
+    .select('id, auth_id, name, email, role, access_scope, is_active, can_manage_templates, can_handle_cs, can_write_notices')
     .eq('auth_id', user.id)
     .maybeSingle()
 
@@ -34,6 +34,8 @@ export default async function ErpProtectedLayout({ children }: { children: React
     access_scope: adminData.access_scope,
     is_active: adminData.is_active,
     can_manage_templates: adminData.can_manage_templates,
+    can_handle_cs: adminData.can_handle_cs,
+    can_write_notices: adminData.can_write_notices,
   }
 
   return (

@@ -12,7 +12,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   const { data: adminData } = await supabase
     .from('admins')
-    .select('id, access_scope, is_active, role, can_manage_templates')
+    .select('id, access_scope, is_active, role, can_manage_templates, can_handle_cs, can_write_notices')
     .eq('auth_id', user.id)
     .maybeSingle()
 

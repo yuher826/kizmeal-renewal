@@ -19,6 +19,8 @@ export const ROUTES = {
   ERP_DIET: '/erp/diet',
   ERP_INQUIRIES: '/erp/inquiries',
   ERP_REVIEW: '/erp/review',
+  ERP_NOTICES: '/erp/notices',
+  ERP_DIET_TEMPLATES: '/erp/diet/templates',
   ERP_MY_PAGE: '/erp/my-page',
   NUTRITIONIST_HOME: '/nutritionist/dashboard',
 } as const

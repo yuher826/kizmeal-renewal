@@ -3,7 +3,19 @@
 > 이 파일은 항상 **"지금 상태"만** 담는다. 매 세션 끝에 최신 상태로 덮어쓴다.
 > 과거 이력은 `git log HANDOFF.md`로 본다.
 
-**최종 갱신:** 2026-09-04(2차) — ★권한 2단계(`ErpUserContext` 신설)
+**최종 갱신:** 2026-09-04(3차) — ★권한 3단계(`staff` 역할 + 2층 플래그
+2개) 완료★. 커밋 완료 — 빌드·실물 검증 전부 통과했다. `admins`에
+`can_handle_cs`·`can_write_notices` 컬럼과 `staff` role을 DB에서 이미
+추가해뒀고(SQL은 `supabase/migrations/add_staff_role_and_flags_260904.sql`에
+기록), 이번엔 코드를 맞췄다. `/erp/inquiries`·`/erp/notices`는 이제
+역할 **또는** 플래그로 열린다 — 전 계정이 플래그 `false`라 오늘 동작은
+그대로다. 도중에 `layout.tsx`만 고치고 `middleware.ts`를 빠뜨린 버그를
+발견·수정했다(아래 권한 섹션 갱신분 참조) — `staff`+`can_write_notices=true`
+테스트 계정으로 착지·메뉴·진입·차단을 켜고 끄며 양방향 실물 검증까지
+마쳤다. 다음은 4단계(관리자 관리 체크박스 UI) — API·플래그·역할이
+이미 다 준비돼 순수 UI 작업이다.
+
+**2026-09-04(2차) 갱신:** ★권한 2단계(`ErpUserContext` 신설)
 완료★. 커밋 완료 — 빌드·실물 확인 전부 통과했다. ERP 안에서 "본인 admins 행"을 각 페이지가
 따로 조회하던 곳이 실측 **9곳**(클라이언트 6 / 서버 3)이었다. 클라 6곳만
 `useErpUser()`로 컨텍스트 조회로 바꿨고(서버 3곳은 React 컨텍스트가
@@ -11,7 +23,6 @@
 3개 필드를 추가했다. 진짜 이유는 성능이 아니라 3단계 대비다 — 이제
 `can_handle_cs`·`can_write_notices` 플래그가 추가돼도 `layout.tsx`의
 select 한 줄만 고치면 6곳이 따라온다(아래 권한 섹션 갱신분 참조).
-다음은 3단계(플래그 컬럼 2개 + `staff` 역할).
 
 **2026-09-04(1차) 갱신:** ★권한 1단계(1층 매트릭스 + 라우트 가드 +
 역할별 착지 경로) 완료★. `lib/erp-access.ts` 신설로 `canAccessErpPage`·
@@ -70,11 +81,20 @@ select 한 줄만 고치면 6곳이 따라온다(아래 권한 섹션 갱신분 
   "가운데 자물쇠 스타일 분리"가 왜 필요한지 실물로 확인됨 (아래 CS 섹션)
 + ★신규★ `scripts/dev-fresh.cjs`가 node 프로세스를 하나만 종료해
   `.next` 삭제가 `ENOTEMPTY`로 실패함 — 실제로 5개가 떠 있었다.
-  전체 종료 + 대기 시간 필요 (아래 CS 섹션 뒤에 별도 기록).
+  전체 종료 + 대기 시간 필요 (아래 CS 섹션 뒤에 별도 기록)
++ ★신규★ `ErpHeader.tsx`와 `ErpSidebar.tsx`의 `ROLE_BADGE`가 완전히
+  중복. 역할이 늘 때마다 두 곳을 고쳐야 한다(3단계에서 `staff` 한
+  줄씩 넣으며 재확인함) — 통합은 실물 확인이 따로 필요해 미룸.
++ ★신규★ `/erp/notices` 목록에서 공지 행을 클릭해도 아무 일이 없다.
+  `tr`에 `hover:bg-slate-50`만 있고 링크가 없어 눌러도 되는 것처럼
+  보이는데 상세 페이지(`/erp/notices/[id]`)가 아예 없다. 작성한 공지의
+  본문을 다시 볼 방법도, 수정할 방법도 없다. 권팀장 2·3번(공지 발송
+  대상) 작업에 상세·수정을 함께 넣는 것이 자연스럽다(3단계 실물
+  확인 중 발견, `can_write_notices` 테스트 계정으로 직접 눌러봄).
 
 **다음 세션 착수 지점:**
 > "kizmeal-renewal 이어서. HANDOFF.md 읽고 시작하자.
-> 권한 2단계 커밋 확인 후 3단계(admins 컬럼 2개 + staff 역할)부터."
+> 권한 3단계 커밋 확인 후 4단계(관리자 관리 체크박스 UI)부터."
 
 ---
 
@@ -299,6 +319,140 @@ layout의 결합이라는 문제가 붙는다. 남는 장사가 아니다.
 추가돼도 `layout.tsx`의 select 한 줄만 고치면 컨텍스트를 쓰는
 6곳 전부에 자동으로 따라온다.
 
+### ✅ 3단계 완료 (2026-09-04, 커밋 완료 — 빌드·실물 검증 전부 통과)
+
+**실행한 SQL 전문(2026-09-04, Supabase 대시보드에서 이미 실행 완료)**
+```sql
+alter table admins add column if not exists can_handle_cs boolean not null default false;
+alter table admins add column if not exists can_write_notices boolean not null default false;
+
+alter table admins drop constraint if exists admins_role_check;
+alter table admins add constraint admins_role_check
+  check (role in ('super_admin','manager','director',
+                  'nutritionist_ck','nutritionist_consignment','staff'));
+```
+실측 확인 결과 — `can_handle_cs`·`can_write_notices` 둘 다
+`boolean NOT NULL default false`로 기존 `can_manage_templates`와
+형식이 완전히 같다. `admins_role_check`에 `'staff'` 포함 확인. 기존
+6개 계정은 전부 `false`이므로 이 작업으로 새로 생기는 권한은 없다.
+기록용 파일: `supabase/migrations/add_staff_role_and_flags_260904.sql`
+(재실행 불필요, 이미 실행됨을 파일 상단에 명시).
+
+**★DB CHECK 제약이 `staff`를 막고 있었다★**
+`lib/roles.ts`의 `ROLES`에 `STAFF: 'staff'`만 추가하면 코드 쪽
+`VALID_ADMIN_ROLES`(`app/api/admin/branch/route.ts:9`, `Object.values(ROLES)`
+파생)는 통과하지만, DB `admins_role_check` 제약이 `'staff'`를 몰라
+INSERT/UPDATE가 CHECK 위반으로 실패한다. 2026-08-05에 `role` 컬럼
+기본값이 `'admin'`으로 남아 있어 겪었던 사고와 같은 종류다 — **코드가
+새 값을 안다고 해서 DB가 받아주는 게 아니다.** 이번엔 SQL을 코드
+작업보다 먼저(2026-09-04 당일) 실행해 이 순서를 지켰다. ★SQL과 코드가
+같은 커밋 범위 안에서 나가야 하는 이유가 바로 이것이다.★
+
+**★`ALLOWED_FIELDS`에 `can_manage_templates`가 없어서 SQL로만
+바꿀 수 있었다★**
+`app/api/admin/branch/route.ts`의 `update-admin` 화이트리스트
+(`ALLOWED_FIELDS`)에 `can_manage_templates`가 원래 없었다 — 그래서
+템플릿 담당자를 바꾸려면 Supabase SQL을 직접 쳐야 했다(HANDOFF의
+오래된 미해결 항목). 이번에 플래그 3개(`can_manage_templates`,
+`can_handle_cs`, `can_write_notices`)를 전부 화이트리스트에 열었다.
+4단계에서 관리자 관리 화면에 체크박스 UI가 붙으면 이 API가 그대로
+받아준다.
+
+**플래그 값 검증 — role 조건을 섞지 않는다**
+세 플래그는 `typeof === 'boolean'`인지만 확인한다. 어떤 역할이 어떤
+플래그를 가질 수 있는지는 검증하지 않는다 — `staff`든 영양사든
+플래그를 배정받을 수 있는 게 설계 의도이기 때문이다. 문자열
+`"false"`가 그대로 들어가 DB에서 `true`가 되는 사고만 막는다.
+
+**★플래그가 role보다 우선하는 방침과 근거★**
+`/erp/inquiries`·`/erp/notices` 규칙을 "역할 목록 **또는** 플래그"로
+바꿨다. 위 "1층 매트릭스 완성본" 표에 영양사가 `/erp/inquiries` ❌로
+적힌 것은 이제 **"플래그가 없으면 ❌"**로 읽는다 — 배서영 영양사께
+CS 대응이 필요해지면 역할을 안 바꾸고 `can_handle_cs` 체크박스
+하나로 열린다(4단계 이후). 근거는 `canManageTemplates`가 이미 이렇게
+동작하는 것과 같다 — "CS·공지·템플릿은 직무가 아니라 배정"이라는
+이 설계 전체의 원칙이다. 현재 전 계정이 플래그 `false`이므로 오늘
+동작은 바뀌지 않는다.
+
+`staff`는 `canAccessErpPage`의 어느 리터럴 role 배열에도 넣지
+않았다 — deny by default이므로, 플래그가 하나도 없는 `staff`는
+`/erp/my-page`만 열린다. 그게 설계 의도다.
+
+**`MANAGER_CREATABLE_ROLES` 자동 확장 — 확인했고 의도한 동작**
+`MANAGER_CREATABLE_ROLES`가 `Object.values(ROLES)`에서 파생돼
+`ROLES`에 `staff`를 추가하자마자 매니저가 `staff` 계정을 만들 수
+있게 자동으로 따라왔다. 별도 처리 없이 그대로 뒀다 — 권팀장이
+디자이너·CS 전담 직원 계정을 만드는 것은 실무상 자연스럽다.
+
+### 🐛 버그 발견·수정 — middleware가 새 플래그를 못 읽고 있었다
+
+**증상** `staff` + `can_write_notices=true` 계정이 사이드바엔 '고객사
+공지' 메뉴가 보이는데, 주소를 직접 쳐도 사이드바를 눌러도
+`/erp/my-page`로 튕겼다.
+
+**원인** `middleware.ts`의 admins select가 `'role, can_manage_templates'`
+그대로 남아 있었다 — `can_handle_cs`·`can_write_notices`를 못 읽으니
+`canAccessErpPage`가 항상 두 플래그를 `undefined`로 보고 role만으로
+판정했다. **layout.tsx의 select만 고치고 middleware를 빠뜨린 것.**
+사이드바(메뉴 노출)는 `ErpUserContext`를 통해 layout의 select를 쓰므로
+정상이었는데, 실제 이동을 막는 middleware 쪽 select가 안 따라가서
+"메뉴는 보이는데 들어가면 튕기는" 불일치가 났다.
+
+**수정** `can_manage_templates`를 조회하던 곳 중 `canAccessErpPage`·
+`landingPathFor`에 admin 객체를 넘기는 5곳의 select에
+`can_handle_cs, can_write_notices`를 추가했다.
+```
+middleware.ts:86
+app/erp/page.tsx:14
+app/erp/login/ErpLoginForm.tsx:31, 72
+app/board/login/page.tsx:30, 81
+app/board/admin/layout.tsx:15
+```
+`ErpSidebar.tsx`는 `ErpUserProvider`(→ `app/erp/(protected)/layout.tsx`)
+에서 값을 받으므로 이미 3플래그 다 갖고 있어 수정 불필요.
+
+**전수 확인** `canAccessErpPage`·`landingPathFor` 호출부를 grep으로
+전부 훑어 admin 객체 출처 6곳(middleware, `erp/page.tsx`,
+`ErpLoginForm.tsx` 2곳, `board/login/page.tsx` 2곳,
+`board/admin/layout.tsx`, `ErpSidebar.tsx`의 컨텍스트)이 전부 3플래그를
+갖는 것을 확인했다. `app/api/board/diet/templates/*`의
+`can_manage_templates` 조회는 `canAccessErpPage`를 호출하지 않고
+`canManageTemplates`를 직접 쓰는 별개 API 게이트라 범위 밖이다.
+
+**★재발 방지 — middleware와 layout이 admins를 따로 조회한다★**
+`middleware.ts`와 `app/erp/(protected)/layout.tsx`가 같은 `admins`
+테이블을 **각자 다른 select로** 두 번 조회한다(2단계에서 이 중복을
+없애지 않기로 뒤집은 근거는 위 "2단계 완료" 절 참고). 그 결과 `ErpUser`나
+`ErpAccessAdmin`에 필드를 추가할 때 **두 곳의 select를 함께 고쳐야
+한다** — 하나만 고치면 이번처럼 "화면엔 보이는데 실제로는 막힌다"는,
+증상만으로는 원인을 특정하기 어려운 버그가 난다. 앞으로 플래그가
+더 늘어나면(`can_handle_cs`·`can_write_notices`처럼) 이 체크리스트를
+따른다: **1) `canAccessErpPage`/`landingPathFor` 호출부를 grep으로
+전수 확인 2) 그 호출에 admin 객체를 넘기는 모든 select문에 새 필드
+반영.**
+
+### ✅ 실물 검증 완료 — 플래그 양방향 동작 확인
+
+버그 수정 후 테스트 계정으로 직접 확인했다.
+
+**ON — `staff` + `can_write_notices=true`로 바꾼 뒤**
+- 착지: 로그인 시 `/erp/notices`로 이동 (`LANDING_PREFERENCE.staff`의
+  첫 허용 경로)
+- 메뉴: 사이드바에 '고객사 공지' 1개만 노출(플래그 없는 나머지는 전부
+  숨김 — deny by default가 의도대로 동작)
+- 진입: `/erp/notices` 주소 직접 입력·메뉴 클릭 모두 정상 진입
+- 차단: `/erp/diet` 주소를 직접 쳐보니 `/erp/notices`로 튕김 (플래그
+  없는 경로는 여전히 막힘 — 버그 수정 전엔 이게 `/erp/my-page`로
+  잘못 튕겼었다)
+
+**OFF — 다시 `can_write_notices=false`로 되돌린 뒤**
+- 착지: `/erp/inquiries`(CS 관리)로 복귀 — `staff`가 아니라 이전
+  역할 기준 착지가 정상 작동
+- 메뉴: 원래 메뉴 전부 복귀
+
+플래그를 켜고 끄는 양방향 모두 매트릭스·착지·메뉴가 일관되게
+바뀌는 것을 실물로 확인했다.
+
 ---
 
 ### ★현재 열려 있는 구멍★
@@ -332,7 +486,7 @@ HANDOFF에 남기지 않아 2026-09-02에 솔아가 모른 채 뒤집었다.
 고객사마다 조직도가 다르면 우리 역할 5종을 강요할 수 없다.
 B로 만들어두면 A로 넘어갈 때 버리는 게 없다 — 체크박스가 늘어날 뿐이다.
 
-### 2층 체크박스 (신설 예정)
+### 2층 체크박스 ✅ 완료(2026-09-04, 3단계) — DB 컬럼·코드 배선 전부 준비됨, 화면 UI는 4단계
 
 | 플래그 | 켜는 사람 |
 |---|---|
@@ -462,8 +616,8 @@ export function canAccessErpPage(admin: { role: string; can_manage_templates?: b
 1단계  1층 매트릭스 + 라우트 가드 + 착지 경로   ✅ 완료 (2026-09-04, 커밋 완료)
        designer 제외, 기존 5개 역할로만
 2단계  ErpUserContext 신설                     ✅ 완료 (2026-09-04, 커밋 완료)
-3단계  admins 컬럼 2개 + staff 역할 신설         ← 다음
-4단계  관리자 관리에 체크박스 UI  ★SQL 없이 화면에서 켜고 끄심★
+3단계  admins 컬럼 2개 + staff 역할 신설         ✅ 완료 (2026-09-04, 커밋 완료)
+4단계  관리자 관리에 체크박스 UI  ★SQL 없이 화면에서 켜고 끄심★  ← 다음
 5단계  CS·공지·템플릿 API 게이트
 6단계  디자이너 계정 발급 (staff + 템플릿 업로드)
 7단계  ERP 홈 대시보드 (역할별 카드) — 권팀장 요청의 근본 해법
@@ -496,8 +650,9 @@ export function canAccessErpPage(admin: { role: string; can_manage_templates?: b
   있으므로 **middleware에 역할 가드를 추가하는 것이 맞다**
 - `MANAGER_CREATABLE_ROLES`가 `Object.values(ROLES)`에서 파생된다.
   `ROLES`에 새 역할을 넣으면 **매니저가 그 계정을 만들 수 있게 자동으로
-  따라온다.** `staff` 신설 시 의도한 것인지 확인할 것(권팀장이 디자이너·
-  CS직원 계정을 만드는 건 실무상 자연스러움)
+  따라온다.** ✅ 3단계에서 `staff` 추가 시 실제로 확인함 — 의도한
+  동작으로 그대로 둔다(권팀장이 디자이너·CS직원 계정을 만드는 건
+  실무상 자연스러움)
 - 메뉴에 없는 숨은 페이지 3개 — `/erp/upload` `/erp/history` `/erp/my-page`.
   앞의 둘은 `diet/page.tsx:728,1009`, `review/page.tsx:2145`,
   `history/page.tsx:99`에서 링크로 진입한다

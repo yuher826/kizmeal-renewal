@@ -237,7 +237,10 @@ export async function POST(request: Request) {
       }
 
       // 수정 허용 필드 화이트리스트 — email은 명시적 제외 (Auth와 어긋남 방지)
-      const ALLOWED_FIELDS = ['name', 'role', 'access_scope', 'department', 'phone', 'is_active']
+      const ALLOWED_FIELDS = [
+        'name', 'role', 'access_scope', 'department', 'phone', 'is_active',
+        'can_manage_templates', 'can_handle_cs', 'can_write_notices',
+      ]
       const filtered: Record<string, unknown> = {}
       for (const f of ALLOWED_FIELDS) if (f in updates) filtered[f] = updates[f]
       if (Object.keys(filtered).length === 0) {
@@ -248,6 +251,15 @@ export async function POST(request: Request) {
       }
       if ('access_scope' in filtered && !VALID_SCOPES.includes(filtered.access_scope as string)) {
         return NextResponse.json({ error: '유효하지 않은 접근범위입니다' }, { status: 400 })
+      }
+      // 플래그 3개는 boolean인지만 확인한다 — 어떤 역할이 어떤 플래그를 가질
+      // 수 있는지는 검증하지 않는다(staff든 영양사든 배정받을 수 있는 게
+      // 설계 의도). 문자열 "false"가 그대로 들어가 DB에서 true가 되는
+      // 사고를 막는 용도.
+      for (const flag of ['can_manage_templates', 'can_handle_cs', 'can_write_notices']) {
+        if (flag in filtered && typeof filtered[flag] !== 'boolean') {
+          return NextResponse.json({ error: `${flag}는 boolean이어야 합니다` }, { status: 400 })
+        }
       }
 
       const { data: target } = await adminClient

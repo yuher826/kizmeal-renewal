@@ -16,6 +16,7 @@ export type ErpRole =
   | 'director'
   | 'nutritionist_ck'
   | 'nutritionist_consignment'
+  | 'staff'
   | 'admin'
 
 export interface ErpUser {
@@ -27,6 +28,8 @@ export interface ErpUser {
   access_scope: string | null
   is_active: boolean | null
   can_manage_templates?: boolean | null
+  can_handle_cs?: boolean | null
+  can_write_notices?: boolean | null
 }
 
 export interface ErpMenuItem {

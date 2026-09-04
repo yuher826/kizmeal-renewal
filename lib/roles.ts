@@ -7,6 +7,7 @@ export const ROLES = {
   DIRECTOR:                 'director',
   NUTRITIONIST_CK:          'nutritionist_ck',
   NUTRITIONIST_CONSIGNMENT: 'nutritionist_consignment',
+  STAFF:                    'staff',
 } as const
 
 /** 영양사 역할 목록 (CK 직계약 + 위탁) */
@@ -115,6 +116,24 @@ export const canManageTemplates = (a: { role: string; can_manage_templates?: boo
   a.role === ROLES.SUPER_ADMIN || a.can_manage_templates === true
 
 /**
+ * CS 대응(문의 관리) 가능 여부.
+ * ★role이 아니라 admins.can_handle_cs 플래그로 판단한다 — CS 대응은
+ *   "직무"가 아니라 "배정"이다. canManageTemplates와 같은 이유.
+ * super_admin은 담당자 부재(퇴사·휴가 등) 시 대체 경로로 항상 통과시킨다.
+ */
+export const canHandleCs = (a: { role: string; can_handle_cs?: boolean | null }): boolean =>
+  a.role === ROLES.SUPER_ADMIN || a.can_handle_cs === true
+
+/**
+ * 고객사 공지 작성 가능 여부.
+ * ★role이 아니라 admins.can_write_notices 플래그로 판단한다 — 공지
+ *   작성은 "직무"가 아니라 "배정"이다. canManageTemplates와 같은 이유.
+ * super_admin은 담당자 부재(퇴사·휴가 등) 시 대체 경로로 항상 통과시킨다.
+ */
+export const canWriteNotices = (a: { role: string; can_write_notices?: boolean | null }): boolean =>
+  a.role === ROLES.SUPER_ADMIN || a.can_write_notices === true
+
+/**
  * 템플릿 삭제 가능 여부 — super_admin만.
  * ★DELETE를 이렇게 좁힌 것은 임시 조치다. 정식 해법은 soft delete
  *   (deleted_at 컬럼)이며, hard delete를 아무나(담당자 포함) 할 수 있게
@@ -131,4 +150,5 @@ export const ROLE_LABEL: Record<string, string> = {
   nutritionist_ck:          '영양사 (직영)',
   nutritionist_consignment: '영양사 (위탁)',
   admin:                    '관리자',
+  staff:                    '직원',
 }
