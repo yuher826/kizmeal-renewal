@@ -16,5 +16,9 @@ export const ROUTES = {
   BOARD_ADMIN_HOME: '/board/admin',
   BOARD_CUSTOMER_HOME: '/board/dashboard',
   ERP_LOGIN: '/erp/login',
+  ERP_DIET: '/erp/diet',
+  ERP_INQUIRIES: '/erp/inquiries',
+  ERP_REVIEW: '/erp/review',
+  ERP_MY_PAGE: '/erp/my-page',
   NUTRITIONIST_HOME: '/nutritionist/dashboard',
 } as const

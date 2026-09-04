@@ -23,6 +23,7 @@ export interface ErpUser {
   email: string
   name: string
   role: ErpRole
+  can_manage_templates?: boolean | null
 }
 
 export interface ErpMenuItem {
@@ -30,7 +31,6 @@ export interface ErpMenuItem {
   href: string
   icon: LucideIcon
   disabled?: boolean
-  allowedRoles?: ErpRole[]
 }
 
 export interface ErpNavGroup {

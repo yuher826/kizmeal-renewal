@@ -10,8 +10,7 @@ import {
   UserCog,
   Tags,
 } from 'lucide-react'
-import type { ErpNavGroup, ErpRole } from '@/types/erp'
-import { ADMIN_CREATE_ROLES } from '@/lib/roles'
+import type { ErpNavGroup } from '@/types/erp'
 
 export const ERP_NAV_GROUPS: ErpNavGroup[] = [
   {
@@ -48,7 +47,7 @@ export const ERP_NAV_GROUPS: ErpNavGroup[] = [
   {
     title: '시스템 관리',
     items: [
-      { label: '관리자 관리', href: '/erp/admins', icon: UserCog, allowedRoles: ADMIN_CREATE_ROLES as ErpRole[] },
+      { label: '관리자 관리', href: '/erp/admins', icon: UserCog },
       { label: '브랜드 관리', href: '/erp/brands', icon: Tags },
     ],
   },

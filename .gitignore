@@ -67,3 +67,4 @@ pptx-server/verify_fix.py
 *.patch
 프롬프트_*.md
 CLAUDE_CODE_*.md
+spec_*.md

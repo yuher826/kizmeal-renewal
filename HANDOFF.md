@@ -3,7 +3,23 @@
 > 이 파일은 항상 **"지금 상태"만** 담는다. 매 세션 끝에 최신 상태로 덮어쓴다.
 > 과거 이력은 `git log HANDOFF.md`로 본다.
 
-**최종 갱신:** 2026-09-02(2차) — ★ERP 권한 설계 확정★. 조사 중
+**최종 갱신:** 2026-09-04 — ★권한 1단계(1층 매트릭스 + 라우트 가드 +
+역할별 착지 경로) 완료★. `lib/erp-access.ts` 신설로 `canAccessErpPage`·
+`landingPathFor`를 한 곳에 모았고, `middleware.ts`에 역할 가드를 추가해
+영양사 계정으로 `/erp/admins`를 직접 치면 막히게 했다. 착지 하드코딩은
+조사 단계에선 3곳으로 알았으나 실측 결과 **6곳**이었고, `ErpLoginForm`의
+`next` 파라미터가 검증 없이 그대로 쓰이고 있어 director 로그인 시
+무한 루프 방아쇠가 될 뻔한 것도 이번에 발견해 함께 막았다(아래 권한
+섹션 갱신분 참조). 커밋 완료 — 빌드·diff·실물 확인 전부 통과했다.
+다음은 2단계 `ErpUserContext`.
+
+**2026-09-02(3차) 갱신:** ★권팀장 5·7번 CS '미처리' 이름 충돌
+정리 완료(`099f032`)★. 같은 `pending`이 한 화면에서 세 이름으로 불리고
+있었고, '미처리'는 전혀 다른 개념(안 읽음)에도 쓰이고 있었다. `lib/types.ts`의
+`STATUS_LABELS.pending='대기중'`에 표기를 맞췄다. ★후속 4건 미해결★(519행
+하드코딩·0건 카드·카드 축 불일치·board/admin의 반대 의미 '미처리').
+
+**2차 갱신:** 2026-09-02 — ★ERP 권한 설계 확정★. 조사 중
 ★ERP는 로그인만 하면 전 페이지 접근 가능★한 구멍을 발견했다(영양사 계정으로
 `/erp/admins`가 주소창으로 열린다). 8/28에 결정해 두고 HANDOFF에 남기지
 않은 「방식 B 2층 구조」를 과거 대화에서 되찾았고, 8/28의 숙제였던 1층
@@ -32,17 +48,156 @@
 부재 + DELETE 개명·상수화 + 실데이터 점검(필수항목 미입력 원) + dev 서버
 `.next` 오염 자동감지 + director 권한 갭 5순위(고객사 공지)
 + ★신규★ `gen_form.py` 생일간식 칸 8pt 연회색(아래 커밋2 섹션)
-+ ★★ERP 역할 가드 부재 — 로그인만 하면 전 페이지 접근 가능★★
-  (아래 권한 설계 섹션. 1단계로 착수)
-+ 템플릿 '업로드됨·활성화 대기' 배지.
++ ★신규★ `'admin'` 레거시 role 잔재 청소 (아래 권한 섹션 "1단계 완료" 참고,
+  DB 실계정 0건 확인함)
++ 템플릿 '업로드됨·활성화 대기' 배지
++ ★신규★ CS 후속 4건 — 519행 '대기중' 하드코딩 / 0건 카드가 눌림
+  / 통계 카드 4개 축 불일치 / board/admin 의 '미처리'는 unread 기준
+  (아래 CS 섹션).
 
 **다음 세션 착수 지점:**
 > "kizmeal-renewal 이어서. HANDOFF.md 읽고 시작하자.
-> 권한 1층 매트릭스 + 라우트 가드부터."
+> 권한 1단계 커밋 확인 후 2단계 ErpUserContext부터."
 
 ---
 
-## ★ERP 권한 설계 확정 (2026-09-02) — 착수 전★
+## ✅ 권팀장 5·7번 — CS '미처리' 이름 충돌 정리 (2026-09-02, `099f032`)
+
+### 무엇이 문제였나 — 버그가 아니라 이름이 겹친 것
+
+같은 `pending` 상태가 한 화면에서 **세 가지 이름**으로 불리고 있었고,
+게다가 '미처리'는 전혀 다른 개념에도 쓰이고 있었다.
+
+```
+통계 카드        '미처리'    status === 'pending'
+드롭다운         '대기'      STATUS_FILTER_TABS
+상태 변경 버튼    '대기중'    STATUS_LABELS (lib/types.ts)
+오른쪽 버튼      '미처리만'   unread_count_admin > 0   ← 완전히 다른 개념
+```
+
+`unreadOnly`는 **"관리자가 아직 안 읽은 메시지가 있는 문의"**다.
+문의를 열면 `unread_count_admin`이 0으로 리셋되므로(`page.tsx:472,474`)
+★처리 여부와 무관하다★ — 읽기만 하고 답을 안 해도 목록에서 사라진다.
+'미처리만'이라는 이름 때문에 권팀장이 놓칠 수 있는 구조였다.
+
+### 적용 — `inquiries/page.tsx` 문자열 3곳만
+
+| 행 | 전 | 후 |
+|---|---|---|
+| 519 | 통계 카드 `'미처리'` | `'대기중'` |
+| 567 | 버튼 `미처리만` | `● 새 메시지만` |
+| 443 | 주석 `미처리(unread)…` | `안 읽은 메시지…` |
+
+`git diff --stat` = 1 file changed, 3 insertions, 3 deletions.
+`InquiryStatus` 값·`statFilter`·`unreadOnly`·`filterStatus` 로직·카드
+색상/순서/개수 전부 무변경. `npm run build` 통과.
+
+### ★'대기'가 아니라 '대기중'으로 맞춘 이유★
+
+처음엔 드롭다운과 같은 `'대기'`로 하려 했으나 **철회했다.**
+두 필터는 같은 `status === 'pending'`을 AND로 보므로 **완전히 같은
+기능**이다(`page.tsx:393`). 라벨까지 똑같이 만들면 "같은 필터가 두 개"로
+보여 새로운 혼란이 생긴다.
+
+조사 결과 `lib/types.ts:83-88`의 `STATUS_LABELS.pending`이 이미
+`'대기중'`이었고, **상태 변경 버튼과 상태 변경 로그 메시지가 전부
+이 상수를 참조**하고 있었다
+(`InquiryDetailPanel.tsx:1099` — `상태가 '${STATUS_LABELS[status]}'(으)로…`).
+즉 통계 카드만 그 밖에서 따로 `'미처리'`를 쓰고 있었던 것이다.
+→ 상수 쪽 표기에 맞췄다. 드롭다운(`'대기'`)과는 글자가 달라 중복으로도
+   보이지 않는다.
+
+### ★후속 과제 3건 — 미해결★
+
+**① 519행이 `'대기중'` 문자열 하드코딩 상태다**
+원래는 `label: STATUS_LABELS.pending`으로 참조해야 한다. 지금은
+`STATUS_LABELS.pending`을 바꾸면 통계 카드만 어긋나 오늘과 같은 문제가
+재발한다.
+→ 지금 안 한 이유: 통계 카드 4개 중 `pending`만 상태이고 나머지 셋은
+  다른 축이다(아래 ③). 하나만 상수 참조로 바꾸면 네 줄의 모양이 달라져
+  오히려 읽기 나빠진다. **6번·10번 용어 재설계 때 네 개를 함께 정리한다.**
+
+**② 0건 카드가 눌린다 — 권팀장 5번의 나머지**
+실물에서 `대기중 0`, `오늘 신규 0`인데도 클릭되어 빈 목록이 나온다.
+`page.tsx:519~535`의 `button`에 `disabled={c.value === 0}` 계열 처리가
+필요하다. 이번 커밋은 라벨만 다뤘으므로 범위 밖으로 뒀다.
+
+**③ 통계 카드 4개의 축이 제각각이다**
+```
+대기중      오늘 신규    SLA 초과    이번달 처리
+ 상태        기간         경보        기간+상태
+```
+`대기중`만 상태다. 6·10번 용어 재설계 때 함께 봐야 한다.
+
+**④ `app/board/admin/inquiries/page.tsx`에도 '미처리'가 있다**
+★거기서는 `stats.unread` 기준 — ERP와 정반대 의미다★
+(`:247` `미처리 {stats.unread}건`, `:261` 카드 라벨).
+HANDOFF에 `app/board/admin/`이 리다이렉트된 죽은 코드라고 적혀 있으나,
+파일을 열어보니 `'use client'`로 시작하는 살아 있는 컴포넌트였다.
+★리다이렉트가 어디서 걸리는지 확인 전에는 죽었다고 단정할 수 없다.★
+→ 이번 커밋에서는 건드리지 않았다. 죽은 코드인지 먼저 확인할 것.
+
+---
+
+## ★ERP 권한 설계 확정 + 1단계 완료 (2026-09-02 설계 / 2026-09-04 1단계)★
+
+### ✅ 1단계 완료 (2026-09-04, 커밋 완료 — diff·실물 확인 통과)
+
+**착수 전 SQL 실측 결과** — `super_admin` 2 / `manager` 2(그중 1건
+`erp_only`) / `director` 1 / `nutritionist_ck` 1. `admin`·NULL·비활성
+계정은 **0건**이다. `nutritionist_consignment` 실계정도 0건.
+
+**실측 정정 — 착지 하드코딩 3곳 → 6곳**
+설계 단계(9/2)에서 조사한 하드코딩은 `app/erp/page.tsx` /
+`ErpLoginForm.tsx:39,87` / `ErpSidebar.tsx:64` 3곳이었으나, 착수해서
+grep으로 전수 확인하니 아래 3곳이 더 있었다.
+```
+app/erp/not-found.tsx:18       클라이언트 링크 → '/erp/my-page' 리터럴로 고정
+                                (원래 있던 '/erp/branches' 링크는 director 등에서
+                                 죽은 링크가 되므로 함께 제거, 링크 하나만 남김)
+app/board/admin/layout.tsx:24  erp_only 계정 → landingPathFor
+app/board/login/page.tsx:31,82 erp_only 계정 → landingPathFor
+```
+
+**신규 발견 — `next` 파라미터 무검증 (진짜 루프 방아쇠)**
+`ErpLoginForm.tsx`가 로그인 성공 후 `next` 쿼리 파라미터를 검증 없이
+그대로 `router.push`했다. director가 `/erp/diet` 링크로 들어오면
+middleware가 `/erp/login?next=/erp/diet`로 보내고, 로그인 폼이 `next`를
+그대로 push하고, 새 역할 가드가 다시 막아 **무한 루프**가 될 뻔했다.
+`next && canAccessErpPage(admin, next) ? next : landingPathFor(admin)`로
+검증 후 사용하도록 고쳤다 — 착지 로직과 분리할 수 없는 한 묶음이라
+같은 커밋에 넣었다.
+
+**`canAccessErpPage` 시그니처를 `(role, pathname)`이 아니라 admin 객체로
+잡은 근거** — 9/2 설계 메모(아래 "나중에 2층을…" 절)엔
+`canAccessErpPage(role: string, pathname: string)`로 적혀 있었으나 실제
+구현은 `canAccessErpPage(admin: {role, can_manage_templates}, pathname)`로
+바꿨다. `/erp/diet/templates`가 role이 아니라 `can_manage_templates`
+플래그로 열리기 때문이다(이미 존재하는 컬럼). 앞으로 2층 체크박스가
+`can_handle_cs`·`can_write_notices` 2개 더 늘어날 예정이라 처음부터
+admin 객체로 받는 편이 그때 시그니처를 또 안 바꿔도 된다.
+
+**착지 검증 — 빌드 타임 스크립트 대신 구조로 없앰**
+9/2 설계 메모는 "착지 경로는 그 역할의 허용 목록 안에 반드시 있어야
+한다 — 빌드 타임 검증을 넣는다"였으나, 실제로는 별도 검증 스크립트를
+만들지 않았다. `landingPathFor`가 각 역할의 우선순위 목록을
+`canAccessErpPage`로 직접 걸러(`.find(p => canAccessErpPage(admin, p))`)
+허용된 첫 경로만 고르고, 마지막 폴백이 전 역할 허용인 `/erp/my-page`라
+**착지가 허용 목록 밖으로 나가는 것이 구조적으로 불가능**하다. 검증
+스크립트가 따로 필요 없다.
+
+**신규 미해결 — `'admin'` 레거시 role 잔재 청소**
+DB 실계정 0건을 확인했으니(위 SQL 실측) 아래 4곳의 `'admin'` 취급은
+전부 죽은 코드다. 이번 범위에서는 건드리지 않았다.
+```
+types/erp.ts:19            ErpRole 유니온에 'admin' 포함
+app/erp/(protected)/layout.tsx:32   role 없을 때 ?? 'admin' 폴백
+components/erp/ErpHeader.tsx        ROLE_BADGE.admin
+components/erp/ErpSidebar.tsx       ROLE_BADGE.admin
+lib/roles.ts                        ROLE_LABEL.admin
+```
+
+---
 
 ### ★현재 열려 있는 구멍★
 
@@ -164,7 +319,7 @@ DELETE .../[id]                       → super_admin (그대로)
 - ★허이사 "읽기"는 라우트 가드로 구현할 수 없다★ — 가드는 진입 여부만
   정한다. 작성 버튼 감추기·서버 API 차단은 별도 작업
 
-### ★착지 경로 — 무한 리다이렉트 함정★
+### ★착지 경로 — 무한 리다이렉트 함정★ (✅ 1단계에서 해결, 위 절 참고)
 
 현재 **모든 착지가 `/erp/diet` 하드코딩**이다.
 
@@ -195,15 +350,16 @@ staff                             →  플래그에 따라 (템플릿/CS/공지)
 속만 갈아끼울 수 있다.
 
 ```ts
-export function canAccessErpPage(role: string, pathname: string): boolean
+export function canAccessErpPage(admin: { role: string; can_manage_templates?: boolean | null }, pathname: string): boolean
 ```
+(1단계 구현 시 `role` 단독에서 admin 객체로 변경 — 위 "1단계 완료" 절 참고)
 
 ### 작업 순서
 
 ```
-1단계  1층 매트릭스 + 라우트 가드 + 착지 경로   ← 다음. 구멍 막기 (반나절)
+1단계  1층 매트릭스 + 라우트 가드 + 착지 경로   ✅ 완료 (2026-09-04, 커밋 완료)
        designer 제외, 기존 5개 역할로만
-2단계  ErpUserContext 신설
+2단계  ErpUserContext 신설                     ← 다음
 3단계  admins 컬럼 2개 + staff 역할 신설
 4단계  관리자 관리에 체크박스 UI  ★SQL 없이 화면에서 켜고 끄심★
 5단계  CS·공지·템플릿 API 게이트
@@ -223,7 +379,8 @@ export function canAccessErpPage(role: string, pathname: string): boolean
   1층 가드가 붙으면 각자에게 안 보이는 그룹이 사라져 순서 문제가
   대부분 풀리고, 7단계 대시보드가 나머지를 푼다
 - **4번**(접근 권한) — 1단계 그 자체
-- **5·7번** — 버그가 아니라 '미처리'라는 이름이 두 개인 것.
+- **5·7번** — ✅ 완료(`099f032`). 아래 CS 섹션 참조.
+  버그가 아니라 '미처리'라는 이름이 두 개인 것이었다.
   `inquiries/page.tsx:519` 통계 카드 '미처리'(`statFilter='pending'`,
   상태가 대기중) vs `:567` '미처리만'(`unreadOnly`, 안 읽음).
   ★통계 카드 이름은 건드리지 않는다★ — `InquiryStatus` 용어 체계는
@@ -370,9 +527,10 @@ PPTX·PDF), 열을 좁히면 원별특이사항이 6줄로 부풀어 한 주가 
 ```
 0) v6 반찬5 + 도시락 예시            ✅ 완료 (3afda23)
 1) 커밋2 기준폼 첫인상 정리           ✅ 완료 (6de9bb5)
-2) ★권한 1층 + 라우트 가드★           ← 다음 (구멍 막기)
-   권팀장 1·4번이 여기에 흡수됨. 5·7번은 그 뒤
-3) CS 홈 + 9번 좌우 배치 + 내부 메모
+2) 권팀장 5·7번 미처리 이름 정리       ✅ 완료 (099f032)
+3) ★권한 1층 + 라우트 가드★           ✅ 완료 (커밋 완료, 구멍 막기)
+   권팀장 1·4번이 여기에 흡수됨
+3) CS 홈 + 9번 좌우 배치 + 내부 메모   ← 다음
 4) 권팀장 2·3번 공지 발송 대상
 5) 권팀장 6번 + 10번 (권팀장 답 받고)
 6) 권팀장 8번 고객사 정보

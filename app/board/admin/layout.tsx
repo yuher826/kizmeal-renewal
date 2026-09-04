@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase-server'
 import AdminMobileNav from '@/components/board/AdminMobileNav'
 import AdminTabBar from '@/components/board/AdminTabBar'
+import { landingPathFor } from '@/lib/erp-access'
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const supabase = createClient()
@@ -11,7 +12,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   const { data: adminData } = await supabase
     .from('admins')
-    .select('id, access_scope, is_active')
+    .select('id, access_scope, is_active, role, can_manage_templates')
     .eq('auth_id', user.id)
     .maybeSingle()
 
@@ -21,7 +22,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   if (adminData.is_active === false) redirect('/board/login')
 
   // ERP 전용 계정은 홈페이지관리 접근 불가 → ERP로 이동
-  if (adminData.access_scope === 'erp_only') redirect('/erp/diet')
+  if (adminData.access_scope === 'erp_only') redirect(landingPathFor(adminData))
 
   return (
     <>

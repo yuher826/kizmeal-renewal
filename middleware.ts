@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import { ROUTES } from '@/lib/routes'
+import { canAccessErpPage, landingPathFor } from '@/lib/erp-access'
 
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
@@ -74,6 +75,25 @@ export async function middleware(request: NextRequest) {
     const redirectUrl = new URL('/erp/login', request.url)
     redirectUrl.searchParams.set('next', pathname)
     return NextResponse.redirect(redirectUrl)
+  }
+
+  // ── ERP 역할 가드 (1층 매트릭스) ───────────────────────────────
+  // is_active / access_scope 판정은 넣지 않는다 — layout이 이미 한다.
+  // admin row가 없으면 통과시킨다 — layout이 /erp/login으로 처리한다.
+  if (user && isErpProtected) {
+    const { data: adminData } = await supabase
+      .from('admins')
+      .select('role, can_manage_templates')
+      .eq('auth_id', user.id)
+      .maybeSingle()
+
+    if (adminData && !canAccessErpPage(adminData, pathname)) {
+      const url = request.nextUrl.clone()
+      url.pathname = landingPathFor(adminData)
+      url.search = ''
+      url.searchParams.set('denied', pathname)
+      return NextResponse.redirect(url)
+    }
   }
 
   // must_change_password 체크 (고객 라우트에서만)

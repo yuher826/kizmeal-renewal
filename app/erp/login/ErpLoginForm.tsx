@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Eye, EyeOff, Loader2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
+import { canAccessErpPage, landingPathFor } from '@/lib/erp-access'
 
 interface Props {
   next?: string
@@ -27,7 +28,7 @@ export default function ErpLoginForm({ next, message }: Props) {
         const uid = data.session.user.id
         const { data: adminRow } = await supabase
           .from('admins')
-          .select('id, access_scope')
+          .select('id, access_scope, role, can_manage_templates')
           .eq('auth_id', uid)
           .maybeSingle()
         if (adminRow) {
@@ -36,7 +37,8 @@ export default function ErpLoginForm({ next, message }: Props) {
             router.push('/board/admin')
             return
           }
-          router.push(next || '/erp/diet')
+          const target = next && canAccessErpPage(adminRow, next) ? next : landingPathFor(adminRow)
+          router.push(target)
           return
         }
       }
@@ -67,7 +69,7 @@ export default function ErpLoginForm({ next, message }: Props) {
 
     const { data: adminData } = await supabase
       .from('admins')
-      .select('id, access_scope')
+      .select('id, access_scope, role, can_manage_templates')
       .eq('auth_id', user.id)
       .maybeSingle()
 
@@ -84,7 +86,8 @@ export default function ErpLoginForm({ next, message }: Props) {
       return
     }
 
-    router.push(next || '/erp/diet')
+    const target = next && canAccessErpPage(adminData, next) ? next : landingPathFor(adminData)
+    router.push(target)
   }
 
   function handleKeyDown(e: React.KeyboardEvent) {

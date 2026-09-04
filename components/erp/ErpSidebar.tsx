@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation'
 import { LogOut, Settings } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
 import { ERP_NAV_GROUPS } from '@/lib/erp-nav'
+import { canAccessErpPage, landingPathFor } from '@/lib/erp-access'
 import type { ErpUser } from '@/types/erp'
 
 const ROLE_BADGE: Record<string, { bg: string; text: string; label: string }> = {
@@ -61,7 +62,7 @@ export default function ErpSidebar({ user, open, setOpen }: Props) {
     <div className="h-screen flex flex-col w-64 bg-white border-r border-slate-200">
       {/* 로고 */}
       <Link
-        href="/erp/diet"
+        href={landingPathFor(user)}
         className="bg-emerald-600 px-5 py-4 flex items-center gap-2 flex-shrink-0 cursor-pointer hover:bg-emerald-700 transition-colors duration-150"
       >
         <span className="text-white text-lg font-bold tracking-wide">KIZMEAL</span>
@@ -71,9 +72,10 @@ export default function ErpSidebar({ user, open, setOpen }: Props) {
       {/* 메뉴 */}
       <nav className="flex-1 overflow-y-auto py-4 px-3">
         {ERP_NAV_GROUPS.map((group, gi) => {
-          // allowedRoles 미지정 메뉴는 전원 노출, 지정된 메뉴는 role 일치 시에만 노출
+          // disabled 항목은 접근 검사를 건너뛰고 '준비중'으로 노출한다(페이지가 없어 규칙이 없음).
+          // 그 외는 canAccessErpPage로 메뉴 노출과 실제 접근 가능 여부를 일치시킨다.
           const visibleItems = group.items.filter(
-            item => !item.allowedRoles || item.allowedRoles.includes(user.role)
+            item => item.disabled || canAccessErpPage(user, item.href)
           )
           if (visibleItems.length === 0) return null
           return (
