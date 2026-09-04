@@ -15,6 +15,7 @@ import StatusBadge from '@/components/board/StatusBadge'
 import ReplyTemplates from '@/components/board/ReplyTemplates'
 import InternalNote from '@/components/board/InternalNote'
 import FileUpload from '@/components/board/FileUpload'
+import { useErpUser } from '@/components/erp/ErpUserProvider'
 
 // ── 이메일 스레드 유틸 ──────────────────────────────────────────
 const STORAGE_BASE = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/kizmeal-files`
@@ -617,7 +618,7 @@ export default function InquiryDetailPanel({ inquiryId, onNotify }: Props) {
   const [notes, setNotes] = useState<InquiryNote[]>([])
   const [phoneLogs, setPhoneLogs] = useState<PhoneLog[]>([])
   const [templates, setTemplates] = useState<ReplyTemplate[]>([])
-  const [currentAdmin, setCurrentAdmin] = useState<Admin | null>(null)
+  const currentAdmin = useErpUser()
   const [loading, setLoading] = useState(true)
   // 원 로고 로드 실패 시 폴백 (문의 전환 시 초기화)
   const [detailLogoError, setDetailLogoError] = useState(false)
@@ -801,7 +802,7 @@ export default function InquiryDetailPanel({ inquiryId, onNotify }: Props) {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      const [inqRes, msgsRes, adminsRes, slaRes, notesRes, phoneLogsRes, templatesRes, myAdminRes] = await Promise.all([
+      const [inqRes, msgsRes, adminsRes, slaRes, notesRes, phoneLogsRes, templatesRes] = await Promise.all([
         supabase.from('inquiries').select('*, branches(*, brands(*)), admins(*)').eq('id', id).single(),
         supabase.from('messages').select('*, message_attachments(*)').eq('inquiry_id', id).order('created_at', { ascending: true }),
         supabase.from('admins').select('*').eq('is_active', true),
@@ -809,7 +810,6 @@ export default function InquiryDetailPanel({ inquiryId, onNotify }: Props) {
         supabase.from('inquiry_notes').select('*, admins(name)').eq('inquiry_id', id).order('created_at', { ascending: false }),
         supabase.from('phone_logs').select('*, admins(name)').eq('inquiry_id', id).order('created_at', { ascending: false }),
         supabase.from('reply_templates').select('*').order('usage_count', { ascending: false }),
-        supabase.from('admins').select('*').eq('auth_id', user.id).maybeSingle(),
       ])
 
       if (inqRes.data) {
@@ -839,7 +839,6 @@ export default function InquiryDetailPanel({ inquiryId, onNotify }: Props) {
       if (notesRes.data) setNotes(notesRes.data as unknown as InquiryNote[])
       if (phoneLogsRes.data) setPhoneLogs(phoneLogsRes.data as unknown as PhoneLog[])
       if (templatesRes.data) setTemplates(templatesRes.data as unknown as ReplyTemplate[])
-      if (myAdminRes.data) setCurrentAdmin(myAdminRes.data as Admin)
 
       await supabase.from('inquiries').update({ unread_count_admin: 0 }).eq('id', id)
       setLoading(false)

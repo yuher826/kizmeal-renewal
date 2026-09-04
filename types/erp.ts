@@ -20,9 +20,12 @@ export type ErpRole =
 
 export interface ErpUser {
   id: string
+  auth_id: string
   email: string
   name: string
   role: ErpRole
+  access_scope: string | null
+  is_active: boolean | null
   can_manage_templates?: boolean | null
 }
 

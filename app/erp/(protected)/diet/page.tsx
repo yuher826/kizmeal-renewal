@@ -18,6 +18,7 @@ import BranchHolidayExceptionPopup, { checkBranchExceptionsNeeded } from './Bran
 import VacationAssignmentPopup, { checkVacationAssignmentNeeded } from './VacationAssignmentPopup'
 import { UPLOAD_ROLES, ROLES } from '@/lib/roles'
 import { getYearOptions } from '@/lib/diet-utils'
+import { useErpUser } from '@/components/erp/ErpUserProvider'
 
 // ── 상수 ──────────────────────────────────────────────────────────────
 const SEPARATE_CONTRACT_CODES = new Set(['로티스', '잉글리쉬파크', '잉파', 'KIS', 'KPI', '송파MB'])
@@ -168,7 +169,7 @@ function DietAutomationContent() {
   const [notificationsLoading, setNotificationsLoading] = useState(false)
 
   // ── 현재 사용자 역할 ───────────────────────────────────────────────
-  const [userRole, setUserRole] = useState<string | null>(null)
+  const { role: userRole } = useErpUser()
 
   // ── 결과 테이블 그룹 아코디언 (초기 전부 펼침) ─────────────────────
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set())
@@ -295,16 +296,6 @@ function DietAutomationContent() {
   useEffect(() => {
     if (genStatus === 'done') fetchBranchMenuRows()
   }, [genStatus, fetchBranchMenuRows])
-
-  useEffect(() => {
-    const supabase = createClient()
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) return
-      supabase.from('admins').select('role')
-        .eq('auth_id', user.id).maybeSingle()
-        .then(({ data }) => setUserRole(data?.role ?? ''))
-    })
-  }, [])
 
   // ── PPTX 생성 (GitHub Actions 트리거) ─────────────────────────────
   async function handleGenerate() {

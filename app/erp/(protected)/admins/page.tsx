@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
 import { ROLES, ROLE_LABEL, isNutritionist, ADMIN_CREATE_ROLES, MANAGER_CREATABLE_ROLES, MANAGER_FORCED_SCOPE } from '@/lib/roles'
+import { useErpUser } from '@/components/erp/ErpUserProvider'
 import type { Admin } from '@/lib/types'
 
 // access_scope 포함 확장 타입 (lib/types의 Admin에는 아직 없는 컬럼)
@@ -106,8 +107,8 @@ function ActiveBadge({ active }: { active: boolean }) {
 // ── 메인 페이지 ──────────────────────────────────────────────────────
 
 export default function AdminsPage() {
+  const currentAdmin = useErpUser()
   const [admins, setAdmins] = useState<AdminRow[]>([])
-  const [currentAdmin, setCurrentAdmin] = useState<AdminRow | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
   const [statFilter, setStatFilter] = useState<null | 'active' | 'inactive'>(null)
@@ -140,18 +141,10 @@ export default function AdminsPage() {
   // ── 데이터 로드 (centers 탭의 검증된 직접 쿼리 방식, 비활성 포함) ──
   const load = useCallback(async () => {
     const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data, error } = await supabase.from('admins').select('*').order('name')
 
-    const [listRes, selfRes] = await Promise.all([
-      supabase.from('admins').select('*').order('name'),
-      user
-        ? supabase.from('admins').select('*').eq('auth_id', user.id).maybeSingle()
-        : Promise.resolve({ data: null, error: null }),
-    ])
-
-    if (listRes.error) setLoadError('목록을 불러오지 못했습니다. 새로고침 해주세요.')
-    else setAdmins((listRes.data ?? []) as AdminRow[])
-    if (selfRes.data) setCurrentAdmin(selfRes.data as AdminRow)
+    if (error) setLoadError('목록을 불러오지 못했습니다. 새로고침 해주세요.')
+    else setAdmins((data ?? []) as AdminRow[])
     setLoading(false)
   }, [])
 

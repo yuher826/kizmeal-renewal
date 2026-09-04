@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
+import { useErpUser } from '@/components/erp/ErpUserProvider'
 
 /**
  * 파일보관함 — 새 파일 올리기 (2026-08-18)
@@ -29,6 +30,7 @@ const BUCKET = 'kizmeal-files'
 
 export default function ErpFileArchiveNewPage() {
   const router = useRouter()
+  const erpUser = useErpUser()
   const now = new Date()
 
   const [branches, setBranches] = useState<BranchOption[]>([])
@@ -74,9 +76,6 @@ export default function ErpFileArchiveNewPage() {
 
     const supabase = createClient()
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('로그인이 필요합니다.')
-
       // 스토리지 키에 한글이 들어가면 Supabase가 InvalidKey를 반환하므로
       // 경로는 ASCII만 쓰고, 원래 파일명은 title 컬럼에 보존한다.
       const ext = (file.name.split('.').pop() || 'bin').toLowerCase()
@@ -90,9 +89,6 @@ export default function ErpFileArchiveNewPage() {
 
       const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(path)
 
-      const { data: adminRow } = await supabase
-        .from('admins').select('id').eq('auth_id', user.id).maybeSingle()
-
       const { error: insErr } = await supabase.from('file_archive').insert({
         category,
         title: title.trim(),
@@ -103,7 +99,7 @@ export default function ErpFileArchiveNewPage() {
         scope,
         scope_diet_type: scope === 'group'  ? scopeDietType : null,
         scope_branch_id: scope === 'branch' ? scopeBranchId : null,
-        uploaded_by: adminRow?.id ?? null,
+        uploaded_by: erpUser.id,
       })
       if (insErr) throw insErr
 

@@ -3,7 +3,17 @@
 > 이 파일은 항상 **"지금 상태"만** 담는다. 매 세션 끝에 최신 상태로 덮어쓴다.
 > 과거 이력은 `git log HANDOFF.md`로 본다.
 
-**최종 갱신:** 2026-09-04 — ★권한 1단계(1층 매트릭스 + 라우트 가드 +
+**최종 갱신:** 2026-09-04(2차) — ★권한 2단계(`ErpUserContext` 신설)
+완료★. 커밋 완료 — 빌드·실물 확인 전부 통과했다. ERP 안에서 "본인 admins 행"을 각 페이지가
+따로 조회하던 곳이 실측 **9곳**(클라이언트 6 / 서버 3)이었다. 클라 6곳만
+`useErpUser()`로 컨텍스트 조회로 바꿨고(서버 3곳은 React 컨텍스트가
+안 닿아 그대로 둠), `ErpUser`에 `auth_id`·`access_scope`·`is_active`
+3개 필드를 추가했다. 진짜 이유는 성능이 아니라 3단계 대비다 — 이제
+`can_handle_cs`·`can_write_notices` 플래그가 추가돼도 `layout.tsx`의
+select 한 줄만 고치면 6곳이 따라온다(아래 권한 섹션 갱신분 참조).
+다음은 3단계(플래그 컬럼 2개 + `staff` 역할).
+
+**2026-09-04(1차) 갱신:** ★권한 1단계(1층 매트릭스 + 라우트 가드 +
 역할별 착지 경로) 완료★. `lib/erp-access.ts` 신설로 `canAccessErpPage`·
 `landingPathFor`를 한 곳에 모았고, `middleware.ts`에 역할 가드를 추가해
 영양사 계정으로 `/erp/admins`를 직접 치면 막히게 했다. 착지 하드코딩은
@@ -11,7 +21,6 @@
 `next` 파라미터가 검증 없이 그대로 쓰이고 있어 director 로그인 시
 무한 루프 방아쇠가 될 뻔한 것도 이번에 발견해 함께 막았다(아래 권한
 섹션 갱신분 참조). 커밋 완료 — 빌드·diff·실물 확인 전부 통과했다.
-다음은 2단계 `ErpUserContext`.
 
 **2026-09-02(3차) 갱신:** ★권팀장 5·7번 CS '미처리' 이름 충돌
 정리 완료(`099f032`)★. 같은 `pending`이 한 화면에서 세 이름으로 불리고
@@ -43,7 +52,7 @@
 겹침 경고(4세션 연속 범위 밖) + 버그④ 송파랜 PDF 손상 + 슬라이드 구조
 불일치 4건 + 이름표 부여 판정 UI 실물 확인(Chrome 확장 없어 세 세션
 연속 미완료) + 활성화 게이트 신설 + 엑셀 빈칸 역산·방학/공휴일 두 축
-통합 설계 + `ErpUserContext` 신설 + 역할×메뉴 노출 매트릭스(사람이 확정
+통합 설계 + 역할×메뉴 노출 매트릭스(사람이 확정
 필요) + RLS 섹션 안 신규 미해결 3건(a·b·c) + `audit_logs` 조회 화면
 부재 + DELETE 개명·상수화 + 실데이터 점검(필수항목 미입력 원) + dev 서버
 `.next` 오염 자동감지 + director 권한 갭 5순위(고객사 공지)
@@ -53,11 +62,19 @@
 + 템플릿 '업로드됨·활성화 대기' 배지
 + ★신규★ CS 후속 4건 — 519행 '대기중' 하드코딩 / 0건 카드가 눌림
   / 통계 카드 4개 축 불일치 / board/admin 의 '미처리'는 unread 기준
-  (아래 CS 섹션).
+  (아래 CS 섹션)
++ ★신규★ CS 메시지 발신자 판정 오류 — 테스트 매니저 계정으로 쓴 답변이
+  '키즈밀 관리자' 이름으로 저장됨. auth_id가 아닌 다른 기준이 섞인 것으로
+  추정 (아래 CS 섹션, 권팀장 9번 착수 전 조사 필요)
++ ★신규★ 내부 메모가 대화 흐름에 그대로 섞여 표시됨 — 권팀장 9번
+  "가운데 자물쇠 스타일 분리"가 왜 필요한지 실물로 확인됨 (아래 CS 섹션)
++ ★신규★ `scripts/dev-fresh.cjs`가 node 프로세스를 하나만 종료해
+  `.next` 삭제가 `ENOTEMPTY`로 실패함 — 실제로 5개가 떠 있었다.
+  전체 종료 + 대기 시간 필요 (아래 CS 섹션 뒤에 별도 기록).
 
 **다음 세션 착수 지점:**
 > "kizmeal-renewal 이어서. HANDOFF.md 읽고 시작하자.
-> 권한 1단계 커밋 확인 후 2단계 ErpUserContext부터."
+> 권한 2단계 커밋 확인 후 3단계(admins 컬럼 2개 + staff 역할)부터."
 
 ---
 
@@ -137,6 +154,36 @@ HANDOFF에 `app/board/admin/`이 리다이렉트된 죽은 코드라고 적혀 �
 ★리다이렉트가 어디서 걸리는지 확인 전에는 죽었다고 단정할 수 없다.★
 → 이번 커밋에서는 건드리지 않았다. 죽은 코드인지 먼저 확인할 것.
 
+**⑤ ★신규(2단계 실물 확인 중 발견)★ CS 메시지 발신자 판정 오류**
+테스트 매니저 계정으로 로그인해서 쓴 답변이 화면에 **'키즈밀 관리자'**
+라는 이름으로 저장·표시된다. 실제 작성자(매니저 본인)가 아니다.
+`InquiryDetailPanel.tsx:690`이 `msg.sender_id !== currentAdmin.auth_id`로
+"내가 쓴 메시지인지"를 판정하는데(2단계에서 컨텍스트로 옮긴 그 로직),
+저장되는 이름 자체가 다른 기준으로 붙는 것으로 보인다 — **발신자
+판정에 `auth_id`가 아닌 다른 기준(고정 문자열 또는 다른 컬럼)이
+섞여 있을 가능성**. 원인 미조사.
+→ 권팀장 9번(담당자별 이름 작게 노출, 카톡 그룹채팅 스타일)
+  착수 전에 반드시 먼저 고쳐야 한다 — 이름이 틀리면 9번 기능 자체가
+  무의미해진다.
+
+**⑥ ★신규(2단계 실물 확인 중 발견)★ 내부 메모가 대화 흐름에 섞여 보인다**
+일반 답변과 내부 메모(`is_internal`)가 채팅 화면에서 시각적으로
+구분 없이 나란히 표시된다. 권팀장 9번 요청("내부 메모는 가운데
+자물쇠 스타일로 분리 — 우리 쪽에 섞이면 실수로 발송할 위험")이
+왜 필요한지 실물로 재확인된 것 — 설계는 이미 위 "권팀장 요청 10건"
+섹션 9번에 있으나 구현 전이다.
+
+### ★신규(2단계 실물 확인 중 발견)★ `scripts/dev-fresh.cjs`가 node 프로세스를 하나만 종료한다
+
+`.next` 폴더를 지우고 dev 서버를 새로 띄우는 스크립트인데, 기존 node
+프로세스를 종료하는 부분이 **첫 번째 하나만 죽이고** 나머지는 그대로
+둔다. 이번에 실물 확인 중 실제로 **node 프로세스가 5개** 떠 있었고,
+남은 프로세스가 `.next` 폴더를 잡고 있어 삭제가 `ENOTEMPTY`로
+실패했다. 죽이는 대상을 전체 프로세스로 넓히고, 종료 후 파일 핸들이
+풀릴 때까지 짧은 대기 시간을 넣어야 한다. HANDOFF의 기존 "dev 서버
+`.next` 오염 자동감지" 항목과 같은 계열의 문제이나, 이번 건은 원인이
+구체적으로 특정됐다(프로세스 킬이 불완전함).
+
 ---
 
 ## ★ERP 권한 설계 확정 + 1단계 완료 (2026-09-02 설계 / 2026-09-04 1단계)★
@@ -196,6 +243,61 @@ components/erp/ErpHeader.tsx        ROLE_BADGE.admin
 components/erp/ErpSidebar.tsx       ROLE_BADGE.admin
 lib/roles.ts                        ROLE_LABEL.admin
 ```
+
+### ✅ 2단계 완료 (2026-09-04, 커밋 완료)
+
+**실측 — ERP 안에서 "본인 admins 행" 조회 9곳**
+```
+클라이언트 6곳 (컨텍스트로 전환)
+  diet/page.tsx:299~306                useEffect select('role')
+  upload/page.tsx:50~61                checkAuth() select('role') + loadingRole
+  admins/page.tsx:148                  Promise.all 안 select('*').eq('auth_id', …)
+  files/new/page.tsx:94                제출 핸들러 안 select('id').eq('auth_id', …)
+  inquiries/[id]/page.tsx:68           Promise.all 안 select('*').eq('auth_id', …)
+  InquiryDetailPanel.tsx:812           Promise.all 안 select('*').eq('auth_id', …)
+
+서버 컴포넌트 3곳 (그대로 둠 — 컨텍스트가 안 닿음)
+  my-page/page.tsx, branches/new/page.tsx, branches/[id]/page.tsx
+```
+전체 admins 목록을 가져오는 3곳(`admins/page.tsx:146`,
+`inquiries/[id]/page.tsx:63`, `InquiryDetailPanel.tsx:807`)은 성격이
+다르다 — 담당자 드롭다운·관리자 목록용이라 "본인" 조회가 아니므로
+제외했다.
+
+**클라 6곳만 컨텍스트로, 서버 3곳은 그대로 둔 이유**
+React 컨텍스트(`createContext`/`useContext`)는 클라이언트 전용이라
+서버 컴포넌트에서 못 쓴다. 서버 3곳을 컨텍스트로 바꾸려면 그 페이지
+자체를 클라이언트 컴포넌트로 바꿔야 하는데, 이번 범위를 벗어난다.
+
+**`auth_id`를 `ErpUser`에 넣은 근거**
+`InquiryDetailPanel.tsx:690`이 `currentAdmin.auth_id`를
+`msg.sender_id`와 비교해 "내가 보낸 메시지인지"를 판정한다. 이게
+없으면 이 파일은 컨텍스트로 못 바꾼다. `access_scope`·`is_active`는
+이참에 layout이 이미 조회하는 값을 그대로 흘려보낸 것으로,
+`ErpUser`를 쓰는 곳 어디서든 admins 행 원본 없이 판단 가능하게 했다.
+
+**★middleware ↔ layout 중복 조회 제거 — 하지 않기로 뒤집은 근거★**
+1단계 스펙에 "2단계 몫"이라 적어뒀던 항목이었으나 실측 후 뒤집었다.
+middleware가 `role, can_manage_templates` 2개를, layout이 8개
+(`id, auth_id, name, email, role, access_scope, is_active,
+can_manage_templates`)를 조회해 페이지당 admins 조회가 2회다.
+헤더로 넘겨 없앨 수 있지만 하지 않는다 — layout은 어차피 `name`·
+`email`까지 필요해서 조회 자체를 없앨 수 없고, 헤더로는 2개 컬럼만
+아끼는데 그 대가로 한글 이름 인코딩·헤더 크기 제한·middleware와
+layout의 결합이라는 문제가 붙는다. 남는 장사가 아니다.
+
+**`Promise.all` 구조분해 인덱스 함정**
+`inquiries/[id]/page.tsx`와 `InquiryDetailPanel.tsx`는 `Promise.all`
+배열 안에 "본인" 조회와 "전체 목록" 조회가 나란히 있었다. 배열에서
+"본인" 항목 하나만 제거하니 뒤따르는 구조분해 변수명이 그대로
+한 칸씩 밀릴 뻔했다 — 구조분해 변수 이름을 배열 순서에 맞춰
+다시 세는 방식으로 피했다(이름으로 매칭되는 게 아니라 위치로
+매칭되므로, 배열에서 하나를 빼면 그 뒤 이름들이 전부 한 칸씩
+다른 쿼리 결과를 가리키게 된다).
+
+**3단계 이점** — `can_handle_cs`·`can_write_notices` 플래그가
+추가돼도 `layout.tsx`의 select 한 줄만 고치면 컨텍스트를 쓰는
+6곳 전부에 자동으로 따라온다.
 
 ---
 
@@ -359,8 +461,8 @@ export function canAccessErpPage(admin: { role: string; can_manage_templates?: b
 ```
 1단계  1층 매트릭스 + 라우트 가드 + 착지 경로   ✅ 완료 (2026-09-04, 커밋 완료)
        designer 제외, 기존 5개 역할로만
-2단계  ErpUserContext 신설                     ← 다음
-3단계  admins 컬럼 2개 + staff 역할 신설
+2단계  ErpUserContext 신설                     ✅ 완료 (2026-09-04, 커밋 완료)
+3단계  admins 컬럼 2개 + staff 역할 신설         ← 다음
 4단계  관리자 관리에 체크박스 UI  ★SQL 없이 화면에서 켜고 끄심★
 5단계  CS·공지·템플릿 API 게이트
 6단계  디자이너 계정 발급 (staff + 템플릿 업로드)

@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 import { UPLOAD_ROLES } from '@/lib/roles'
 import { getYearOptions } from '@/lib/diet-utils'
+import { useErpUser } from '@/components/erp/ErpUserProvider'
 
 // ── 타입 ───────────────────────────────────────────────────────────────
 type ValidationIssue = { location: string; message: string; suggestion: string }
@@ -31,8 +32,7 @@ export default function DietUploadPage() {
   const router = useRouter()
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const [adminRole, setAdminRole] = useState<string | null>(null)
-  const [loadingRole, setLoadingRole] = useState(true)
+  const { role: adminRole } = useErpUser()
 
   const now = new Date()
   const [year, setYear] = useState(now.getFullYear())
@@ -45,20 +45,6 @@ export default function DietUploadPage() {
   const [uploading, setUploading] = useState(false)
   const [result, setResult] = useState<UploadResult | null>(null)
   const [toast, setToast] = useState<string | null>(null)
-
-  // ── 권한 확인 ─────────────────────────────────────────────────────
-  useEffect(() => {
-    async function checkAuth() {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { router.push('/board/login'); return }
-      const { data: admin } = await supabase
-        .from('admins').select('role').eq('auth_id', user.id).maybeSingle()
-      setAdminRole(admin?.role ?? null)
-      setLoadingRole(false)
-    }
-    checkAuth()
-  }, [router])
 
   // ── 기존 데이터 확인 ──────────────────────────────────────────────
   useEffect(() => {
@@ -121,16 +107,8 @@ export default function DietUploadPage() {
     }
   }
 
-  // ── 로딩 / 권한 없음 ─────────────────────────────────────────────
-  if (loadingRole) {
-    return (
-      <main className="min-h-screen bg-[#F6FAF6] flex items-center justify-center">
-        <div className="text-gray-500 text-sm">로딩 중...</div>
-      </main>
-    )
-  }
-
-  if (!ALLOWED_ROLES.includes(adminRole || '')) {
+  // ── 권한 없음 ─────────────────────────────────────────────────────
+  if (!ALLOWED_ROLES.includes(adminRole)) {
     return (
       <main className="min-h-screen bg-[#F6FAF6] flex items-center justify-center">
         <div className="bg-white rounded-2xl p-8 shadow-sm text-center">
