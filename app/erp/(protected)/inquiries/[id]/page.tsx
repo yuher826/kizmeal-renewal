@@ -24,6 +24,10 @@ export default function AdminInquiryDetailPage({ params }: { params: { id: strin
   const [inquiry, setInquiry] = useState<Inquiry | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
   const [admins, setAdmins] = useState<Admin[]>([])
+  // auth_id → name. 담당자 드롭다운용 admins 목록(is_active=true 필터)과는
+  // 별도 쿼리다 — 그 목록을 재사용하면 퇴사·비활성 관리자가 쓴 옛
+  // 메시지의 이름을 잃는다. 이름 표시 전용이라 필터를 걸지 않는다.
+  const [senderNameMap, setSenderNameMap] = useState<Record<string, string>>({})
   const [slaRule, setSlaRule] = useState<SlaRule | undefined>()
   const [notes, setNotes] = useState<InquiryNote[]>([])
   const [phoneLogs, setPhoneLogs] = useState<PhoneLog[]>([])
@@ -58,7 +62,7 @@ export default function AdminInquiryDetailPage({ params }: { params: { id: strin
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      const [inqRes, msgsRes, adminsRes, slaRes, notesRes, phoneLogsRes, templatesRes] = await Promise.all([
+      const [inqRes, msgsRes, adminsRes, slaRes, notesRes, phoneLogsRes, templatesRes, namesRes] = await Promise.all([
         supabase.from('inquiries').select('*, branches(*, brands(*)), admins(*)').eq('id', id).single(),
         supabase.from('messages').select('*, message_attachments(*)').eq('inquiry_id', id).order('created_at', { ascending: true }),
         supabase.from('admins').select('*').eq('is_active', true),
@@ -66,6 +70,7 @@ export default function AdminInquiryDetailPage({ params }: { params: { id: strin
         supabase.from('inquiry_notes').select('*, admins(name)').eq('inquiry_id', id).order('created_at', { ascending: false }),
         supabase.from('phone_logs').select('*, admins(name)').eq('inquiry_id', id).order('created_at', { ascending: false }),
         supabase.from('reply_templates').select('*').order('usage_count', { ascending: false }),
+        supabase.from('admins').select('auth_id, name'),
       ])
 
       if (inqRes.data) setInquiry(inqRes.data as unknown as Inquiry)
@@ -92,6 +97,15 @@ export default function AdminInquiryDetailPage({ params }: { params: { id: strin
       if (notesRes.data) setNotes(notesRes.data as unknown as InquiryNote[])
       if (phoneLogsRes.data) setPhoneLogs(phoneLogsRes.data as unknown as PhoneLog[])
       if (templatesRes.data) setTemplates(templatesRes.data as unknown as ReplyTemplate[])
+      // setLoading(false)보다 반드시 먼저 채운다 — 뒤에서 채우면 첫 렌더에서
+      // 관리자 답변 전부가 '키즈밀'로 잠깐 보였다가 이름으로 바뀌는 깜빡임이 난다.
+      if (namesRes.data) {
+        const map: Record<string, string> = {}
+        for (const a of namesRes.data as { auth_id: string | null; name: string }[]) {
+          if (a.auth_id) map[a.auth_id] = a.name
+        }
+        setSenderNameMap(map)
+      }
 
       // Mark admin unread as 0
       await supabase.from('inquiries').update({ unread_count_admin: 0 }).eq('id', id)
@@ -141,6 +155,16 @@ export default function AdminInquiryDetailPage({ params }: { params: { id: strin
   function showToast(msg: string) {
     setToast(msg)
     setTimeout(() => setToast(''), 10000)
+  }
+
+  // 발신자 이름 해석 — inquiry.admins.name(담당자)을 쓰면 안 된다. 그건
+  // "이 문의에 배정된 사람"이지 "이 메시지를 쓴 사람"이 아니다. 이름을
+  // 못 찾았을 때 담당자 이름을 대신 보여주는 것은 틀린 정보이고, 고객사에까지
+  // 나가는 텍스트라 잘못된 이름보다 회사명이 낫다.
+  function resolveSenderName(senderId: string | undefined): string {
+    if (senderId && senderNameMap[senderId]) return senderNameMap[senderId]
+    if (senderId && senderId === currentAdmin.auth_id) return currentAdmin.name
+    return '키즈밀'
   }
 
   async function sendMessage() {
@@ -387,7 +411,7 @@ export default function AdminInquiryDetailPage({ params }: { params: { id: strin
                   key={msg.id}
                   message={msg}
                   branchName={inquiry?.branches?.name}
-                  adminName={inquiry?.admins?.name || currentAdmin?.name || '키즈밀'}
+                  adminName={resolveSenderName(msg.sender_id)}
                 />
               ))}
               <div ref={messagesEndRef} />
