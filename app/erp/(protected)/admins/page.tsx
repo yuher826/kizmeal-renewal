@@ -9,9 +9,12 @@ import { ROLES, ROLE_LABEL, isNutritionist, ADMIN_CREATE_ROLES, MANAGER_CREATABL
 import { useErpUser } from '@/components/erp/ErpUserProvider'
 import type { Admin } from '@/lib/types'
 
-// access_scope 포함 확장 타입 (lib/types의 Admin에는 아직 없는 컬럼)
+// access_scope · 권한 플래그 포함 확장 타입 (lib/types의 Admin에는 아직 없는 컬럼)
 interface AdminRow extends Admin {
   access_scope?: string | null
+  can_manage_templates?: boolean | null
+  can_handle_cs?: boolean | null
+  can_write_notices?: boolean | null
 }
 
 // ── 상수 ─────────────────────────────────────────────────────────────
@@ -41,6 +44,13 @@ const SCOPE_OPTIONS = [
   { value: 'erp_only',   label: 'ERP 전용' },
   { value: 'board_only', label: '홈페이지 전용' },
 ]
+
+// 추가 권한 플래그 메타 (수정 모달 체크박스 + 목록 배지가 함께 참조)
+const PERMISSION_FLAGS = [
+  { field: 'can_manage_templates', label: '템플릿 관리', badge: '템플릿', desc: '디자이너 양식 업로드·활성화' },
+  { field: 'can_handle_cs',        label: 'CS 관리 대응', badge: 'CS',   desc: '고객사 1:1 문의 답변' },
+  { field: 'can_write_notices',    label: '고객사 공지 작성', badge: '공지', desc: '계약 원 담당자에게 공지 발송' },
+] as const
 
 // 역할 배지 색상
 function roleBadgeClass(role: string): string {
@@ -104,6 +114,32 @@ function ActiveBadge({ active }: { active: boolean }) {
   )
 }
 
+// ★역할 배지(색으로 구분)·범위/상태 배지(채움 스타일)와 겹치지 않도록
+//   전부 같은 중립색 아웃라인으로 통일 — 권한은 색이 아니라 글자로만 구분한다.
+//   super_admin은 role만으로 canManageTemplates 등이 항상 true를 반환하지만
+//   DB 값은 false이므로, 여기서도 '전체' 배지로 그 사실을 명시한다
+//   (목록·수정 모달 두 곳에서 규칙이 갈리지 않도록 이 컴포넌트 하나만 쓴다).
+function PermissionBadges({ admin }: { admin: AdminRow }) {
+  if (admin.role === 'super_admin') {
+    return (
+      <span className="inline-flex items-center text-xs font-medium rounded border border-slate-300 text-slate-500 px-2 py-0.5">
+        전체
+      </span>
+    )
+  }
+  const active = PERMISSION_FLAGS.filter(f => !!admin[f.field])
+  if (active.length === 0) return <span className="text-xs text-slate-300">—</span>
+  return (
+    <div className="flex flex-wrap gap-1">
+      {active.map(f => (
+        <span key={f.field} className="inline-flex items-center text-xs font-medium rounded border border-slate-300 text-slate-500 px-2 py-0.5">
+          {f.badge}
+        </span>
+      ))}
+    </div>
+  )
+}
+
 // ── 메인 페이지 ──────────────────────────────────────────────────────
 
 export default function AdminsPage() {
@@ -125,7 +161,10 @@ export default function AdminsPage() {
 
   // 수정 모달
   const [editTarget, setEditTarget] = useState<AdminRow | null>(null)
-  const [editForm, setEditForm] = useState({ name: '', role: '', access_scope: 'both', department: '', phone: '', is_active: true })
+  const [editForm, setEditForm] = useState({
+    name: '', role: '', access_scope: 'both', department: '', phone: '', is_active: true,
+    can_manage_templates: false, can_handle_cs: false, can_write_notices: false,
+  })
   const [saving, setSaving] = useState(false)
   const [editMsg, setEditMsg] = useState('')
 
@@ -218,6 +257,9 @@ export default function AdminsPage() {
       department: a.department ?? '',
       phone: a.phone ?? '',
       is_active: a.is_active,
+      can_manage_templates: a.can_manage_templates ?? false,
+      can_handle_cs: a.can_handle_cs ?? false,
+      can_write_notices: a.can_write_notices ?? false,
     })
     setEditMsg('')
   }
@@ -225,6 +267,10 @@ export default function AdminsPage() {
   // 보호 조건 (UI 측 — 서버에서도 동일하게 강제됨)
   const isSelf = !!(editTarget && currentAdmin && editTarget.id === currentAdmin.id)
   const isLastSuperAdmin = !!(editTarget && editTarget.role === 'super_admin' && editTarget.is_active && activeSuperAdminCount <= 1)
+  // super_admin은 canManageTemplates 등이 role만으로 항상 true를 반환하므로
+  // (lib/roles.ts) DB 값(false)을 그대로 그리면 "권한 없음"으로 오해된다.
+  // 체크박스를 checked+disabled로 고정해 실제 동작과 화면을 일치시킨다.
+  const isTargetSuperAdmin = editTarget?.role === 'super_admin'
 
   async function handleEditSave() {
     if (!editTarget) return
@@ -236,6 +282,12 @@ export default function AdminsPage() {
     if (editForm.department.trim() !== (editTarget.department ?? '')) updates.department = editForm.department.trim() || null
     if (editForm.phone.trim() !== (editTarget.phone ?? '')) updates.phone = editForm.phone.trim() || null
     if (editForm.is_active !== editTarget.is_active) updates.is_active = editForm.is_active
+    // 플래그 3개 — boolean을 그대로 보낸다(서버가 typeof==='boolean'을 검증).
+    // super_admin 행은 체크박스가 disabled라 editForm 값이 안 바뀌므로
+    // 여기서 별도 분기 없이도 updates에 담기지 않는다.
+    for (const { field } of PERMISSION_FLAGS) {
+      if (editForm[field] !== (editTarget[field] ?? false)) updates[field] = editForm[field]
+    }
 
     if (Object.keys(updates).length === 0) {
       setEditMsg('변경된 내용이 없습니다')
@@ -326,7 +378,7 @@ export default function AdminsPage() {
           <table className="w-full">
             <thead>
               <tr className="bg-slate-50">
-                {['이름', '이메일', '역할', '접근범위', '상태', ...(isSuperAdmin ? ['관리'] : [])].map(h => (
+                {['이름', '이메일', '역할', '접근범위', '추가 권한', '상태', ...(isSuperAdmin ? ['관리'] : [])].map(h => (
                   <th key={h} className="text-left px-4 py-3 text-xs font-bold text-slate-400">{h}</th>
                 ))}
               </tr>
@@ -341,6 +393,7 @@ export default function AdminsPage() {
                   <td className="px-4 py-3.5 text-sm text-slate-500">{a.email}</td>
                   <td className="px-4 py-3.5"><RoleBadge role={a.role} /></td>
                   <td className="px-4 py-3.5"><ScopeBadge scope={a.access_scope} /></td>
+                  <td className="px-4 py-3.5"><PermissionBadges admin={a} /></td>
                   <td className="px-4 py-3.5"><ActiveBadge active={a.is_active} /></td>
                   {isSuperAdmin && (
                     <td className="px-4 py-3.5">
@@ -355,7 +408,7 @@ export default function AdminsPage() {
                 </tr>
               ))}
               {filtered.length === 0 && (
-                <tr><td colSpan={isSuperAdmin ? 6 : 5} className="px-4 py-10 text-center text-sm text-slate-400">표시할 관리자가 없습니다</td></tr>
+                <tr><td colSpan={isSuperAdmin ? 7 : 6} className="px-4 py-10 text-center text-sm text-slate-400">표시할 관리자가 없습니다</td></tr>
               )}
             </tbody>
           </table>
@@ -385,6 +438,7 @@ export default function AdminsPage() {
               <div className="flex flex-wrap gap-1.5 mt-2">
                 <RoleBadge role={a.role} />
                 <ScopeBadge scope={a.access_scope} />
+                <PermissionBadges admin={a} />
                 <ActiveBadge active={a.is_active} />
               </div>
             </div>
@@ -563,6 +617,31 @@ export default function AdminsPage() {
                 />
               </div>
             ))}
+
+            {/* 추가 권한 — "직무가 아니라 배정"인 3단계 플래그 (canManageTemplates와 같은 설계) */}
+            <div className="bg-slate-50 rounded-xl px-4 py-3 space-y-3">
+              <p className="text-sm font-semibold text-slate-600">추가 권한</p>
+              {PERMISSION_FLAGS.map(({ field, label, desc }) => (
+                <label key={field} className="flex items-start gap-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={isTargetSuperAdmin || editForm[field]}
+                    disabled={isTargetSuperAdmin}
+                    onChange={e => setEditForm(f => ({ ...f, [field]: e.target.checked }))}
+                    className="mt-0.5 w-4 h-4 rounded accent-emerald-600 disabled:cursor-not-allowed"
+                  />
+                  <span>
+                    <span className="block text-sm font-medium text-slate-700">{label}</span>
+                    <span className="block text-xs text-slate-400">{desc}</span>
+                  </span>
+                </label>
+              ))}
+              {isTargetSuperAdmin && (
+                <p className="text-xs text-slate-400 pt-1 border-t border-slate-200">
+                  슈퍼관리자는 플래그와 무관하게 항상 전체 권한을 가집니다.
+                </p>
+              )}
+            </div>
 
             {/* 활성 토글 — 자기 자신·마지막 super_admin은 비활성화 불가 */}
             <div className="flex items-center justify-between bg-slate-50 rounded-xl px-4 py-3">
