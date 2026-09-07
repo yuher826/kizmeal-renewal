@@ -3,7 +3,22 @@
 > 이 파일은 항상 **"지금 상태"만** 담는다. 매 세션 끝에 최신 상태로 덮어쓴다.
 > 과거 이력은 `git log HANDOFF.md`로 본다.
 
-**최종 갱신:** 2026-09-07(2차) — ★`/api/board/notices` 미인증 쓰기
+**최종 갱신:** 2026-09-07(3차) — ★`board/admin/diet` 클러스터 조사
+완료(조사만, 코드 변경 없음)★. 권한 5단계 준비 중 `generate-pdf` API를
+살피다 `app/board/admin/diet/` 산하 7개 화면(2,082줄)이 ERP 후계
+화면과 나란히 살아있는 걸 발견했다. `ADMIN_TABS`엔 diet 항목이 없고
+외부 진입점은 `branch-profile` 하나뿐, 나머지 6개는 자기들끼리만
+연결된 사실상 고아 클러스터다. ★오전 문의 건과 다른 결정적 차이★ —
+`next.config.mjs` 리다이렉트가 `diet-automation`만 덮고 `diet`는 안
+덮어, 관리자가 주소로 들어가면 실제로 업로드·배포가 되며 ERP와
+별개로 데이터가 생긴다 — 링크가 없다고 안전한 게 아니다.
+`generate-pdf` 위험도도 정정했다 — 서비스 롤이 아니라 쿠키
+클라이언트라 RLS가 적용되므로 오늘 오전 막은 `board/notices`와
+등급이 다르다. 삭제 여부는 사람 확인 2건(`diet_pdfs` 실데이터 여부,
+권팀장·영양사 실사용 여부)이 먼저 필요해 이번엔 조사만 하고 착수하지
+않았다. 자세한 내용은 아래 "`board/admin/diet` 클러스터" 섹션 참고.
+
+**2026-09-07(2차) 갱신:** ★`/api/board/notices` 미인증 쓰기
 구멍 차단 완료★. 커밋 완료(push 안 함) — 빌드·curl 실물 확인·유대표
 브라우저 실물 확인(목록·작성·고정·삭제·학부모 포털 노출) 전부
 통과했다. `getUser()`가 한 번도 없이 서비스 롤 키를 쓰던 파일이라
@@ -207,7 +222,10 @@ select 한 줄만 고치면 6곳이 따라온다(아래 권한 섹션 갱신분 
 + ★신규 미해결★ API 권한 전수 스캔에서 나온 나머지(권한 5단계 대상,
   2026-09-07 `spec_board_notices_auth.md` 조사)
   ```
-  board/diet/generate-pdf   인증 0회 + upsert 있음        ← 조사 필요
+  board/diet/generate-pdf   인증 0회(getUser 없음)          ★위험도 정정★
+                            (2026-09-07 재조사: 서비스 롤이 아니라
+                            쿠키 클라이언트라 RLS는 적용됨 — 아래
+                            "board/admin/diet 클러스터" 섹션 참고)
   public-inquiry/admin      인증 O, 역할 체크 없음(관리자 전용인데)
   pptx/actions-status       인증 O, 역할 체크 없음
   parent-inquiry/notify     인증 O, 역할 체크 없음
@@ -215,12 +233,70 @@ select 한 줄만 고치면 6곳이 따라온다(아래 권한 섹션 갱신분 
                             인증 0회 (쓰기는 없음 — 위험도 낮으나 확인 필요)
   ```
   `board/diet/templates` 4종은 플래그 체크가 이미 있어 정상
++ ★신규 — 사람 확인 필요★ **`board/admin/diet` 클러스터**
+  (2026-09-07 조사, 코드 변경 없음 — 아래 별도 섹션 참고). `generate-pdf`를
+  조사하다 `app/board/admin/diet/` 산하 7개 화면(2,082줄)이 ERP 후계
+  화면과 나란히 살아있는 걸 발견했다. 외부 진입점 1개(`branch-profile`)
+  빼고 사실상 고아지만, 오전 문의 건과 달리 `next.config.mjs`가 이
+  경로를 리다이렉트로 덮지 않아 관리자가 주소로 들어가면 실제로
+  업로드·배포가 된다. **착수 전 사람이 먼저 확인**: ①`diet_pdfs`에
+  실데이터가 있는가 ②권팀장·영양사가 이 옛 화면을 아직 쓰는가
+  (북마크 가능성)
 
 **다음 세션 착수 지점:**
 > "kizmeal-renewal 이어서. HANDOFF.md 읽고 시작하자.
-> `/api/board/notices` 인증 추가 커밋(push 여부) 확인 후 권한 5단계
-> (CS·공지·템플릿 API 게이트, 이번에 드러난 API 권한 전수 스캔
-> 잔여 항목 포함) 또는 권팀장 9번(좌우 배치)부터."
+> `board/admin/diet` 클러스터 — `diet_pdfs` 실데이터 여부·권팀장/
+> 영양사 실사용 여부부터 확인(사람 확인 필요, 아래 별도 섹션).
+> 그 다음 `/api/board/notices` 인증 추가 커밋(push 여부) 확인 후
+> 권한 5단계(CS·공지·템플릿 API 게이트, API 권한 전수 스캔 잔여
+> 항목 포함) 또는 권팀장 9번(좌우 배치)."
+
+---
+
+## 🔍 `board/admin/diet` 클러스터 — 다음 세션 판단 필요 (2026-09-07 조사, 코드 변경 없음)
+
+권한 5단계 준비 중 `/api/board/diet/generate-pdf`(269줄, `getUser` 없음)를
+조사하다 발견. 실측 결과:
+
+- `app/board/admin/diet/` 아래 7개 화면, 합계 2,082줄
+  ```
+  page               294줄
+  upload              440줄
+  generate            271줄
+  deploy              189줄
+  [branchId]           12줄
+  templates            13줄
+  branch-profile/[branchId]   863줄
+  ```
+- `ADMIN_TABS`에 diet 항목 없음. 외부 진입점은 `branch-profile` 하나뿐
+  (`erp/(protected)/diet/page.tsx:1013,1239,1291`에서 링크)
+- 나머지 6개는 `page.tsx → upload → generate → deploy`로 자기들끼리만 연결
+- ERP에 후계 화면이 전부 존재: `/erp/diet`, `/erp/diet/templates`,
+  `/erp/upload`, `/erp/review`, `/erp/history`
+- `diet_pdfs` 테이블은 `board/admin/diet/deploy`와 `generate-pdf` API
+  두 곳에서만 쓴다. ERP 쪽은 이 테이블을 안 본다 — 현행 PPTX/PDF
+  생성은 GitHub Actions + pptx-server 담당이라 puppeteer 경로는 무관
+
+★오전 문의 건과 다른 점★ `next.config.mjs`는 `/board/admin/diet-automation/*`
+만 덮고 `/board/admin/diet/*`는 안 덮는다. middleware에도 diet 언급 0건.
+즉 리다이렉트 보호가 없어 관리자면 주소로 옛 화면에 들어갈 수 있고,
+거기서 업로드·배포하면 현행 ERP 흐름과 별개로 데이터가 생긴다.
+이것이 실질적 위험이다.
+
+★`generate-pdf` 위험도 정정★ 전수 스캔에서 "인증 0회"로 분류했으나,
+서비스 롤이 아니라 `@supabase/ssr` 쿠키 클라이언트를 쓴다 — RLS가
+적용되므로 오전에 막은 `board/notices`와는 등급이 다르다.
+
+### 다음 세션 착수 전 사람이 확인할 것 2건
+
+- `diet_pdfs`에 실데이터가 있는가 (있으면 옛 PDF가 어딘가 쓰일 수 있음)
+- 권팀장·영양사가 이 옛 화면을 아직 쓰는가 (링크는 없어도 북마크 가능)
+
+### 작업 후보
+
+- 삭제 1,219줄(6개 화면) + `generate-pdf` API 269줄
+- 이전 863줄: `branch-profile/[branchId]` → ERP로
+- `/board/admin/diet/*` → `/erp/diet` 리다이렉트 추가 (오전 패턴)
 
 ---
 
