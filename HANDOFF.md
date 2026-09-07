@@ -3,7 +3,25 @@
 > 이 파일은 항상 **"지금 상태"만** 담는다. 매 세션 끝에 최신 상태로 덮어쓴다.
 > 과거 이력은 `git log HANDOFF.md`로 본다.
 
-**최종 갱신:** 2026-09-07 — ★문의 상세 고아 라우트 2세트 삭제
+**최종 갱신:** 2026-09-07(2차) — ★`/api/board/notices` 미인증 쓰기
+구멍 차단 완료★. 커밋 완료(push 안 함) — 빌드·curl 실물 확인·유대표
+브라우저 실물 확인(목록·작성·고정·삭제·학부모 포털 노출) 전부
+통과했다. `getUser()`가 한 번도 없이 서비스 롤 키를 쓰던 파일이라
+로그인 없이 학부모 공지 생성·수정·삭제가 전부 가능했다(실서버
+배포 상태). `getAdminClient()`(서비스 롤)를 `@/lib/supabase-server`의
+유저 클라이언트로 교체하고, GET·POST·PATCH·DELETE 4개 핸들러
+전부에 `app/api/notices/route.ts`와 동일한 형태의 인증 게이트
+(`getUser()` 401 → `admins` 조회 403)를 추가했다. `parent_notices`의
+RLS(`admin_notices_all`)는 이미 `admins` 기준으로 정상이라 유저
+클라이언트로 바꿔도 관리자 화면은 그대로 동작했다 — 애초에 서비스
+롤을 쓸 이유가 없었다. `created_by`는 `null` 그대로 뒀다(아래 신규
+미해결 참고). curl로 쿠키 없이 GET·POST 모두 `401 {"error":"인증이
+필요합니다"}` 확인. 다음은 권한 5단계(CS·공지·템플릿 API 게이트) —
+`admin_notices_all`이 `is_active`·`role`을 안 보는 문제, 공지 API·화면
+2벌 문제, API 권한 전수 스캔 잔여 항목이 이번 작업으로 새로 드러나
+5단계 범위에 쌓였다.
+
+**2026-09-07(1차) 갱신:** ★문의 상세 고아 라우트 2세트 삭제
 완료★. 빌드 통과, 실물 확인은 유대표 예정(★push 안 함★). HANDOFF
 ⑦번이 "문의 상세 렌더링 코드 4벌 중복"을 통합 과제로 적어뒀으나,
 실측 결과 동급 4벌이 아니라 **살아있는 2벌**(`InquiryDetailPanel.tsx`,
@@ -155,11 +173,54 @@ select 한 줄만 고치면 6곳이 따라온다(아래 권한 섹션 갱신분 
   에러 메시지와 안내 메시지를 같은 스타일로 묶어 쓰고 있는 게
   근본 원인, 분리하려면 `editMsg`를 상태(에러/안내)와 함께 갖도록
   바꿔야 한다.
++ ✅ 해소(2026-09-07) ~~`/api/board/notices` 미인증 쓰기 구멍~~ —
+  `getAdminClient()`(서비스 롤) 제거, 4개 핸들러에 인증 게이트 추가
+  (아래 신규 함정·미해결 항목 참고)
++ ★신규 함정★ **마이그레이션 파일과 실제 DB 정책이 다를 수 있다**
+  (2026-09-07, `spec_board_notices_auth.md` 착수 전 실측) —
+  `supabase/migrations/notices_schema.sql:47`은 `admin_notices_all`
+  정책이 `board_users`(현행 코드 미사용 옛 테이블)를 참조한다고
+  적혀 있으나 틀렸다. DB에서 실제로는 `admins` 기준으로 이미
+  수정돼 있고 마이그레이션 파일에 반영되지 않았다 — `sort_order`와
+  같은 계열의 함정. **RLS를 판단할 때는 레포 파일이 아니라
+  `pg_policies`를 조회할 것.**
++ ★신규 미해결★ `admin_notices_all` 정책이 `is_active`·`role`을
+  보지 않는다 — 비활성 관리자·director도 학부모 공지 CRUD가
+  가능하다. "누가 학부모 공지를 쓸 수 있는가"를 정한 뒤 정책을
+  좁혀야 한다(권한 5단계와 연결)
++ ★신규 미해결★ **공지 API·화면이 2벌이다**
+  ```
+  /api/board/notices  +  /board/admin/notices   전체 공지(branch_id: null 고정)
+  /api/notices        +  /erp/notices           원별 지정 가능
+  ```
+  같은 `parent_notices` 테이블에 쓴다. 9/7 오전에 삭제한 문의 화면과
+  같은 구조(살아있는 화면 vs 고아인지는 미확인) — 어느 쪽이 정식인지
+  판단 필요
++ ★신규 미해결★ **`parent_notices.created_by`는 사실상 죽은
+  컬럼이다.** 타입 `uuid`, FK 없음(FK는 `branch_id → branches(id)`
+  하나뿐). `/api/board/notices`는 `null` 하드코딩, `/api/notices`는
+  insert 구문에 이 컬럼이 아예 없다. 읽어서 표시하는 화면도 0곳.
+  이번에 인증을 붙이며 `adminData.id`로 채우려다, 두 API가 서로
+  다르게 동작하는 상태를 새로 만드는 것이라 판단해 `null` 유지로
+  확정했다. 채우려면 두 API를 함께 고쳐야 하고, 그 전에 "작성자를
+  표시할 화면이 있는가"부터 정해야 한다.
++ ★신규 미해결★ API 권한 전수 스캔에서 나온 나머지(권한 5단계 대상,
+  2026-09-07 `spec_board_notices_auth.md` 조사)
+  ```
+  board/diet/generate-pdf   인증 0회 + upsert 있음        ← 조사 필요
+  public-inquiry/admin      인증 O, 역할 체크 없음(관리자 전용인데)
+  pptx/actions-status       인증 O, 역할 체크 없음
+  parent-inquiry/notify     인증 O, 역할 체크 없음
+  cs/notify · notify-admin · download · pptx/download-zip
+                            인증 0회 (쓰기는 없음 — 위험도 낮으나 확인 필요)
+  ```
+  `board/diet/templates` 4종은 플래그 체크가 이미 있어 정상
 
 **다음 세션 착수 지점:**
 > "kizmeal-renewal 이어서. HANDOFF.md 읽고 시작하자.
-> 문의 상세 고아 라우트 삭제 커밋(push 여부) 확인 후 권한 5단계
-> (CS·공지·템플릿 API 게이트) 또는 권팀장 9번(좌우 배치)부터."
+> `/api/board/notices` 인증 추가 커밋(push 여부) 확인 후 권한 5단계
+> (CS·공지·템플릿 API 게이트, 이번에 드러난 API 권한 전수 스캔
+> 잔여 항목 포함) 또는 권팀장 9번(좌우 배치)부터."
 
 ---
 
