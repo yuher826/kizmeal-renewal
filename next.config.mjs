@@ -46,9 +46,11 @@ const nextConfig = (phase) => {
         { source: '/board/admin/diet-automation/review',  destination: '/erp/review',  permanent: false },
         { source: '/board/admin/diet-automation/upload',  destination: '/erp/upload',  permanent: false },
         { source: '/board/admin/diet-automation/history', destination: '/erp/history', permanent: false },
-        // 운영 문의 (하위 경로 와일드카드 허용)
+        // 운영 문의 (★2026-09-07 정정★ 목적지 '/erp/inquiries/:path*'는
+        //  고아 라우트 삭제로 이제 없는 경로다. 딥링크는 '?id=' 쿼리
+        //  형태이므로 그에 맞춰 매핑한다 — spec_inquiry_orphan_cleanup.md)
         { source: '/board/admin/inquiries',               destination: '/erp/inquiries',              permanent: false },
-        { source: '/board/admin/inquiries/:path*',        destination: '/erp/inquiries/:path*',        permanent: false },
+        { source: '/board/admin/inquiries/:id',           destination: '/erp/inquiries?id=:id',        permanent: false },
         // 원 관리 (구 board 화면·/erp/centers 삭제 — 정식 후계는 /erp/branches.
         //  하위 경로는 ID 체계가 달라 :path* 그대로 매핑하면 404가 나므로 목록으로 고정)
         { source: '/board/admin/branches',                destination: '/erp/branches', permanent: false },
