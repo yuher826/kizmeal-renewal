@@ -3,7 +3,23 @@
 > 이 파일은 항상 **"지금 상태"만** 담는다. 매 세션 끝에 최신 상태로 덮어쓴다.
 > 과거 이력은 `git log HANDOFF.md`로 본다.
 
-**최종 갱신:** 2026-09-04(5차) — ★CS 메시지 발신자 이름 표시 수정
+**최종 갱신:** 2026-09-07 — ★문의 상세 고아 라우트 2세트 삭제
+완료★. 빌드 통과, 실물 확인은 유대표 예정(★push 안 함★). HANDOFF
+⑦번이 "문의 상세 렌더링 코드 4벌 중복"을 통합 과제로 적어뒀으나,
+실측 결과 동급 4벌이 아니라 **살아있는 2벌**(`InquiryDetailPanel.tsx`,
+`app/board/(customer)/inquiries/[id]/page.tsx`) **+ 고아 2세트**였다.
+`app/erp/(protected)/inquiries/[id]/`는 어떤 링크의 대상도 아니었고
+(딥링크는 이미 `?id=` 형태), `app/board/admin/inquiries/`는
+`ADMIN_TABS`·대시보드 어디서도 연결되지 않는 죽은 경로였다. 통합이
+아니라 삭제로 근본 해결했다(유대표 승인). 두 폴더를 `git rm`으로
+삭제하고 `AdminMobileNav.tsx`의 죽은 경로 제목 분기 1줄을 제거했다.
+잔여 참조 0건, 소비 컴포넌트 5개(MessageBubble·StatusBadge·
+ReplyTemplates·InternalNote·FileUpload) 생존 전부 예상대로 확인.
+권팀장 10번의 `assigned_admin_id` 중복도 3벌→1벌로 줄어 착수 규모가
+줄었다. 다음은 유대표 실물 확인 후 커밋(별도 파일, push는 보류) →
+이후 권한 5단계(CS·공지·템플릿 API 게이트) 또는 권팀장 9번(좌우 배치).
+
+**2026-09-04(5차) 갱신:** ★CS 메시지 발신자 이름 표시 수정
 완료★. 커밋 완료 — 빌드·실물 검증 전부 통과했다. "발신자 판정
 버그"로 알려졌던 것이 실은 `inquiry.admins.name`(문의 담당자)을
 발신자 이름 대신 쓰던 설계 누락이었음을 규명했다. ERP 3벌
@@ -124,12 +140,14 @@ select 한 줄만 고치면 6곳이 따라온다(아래 권한 섹션 갱신분 
   이름을 보여주려면 RLS 정책 신설이 필요하고, 직원 이름을 49개
   원에 노출하는 문제라 권팀장과 상의 후 정한다. 지금 상태(회사명
   통일)가 잘못된 것은 아니므로 급하지 않다.
-+ ★신규★ ★우선순위 격상★ 문의 상세 렌더링 코드 **4벌** 중복 — 권팀장
-  9번·10번의 선결 조건이다(둘 다 4개 파일을 전부 고쳐야 함). 오늘
-  발신자 이름 수정에서 실제로 "하나만 고치고 하나는 미뤄서 화면마다
-  다르게 동작"하는 일이 났다. `board/admin` 파일은 `ErpUserContext`를
-  못 쓰는 문제까지 있어 통합 전에 선결 결정이 필요하다 (아래 CS 섹션
-  ⑦번 참고)
++ ✅ 해소(2026-09-07) ~~★우선순위 격상★ 문의 상세 렌더링 코드 4벌
+  중복~~ → ★전제가 틀렸다★. 실측 결과 동급 4벌이 아니라 **살아있는
+  2벌**(`InquiryDetailPanel.tsx`, `board/(customer)/inquiries/[id]/page.tsx`)
+  **+ 고아 2세트**(`erp/inquiries/[id]`, `board/admin/inquiries/`)였다.
+  통합이 아니라 고아 폴더 삭제로 해소했다(유대표 승인,
+  `spec_inquiry_orphan_cleanup.md`). `board/admin`이 `ErpUserContext`를
+  못 쓰는 문제는 그 파일 자체가 없어지며 결정 자체가 소멸했다(아래
+  CS 섹션 ⑦번 참고)
 + ★신규★ `admins/page.tsx` 수정 모달의 "변경된 내용이 없습니다"
   안내가 빨간 배경(`editMsg` 공용 표시 블록, `bg-red-50 text-red-600`)이라
   오류처럼 보인다. 실제로는 정상 안내(저장할 변경 사항이 없다는
@@ -140,7 +158,8 @@ select 한 줄만 고치면 6곳이 따라온다(아래 권한 섹션 갱신분 
 
 **다음 세션 착수 지점:**
 > "kizmeal-renewal 이어서. HANDOFF.md 읽고 시작하자.
-> 권한 4단계 커밋 확인 후 5단계(CS·공지·템플릿 API 게이트)부터."
+> 문의 상세 고아 라우트 삭제 커밋(push 여부) 확인 후 권한 5단계
+> (CS·공지·템플릿 API 게이트) 또는 권팀장 9번(좌우 배치)부터."
 
 ---
 
@@ -212,13 +231,12 @@ select 한 줄만 고치면 6곳이 따라온다(아래 권한 섹션 갱신분 
 ```
 `대기중`만 상태다. 6·10번 용어 재설계 때 함께 봐야 한다.
 
-**④ `app/board/admin/inquiries/page.tsx`에도 '미처리'가 있다**
-★거기서는 `stats.unread` 기준 — ERP와 정반대 의미다★
-(`:247` `미처리 {stats.unread}건`, `:261` 카드 라벨).
-HANDOFF에 `app/board/admin/`이 리다이렉트된 죽은 코드라고 적혀 있으나,
-파일을 열어보니 `'use client'`로 시작하는 살아 있는 컴포넌트였다.
-★리다이렉트가 어디서 걸리는지 확인 전에는 죽었다고 단정할 수 없다.★
-→ 이번 커밋에서는 건드리지 않았다. 죽은 코드인지 먼저 확인할 것.
+**④ ✅ 소멸(2026-09-07) `app/board/admin/inquiries/page.tsx`에도 '미처리'가 있다**
+★거기서는 `stats.unread` 기준 — ERP와 정반대 의미다★ 였으나, 실측
+결과(`spec_inquiry_orphan_cleanup.md`) 이 파일 자체가 어디서도
+링크되지 않는 고아 라우트였다. 파일을 폴더째 삭제해 '미처리' 의미
+충돌이 소멸했다 — 통합·수정 대상이 아니라 애초에 존재할 필요가
+없던 화면이었다.
 
 **⑤ ✅ 해결(2026-09-04) CS 메시지에 실제 작성자 대신 담당자 이름이 표시됨**
 ★원인 규명 완료 — "발신자 판정 버그"가 아니었다★. 처음엔 `sender_id`
@@ -285,43 +303,38 @@ RLS 정책 신설이 필요한 별개의 결정이다. 직원 이름을 49개 �
 왜 필요한지 실물로 재확인된 것 — 설계는 이미 위 "권팀장 요청 10건"
 섹션 9번에 있으나 구현 전이다.
 
-**⑦ ★신규(2026-09-04, 발신자 이름 수정 중 발견)★ 문의 상세 렌더링 코드 4벌 중복**
+**⑦ ✅ 해소(2026-09-07) ~~문의 상세 렌더링 코드 4벌 중복~~**
 ```
-InquiryDetailPanel.tsx
-app/erp/(protected)/inquiries/[id]/page.tsx
-app/board/admin/inquiries/[id]/page.tsx
-app/board/(customer)/inquiries/[id]/page.tsx
+InquiryDetailPanel.tsx                              살아있음 (ERP CS 목록 2패널)
+app/erp/(protected)/inquiries/[id]/page.tsx         고아 — 삭제
+app/board/admin/inquiries/[id]/page.tsx             고아 — 삭제
+app/board/(customer)/inquiries/[id]/page.tsx        살아있음 (고객사 목록)
 ```
-네 파일이 `Promise.all` 조회·발신자 이름 해석·메시지 렌더링을 각자
-따로 갖고 있다.
+★전제가 틀렸다★ — 실측(`spec_inquiry_orphan_cleanup.md`) 결과 동급
+4벌이 아니라 **살아있는 2벌 + 고아 2세트**였다. 고아였던 두 `[id]`
+페이지는 diff 18줄뿐인 복붙 사본(차이는 `currentAdmin` 획득 방식만)
+이었고, 어느 링크의 대상도 아니었다 — 이메일 딥링크는 이미
+`${BASE_URL}/erp/inquiries?id=${inquiryId}` 형태로 `erp/inquiries/page.tsx`가
+`searchParams`로 받아 패널을 여는 구조였다. `app/board/admin/inquiries`도
+`ADMIN_TABS`·대시보드 어디서도 연결되지 않았다.
 
-★우선순위 격상 — 권팀장 9번·10번의 선결 조건★ 9번(좌우 배치)과
-10번(공동처리)은 둘 다 이 4개 파일을 전부 고쳐야 한다. 통합 없이
-착수하면 같은 수정을 네 번 하고, 하나를 빠뜨리면 화면마다 다르게
-동작하는 위험이 구조적으로 있다. ★정정★ 오늘 ERP 3벌만 고친 것이
-"ERP와 고객사에 서로 다른 이름이 표시되는" 결과로 이어졌다고
-처음에 적었으나 틀렸다 — `board/(customer)` 쪽은 RLS로 `admins`
-조회 자체가 막혀 있어 애초에 실제 이름을 표시한 적이 없다(위 CS
-섹션 ⑤번 정정 참고). 이번 건에서 실제로 문제가 나지는 않았지만,
-"4벌 중 일부만 고치면 화면마다 동작이 갈린다"는 구조적 위험 자체는
-여전히 유효하다 — 다음에 이 4파일 중 하나를 고칠 때는 재발할 수 있다.
+★따라서 통합이 아니라 삭제가 근본 해결이었다★(유대표 승인). 두
+고아 폴더를 `git rm`으로 삭제해 "4벌 중 일부만 고치면 화면마다
+동작이 갈린다"는 구조적 위험 자체가 사라졌다 — 이제 살아있는
+2벌(ERP·고객사)만 남았고, 이 둘은 관심사가 달라(고객사엔 템플릿·
+SLA·담당자배정이 없음)애초에 통합 대상이 아니다.
 
-★선결 결정★ `app/board/admin/inquiries/[id]/page.tsx`는 ERP 밖이라
-`ErpUserContext`를 쓰지 못한다(2단계 범위가 ERP로 한정됐던 이유와
-같음). 통합 시 이 파일을 어떻게 다룰지 — 별도 context를 하나 더
-두는지, 아니면 이 파일 자체를 ERP 쪽으로 옮기는지 — 착수 전에
-먼저 정해야 한다.
+★선결 결정도 함께 소멸★ `app/board/admin/inquiries/[id]/page.tsx`가
+ERP 밖이라 `ErpUserContext`를 못 쓰는 문제로 "별도 context를 두는지,
+파일을 ERP로 옮기는지"를 통합 전에 정해야 한다고 적어뒀으나, 그
+파일 자체가 없어지며 결정할 대상이 없어졌다.
 
-★참고 — 우연이 아니라 패턴이다★ 오늘 하루에만 같은 종류의 중복을
-네 번 만났다.
+★남은 패턴 3벌★ (렌더링 4벌은 해소, 나머지는 미해결)
 ```
 ROLE_BADGE          2벌 (ErpHeader.tsx / ErpSidebar.tsx, 3단계에서 재확인)
 admins 조회         9벌 (2단계에서 실측, 6곳만 컨텍스트로 전환)
-렌더링 코드         4벌 (이번 발신자 이름 수정에서 발견)
 board/admin 컨텍스트 미적용   ERP와 board가 서로 다른 인증 계층
 ```
-
-→ 권팀장 9번·10번 착수 전에 통합 여부와 범위를 먼저 결정할 것.
 
 ### ★신규(2단계 실물 확인 중 발견)★ `scripts/dev-fresh.cjs`가 node 프로세스를 하나만 종료한다
 
@@ -1064,13 +1077,14 @@ PPTX·PDF), 열을 좁히면 원별특이사항이 6줄로 부풀어 한 주가 
 문의 완료"**다.
 - 연결 테이블 `inquiry_assignees` 필요(담당자별 완료여부 포함)
 - '완료'가 개인 완료 / 문의 완료 두 뜻이 된다 → 6번과 함께 설계
-- ★`assigned_admin_id` 코드가 3벌 중복★ (2026-09-01 실측 확인)
-  ```
-  app/board/admin/inquiries/[id]/page.tsx:253
-  app/erp/(protected)/inquiries/[id]/page.tsx:253
-  app/erp/(protected)/inquiries/components/InquiryDetailPanel.tsx:1107
-  ```
-  하나만 고치면 나머지가 덮어쓴다. 3~4일 규모
+- ★정정(2026-09-07)★ `assigned_admin_id` 코드는 3벌 중복이 아니라
+  **1벌**이다 — 2026-09-01 실측 당시 있던 나머지 2벌
+  (`app/board/admin/inquiries/[id]/page.tsx:253`,
+  `app/erp/(protected)/inquiries/[id]/page.tsx:253`)은 고아 라우트라
+  `spec_inquiry_orphan_cleanup.md`로 폴더째 삭제됐다(위 CS 섹션
+  ⑦번 참고). 이제 `InquiryDetailPanel.tsx:1107`(저장) 하나만 남아
+  "하나만 고치면 나머지가 덮어쓴다"는 위험이 사라졌다 — 10번 착수
+  규모가 3~4일에서 줄었다.
 
 ### 신규 발견 — 미해결
 
@@ -3437,6 +3451,43 @@ API도 렌더링 로직도 정상이었고, 원인은 오직 깨진 dev 서버 �
 매번 기억할 필요 자체가 없어진다. `scripts/dev-fresh.cjs`를 `dev-fresh`
 전용이 아니라 `dev` 스크립트 자체의 사전 점검 단계로 흡수하는 방향으로
 검토할 것.
+
+---
+
+## ⚠️ 반복 함정 — 라우트 삭제 전엔 `next.config.mjs`의 redirects/rewrites도 확인할 것
+
+**2026-09-07, 문의 상세 고아 라우트 삭제(`spec_inquiry_orphan_cleanup.md`)
+실물 확인 중 발견.**
+
+착수 전 실측(스펙 작성 단계)은 코드 안 링크(딥링크·메뉴·대시보드)만
+grep했고, `next.config.mjs`의 `redirects()`는 확인하지 않았다. 실제로는
+`/board/admin/inquiries`, `/board/admin/inquiries/:path*` 두 규칙이
+이미 있었다 — 즉 이 경로는 "링크가 없는 고아"였을 뿐 아니라, config
+리다이렉트가 middleware보다 먼저 걸려 **페이지 파일에 도달하는 것
+자체가 애초에 불가능**했다. 삭제 판단은 이 사실을 몰랐어도 결과적으로
+더 정확했던 셈이다(고아라는 결론은 그대로 유지, 오히려 근거가 하나
+더 늘었다).
+
+**실물 확인에서 어긋난 것 — "직접 입력 시 404" 기대는 틀렸다.**
+스펙의 "실물 확인 6번"은 `/board/admin/inquiries` 직접 입력 시 404를
+정상으로 적었으나, 실측하니 `/erp/inquiries`로 **307 리다이렉트**되는
+것이 정상 동작이었다(page.tsx가 없어도 config redirect가 먼저 응답).
+페이지 파일 삭제 여부와 config redirect 존재 여부는 서로 다른 층이라,
+페이지만 지우고 확인하면 "404가 나와야 하는데 왜 리다이렉트되지?"로
+착각하기 쉽다.
+
+**목적지 갱신 필요성도 이번에 함께 드러났다** — 기존
+`/board/admin/inquiries/:path* → /erp/inquiries/:path*` 규칙은
+`/erp/inquiries/[id]`(고아 라우트로 이번에 삭제)를 목적지로 삼고
+있어, 그대로 뒀으면 리다이렉트 목적지 자체가 없는 경로가 될 뻔했다.
+`/board/admin/inquiries/:id → /erp/inquiries?id=:id`로 딥링크 쿼리
+형식에 맞춰 정정했다(`lib/email.ts:227`이 보내는 형식과 동일).
+
+→ **다음에 라우트(특히 `app/board/admin/*`처럼 리다이렉트 이력이
+있는 경로)를 삭제·이동할 때는 코드 링크뿐 아니라 `next.config.mjs`의
+`redirects()`/`rewrites()`도 반드시 함께 grep할 것.** 페이지 파일이
+없어져도 config 규칙은 별도로 살아있고, 목적지가 사라진 것도 페이지
+쪽 삭제만 봐서는 알 수 없다.
 
 ---
 
