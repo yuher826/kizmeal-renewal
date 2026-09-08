@@ -413,9 +413,10 @@ def _adapt_ts_menu_data(raw_menu_data):
         # is_skipped 주차는 키 자체를 제외 → _days_by_week에서 [None]*5 처리
 
     return {
-        'year':  raw_menu_data.get('year'),
-        'month': raw_menu_data.get('month'),
-        'weeks': adapted_weeks,
+        'year':    raw_menu_data.get('year'),
+        'month':   raw_menu_data.get('month'),
+        'weeks':   adapted_weeks,
+        'dosirak': raw_menu_data.get('dosirak'),
     }
 
 

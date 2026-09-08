@@ -124,6 +124,7 @@ def _adapt_ts_menu_data(raw_menu_data):
         'weeks':         adapted_weeks,
         'origin_text':   raw_menu_data.get('origin_text'),   # 원산지 텍스트 (DB 저장값 pass-through)
         'material_text': raw_menu_data.get('material_text'), # 원재료 텍스트 (DB 저장값 pass-through)
+        'dosirak':       raw_menu_data.get('dosirak'),   # 도시락 요청 (DB 저장값 pass-through)
     }
 
 

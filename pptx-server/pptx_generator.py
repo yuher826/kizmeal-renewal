@@ -607,6 +607,38 @@ def build_snack(snack, branch, do_strip=False):
     return menu.strip(), kcal.strip()
 
 
+def _build_dosirak_map(menu_data):
+    """menu_data['dosirak'] 를 (원명, 'YYYY-MM-DD') → 메뉴문자열 로 인덱싱.
+
+    dosirak 항목 형태: { date, branch_name, type, menu, note }
+    date 는 upload/route.ts 의 normalizeDosirakDate 가 이미
+    YYYY-MM-DD 로 정규화해 저장한다.
+    원명 표기는 양쪽이 같다 — VALID_BRANCHES 와 cfg['name'] 모두
+    '영통P'·'광교SLP' 축약형(_HOLIDAY_OPERATING 참고).
+    """
+    out = {}
+    for item in menu_data.get('dosirak') or []:
+        branch = item.get('branch_name', '')
+        date   = item.get('date', '')
+        menu   = item.get('menu', '')
+        if branch and date and menu:
+            out[(branch, date)] = menu
+    return out
+
+
+def _dosirak_lines(menu_str):
+    """'A, B, C' → ['<도시락>', 'A', 'B', 'C'] 로 변환.
+    쉼표로만 쪼갠다. & 는 항목 안에 그대로 둔다.
+    빈 항목은 버리고 앞뒤 공백은 제거한다.
+    """
+    lines = ['<도시락>']
+    for item in menu_str.split(','):
+        item = item.strip()
+        if item:
+            lines.append(item)
+    return lines
+
+
 # ════════════════════════════════════════════════════════════════════
 # 7. 슬라이드 메타데이터 교체
 # ════════════════════════════════════════════════════════════════════
@@ -963,7 +995,7 @@ def find_shape_smart(slide_el, target_name, fallback_keyword=None):
 # ════════════════════════════════════════════════════════════════════
 # 9. 슬라이드 렌더링
 # ════════════════════════════════════════════════════════════════════
-def _render_slide(table, plan_entry, week_days, cfg):
+def _render_slide(table, plan_entry, week_days, cfg, dosirak_map=None, year=None, month=None):
     _, sections, opts = plan_entry
     if opts.get('skip') or not sections:
         return
@@ -1010,22 +1042,32 @@ def _render_slide(table, plan_entry, week_days, cfg):
                     date_str = day.get('date', '')
                     # ISO '2026-06-03' 또는 2자리 '03' 둘 다 처리, 앞의 0 제거
                     if len(date_str) == 10 and date_str[4] == '-':
-                        day_num = date_str.split('-')[2]
+                        day_num  = date_str.split('-')[2]
+                        iso_date = date_str
                     elif date_str.isdigit():
-                        day_num = date_str
+                        day_num  = date_str
+                        # date_str에 연/월이 없어 도시락 조회 키(YYYY-MM-DD)를
+                        # menu_data의 year/month로 조립한다
+                        iso_date = (f'{int(year):04d}-{int(month):02d}-{int(day_num):02d}'
+                                    if year and month else '')
                     else:
-                        day_num = ''
+                        day_num  = ''
+                        iso_date = ''
                     day_num = str(int(day_num)) if day_num else ''
                     if day.get('is_holiday') and branch_name not in _HOLIDAY_OPERATING:
                         clear_cell(cell)
                         _set_date_only_cell(cell, day_num, reason=day.get('holiday_reason', ''))
                         continue
-                    lines = build_lunch_lines(
-                        day.get('lunch', {}), branch_name,
-                        do_strip=do_strip,
-                        add_fruit=add_fruit,
-                        fruit_text=fruit_text,
-                    )
+                    dosirak_menu = dosirak_map.get((branch_name, iso_date)) if dosirak_map else None
+                    if dosirak_menu:
+                        lines = _dosirak_lines(dosirak_menu)
+                    else:
+                        lines = build_lunch_lines(
+                            day.get('lunch', {}), branch_name,
+                            do_strip=do_strip,
+                            add_fruit=add_fruit,
+                            fruit_text=fruit_text,
+                        )
                     if not lines:
                         # 운영원 공휴일이지만 데이터 없는 경우 — 날짜만 표시
                         clear_cell(cell)
@@ -1372,6 +1414,7 @@ def generate(cfg, menu_data, template_path, out_path, date_map=None,
     slide_indices = [entry[0] for entry in plan]
     prs           = build_pptx_from_plan(template_path, slide_indices)
     week_days     = _days_by_week(menu_data)
+    dosirak_map   = _build_dosirak_map(menu_data)
     slides        = list(prs.slides)
 
     display_name = cfg.get('display_name', cfg['name'])
@@ -1405,7 +1448,9 @@ def generate(cfg, menu_data, template_path, out_path, date_map=None,
         if table is None:
             continue
 
-        _render_slide(table, plan_entry, week_days, cfg)
+        _render_slide(table, plan_entry, week_days, cfg,
+                      dosirak_map=dosirak_map,
+                      year=menu_data.get('year'), month=menu_data.get('month'))
 
         # 공휴일 셀 위에 떠서 날짜를 가리는 장식 그림(선거도장 등) 제거.
         # ★공휴일에도 운영하는 원(_HOLIDAY_OPERATING)만 지운다★ — 나머지
