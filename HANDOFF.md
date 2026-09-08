@@ -3,7 +3,38 @@
 > 이 파일은 항상 **"지금 상태"만** 담는다. 매 세션 끝에 최신 상태로 덮어쓴다.
 > 과거 이력은 `git log HANDOFF.md`로 본다.
 
-**최종 갱신:** 2026-09-08 — ★`board/admin` 전수 조사 완료 +
+**최종 갱신:** 2026-09-08(2차) — ★`board/admin` 화이트리스트 가드
+신설 + 죽은 화면 3계열 삭제 완료★(빌드 통과, push 완료). 착수
+순서 ②③을 이번 세션에 마쳤다 — ①전수 조사(1차)에서 확정한 계획
+그대로 실행했다. **②화이트리스트 가드(`7b63af3`)**:
+`lib/admin-tabs.ts`에 `canAccessAdminPage()`를 추가했다 — 허용
+목록의 출처는 `ADMIN_TABS` 하나뿐이라 메뉴에서 지우면 접근도 함께
+닫힌다. `middleware.ts`는 "Board auth" 직후, ERP 역할 가드 앞에서
+호출한다. prefix 매칭에 `/` 경계를 붙였고(`erp-access.ts`와 같은
+이유 — `notices`가 `notices-old`를 삼키지 않게), 최장 prefix
+매칭은 두지 않았다(판정이 boolean 하나라 겹쳐도 결과가 같음).
+`admins` 조회는 0회(role 판정이 불필요). 차단 시 `/board/admin`
+허브로 착지시키고 `?denied=`는 붙이지 않았다(읽는 화면이 없어서).
+실물 검증 — 허용 6개 전부 열림(`notices/new` 포함, prefix 경계
+확인), 차단 3계열(diet/public-inquiries/stats) 전부 허브 착지 확인.
+**③죽은 화면 삭제(`3e79f7d`, 3,067줄)**: `diet/*` 2,082 +
+`public-inquiries/*` 515 + `stats` 201 + `api/board/diet/generate-pdf`
+269, `AdminMobileNav.tsx` 조건 3줄과 `admin-tabs.ts` 구경로 호환
+조건도 함께 정리. ★함정 주의★ `api/board/diet/`는 695줄이지만
+`templates` 계열 426줄은 살아있다 — `erp/(protected)/diet/templates/page.tsx`가
+271·343·363·401·411 다섯 곳에서 호출하므로 `generate-pdf` 폴더만
+지웠다. `diet_pdfs`는 count 0 확인 — 코드만 정리했고 테이블은
+남겨뒀다(사용처가 소멸했을 뿐 삭제는 이번 범위 밖). `next.config.mjs`의
+`/board/admin/stats → /erp/stats` 리다이렉트는 그대로 유지했다
+(가드보다 먼저 걸려 ERP로 보낸다 — 지우면 허브 착지가 되어 더
+나빠짐). 자세한 내용은 아래 "`board/admin` 접근 제어"·
+"`board/admin/diet` 클러스터" 섹션 참고. ★남은 것★ `?denied=`
+파라미터가 ERP 가드에도 있으나 읽는 화면이 없어 사용자가 왜
+튕겼는지 모른 채 착지한다(별건, 이번엔 안 건드림). `/api/board/*`는
+이 가드 범위 밖이다(matcher가 `/board/(.*)`) — API 인증은 라우트별
+확인이 필요한 별개 주제로 남는다.
+
+**2026-09-08(1차) 갱신:** ★`board/admin` 전수 조사 완료 +
 지난 세션(09-07 4차) 기록 정정 3건★(조사·문서 정정만, 코드 변경
 없음). `/board/admin` 전체 5,686줄을 실측했다 — 살아있는 경로가
 정확히 `ADMIN_TABS` 허용 5계열(`content`·`notices`·`parents`·
@@ -342,7 +373,7 @@ select 한 줄만 고치면 6곳이 따라온다(아래 권한 섹션 갱신분 
 
 ---
 
-## 🔍 `board/admin` 접근 제어 — 화이트리스트로 뒤집기 (2026-09-08 전수 조사 완료, 코드 변경 없음)
+## ✅ `board/admin` 접근 제어 — 화이트리스트 가드 완료 (2026-09-08, `7b63af3`)
 
 **문제의 본질** — "메뉴에서 지웠다"와 "접근이 막혔다"가 다른 층인데
 `board` 쪽은 앞의 두 층만 돼 있다.
@@ -429,16 +460,30 @@ ERP에 이미 후계 화면이 완비돼 있다 — `app/erp/(protected)/branche
 `pathname.startsWith('/board/admin')` 한 줄로 통째 판정한다
 (블랙리스트조차 아님 — 관리자면 `board/admin` 전부 열림).
 
-### 착수 순서
+### 착수 순서 — 전부 완료
 
-1. ~~`/board/admin/*` 전수 조사~~ — 완료(2026-09-08, 위 실측 결과)
-2. `ADMIN_TABS` 기준 화이트리스트 가드를 middleware에 신설
-   (middleware가 `ADMIN_TABS`를 SSOT로 읽는다)
-3. 2,798줄 삭제 — 착수 전 `diet_pdfs` 실데이터 count 확인
+1. ~~`/board/admin/*` 전수 조사~~ — 완료(2026-09-08 1차, 위 실측 결과)
+2. ~~`ADMIN_TABS` 기준 화이트리스트 가드를 middleware에 신설~~ —
+   완료(2026-09-08 2차, `7b63af3`) — `lib/admin-tabs.ts`에
+   `canAccessAdminPage()` 추가, `middleware.ts`가 Board auth 직후·
+   ERP 역할 가드 앞에서 호출. `admins` 조회 0회, 차단 시
+   `/board/admin` 허브 착지(`?denied=` 없음 — 읽는 화면 없어서).
+   실물 검증 — 허용 6개 전부 열림(`notices/new` 포함), 차단
+   3계열 전부 허브 착지 확인
+3. ~~2,798줄 삭제~~ — 완료(2026-09-08 2차, `3e79f7d`, 실제로는
+   `generate-pdf` API 269줄 포함 3,067줄). `diet_pdfs` count 0
+   확인 후 착수. 아래 "`board/admin/diet` 클러스터" 섹션 참고
+
+### 남은 것 (별건, 이번엔 안 건드림)
+
+- `?denied=` 파라미터가 ERP 가드(`canAccessErpPage`)에도 있으나
+  읽는 화면이 없다 — 사용자는 왜 튕겼는지 모른 채 착지한다
+- `/api/board/*`는 이 가드 범위 밖이다(matcher가 `/board/(.*)`).
+  API 인증은 라우트별 확인이 필요한 별개 주제
 
 ---
 
-## 🔍 `board/admin/diet` 클러스터 — 삭제 대상 확정 (2026-09-07 조사 / 2026-09-08 정정, 코드 변경 없음)
+## ✅ `board/admin/diet` 클러스터 — 삭제 완료 (2026-09-07 조사 / 2026-09-08 정정·삭제, `3e79f7d`)
 
 권한 5단계 준비 중 `/api/board/diet/generate-pdf`(269줄, `getUser` 없음)를
 조사하다 발견. 실측 결과:
@@ -481,16 +526,34 @@ ERP에 이미 후계 화면이 완비돼 있다 — `app/erp/(protected)/branche
 서비스 롤이 아니라 `@supabase/ssr` 쿠키 클라이언트를 쓴다 — RLS가
 적용되므로 오전에 막은 `board/notices`와는 등급이 다르다.
 
-### 다음 세션 착수 전 사람이 확인할 것 2건
+### 착수 전 확인 — 완료
 
-- `diet_pdfs`에 실데이터가 있는가 (있으면 옛 PDF가 어딘가 쓰일 수 있음)
-- 권팀장·영양사가 이 옛 화면을 아직 쓰는가 (링크는 없어도 북마크 가능)
+- `diet_pdfs` 실데이터: **count 0 확인**(2026-09-08) — 옛 PDF가
+  어딘가 쓰이고 있을 위험 없음. 코드만 정리, 테이블 자체는 이번엔
+  손대지 않음(사용처가 소멸했을 뿐 삭제는 범위 밖)
+- 권팀장·영양사 북마크 여부는 **화이트리스트 가드(위 섹션)가
+  선행돼 더 이상 물을 필요가 없어졌다** — 주소를 알아도
+  `/board/admin` 허브로 착지한다
 
-### 작업 후보
+### 삭제 완료 (2026-09-08, `3e79f7d`, 3,067줄)
 
-- 삭제 2,082줄(7개 화면 전부 — `branch-profile/[branchId]` 863줄
-  포함, 2026-09-08 재분류) + `generate-pdf` API 269줄
-- `/board/admin/diet/*` → `/erp/diet` 리다이렉트 추가 (오전 패턴)
+- `app/board/admin/diet/**` 2,082줄(7개 화면 전부 — `page`·`upload`·
+  `generate`·`deploy`·`[branchId]`·`templates`·
+  `branch-profile/[branchId]` 863줄 포함)
+- `app/api/board/diet/generate-pdf/route.ts` 269줄
+  — ★함정 주의★ 같은 `app/api/board/diet/` 아래 `templates`
+  계열 426줄은 살아있다(`erp/(protected)/diet/templates/page.tsx:271,343,363,401,411`이
+  호출). `generate-pdf` 폴더만 지웠다 — 착오로 `api/board/diet/`
+  전체를 지우지 말 것
+- `components/board/AdminMobileNav.tsx` 조건문 3줄,
+  `lib/admin-tabs.ts`의 `getActiveAdminTab` 구경로 호환 조건도 정리
+- `next.config.mjs`의 `/board/admin/diet-automation/*` 리다이렉트는
+  그대로 유지(`diet` 본체와는 별개 항목)
+
+### 남은 후보 (미착수)
+
+- `/board/admin/diet/*` → `/erp/diet` 리다이렉트 추가는 보류
+  (화이트리스트 가드가 이미 허브로 보내므로 우선순위 낮음)
 
 ---
 
