@@ -408,7 +408,10 @@ function DietAutomationContent() {
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      // a.download 미지정 - 서버 Content-Disposition(한글명)에 일임
+      // blob: URL엔 Content-Disposition이 없어 브라우저가 파일명을 모른다(UUID로 저장됨) - 클라이언트에서 직접 지정
+      const yy = String(pptxYear % 100).padStart(2, '0')
+      const mm = String(pptxMonth).padStart(2, '0')
+      a.download = `키즈밀_식단표_${yy}_${mm}_v6.xlsx`
       document.body.appendChild(a)
       a.click()
       a.remove()
