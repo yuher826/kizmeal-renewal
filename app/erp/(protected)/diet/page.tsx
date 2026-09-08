@@ -1010,7 +1010,7 @@ function DietAutomationContent() {
               <ChevronRightIcon size={16} className="text-gray-300 group-hover:text-[#2D6A4F] transition-colors shrink-0" />
             </Link>
             <Link
-              href="/board/admin/diet/branch-profile"
+              href="/erp/branches"
               className="group flex items-center gap-3 px-4 py-3 rounded-xl bg-white border border-gray-200 hover:border-[#2D6A4F] transition-colors shadow-sm"
             >
               <span className="flex items-center justify-center w-9 h-9 rounded-lg bg-[#F6FAF6] text-[#2D6A4F] shrink-0">
@@ -1236,7 +1236,7 @@ function DietAutomationContent() {
                                 <p className="text-xs text-gray-400 truncate mt-0.5">{row.deployEmail}</p>
                               ) : row.branchId ? (
                                 <Link
-                                  href={`/board/admin/diet/branch-profile/${row.branchId}`}
+                                  href={`/erp/branches/${row.branchId}`}
                                   className="text-xs text-red-400 hover:underline mt-0.5 inline-block"
                                 >
                                   이메일 미설정 →
@@ -1288,7 +1288,7 @@ function DietAutomationContent() {
                                 <span className="text-xs text-gray-500 truncate block">{row.deployEmail}</span>
                               ) : row.branchId ? (
                                 <Link
-                                  href={`/board/admin/diet/branch-profile/${row.branchId}`}
+                                  href={`/erp/branches/${row.branchId}`}
                                   className="inline-flex items-center gap-1 text-xs text-red-500 hover:underline"
                                   title="원 프로파일에서 이메일을 설정해주세요"
                                 >
