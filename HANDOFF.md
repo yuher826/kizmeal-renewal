@@ -3,7 +3,53 @@
 > 이 파일은 항상 **"지금 상태"만** 담는다. 매 세션 끝에 최신 상태로 덮어쓴다.
 > 과거 이력은 `git log HANDOFF.md`로 본다.
 
-**최종 갱신:** 2026-09-07(4차) — ★`board/admin` 화이트리스트 가드
+**최종 갱신:** 2026-09-08 — ★`board/admin` 전수 조사 완료 +
+지난 세션(09-07 4차) 기록 정정 3건★(조사·문서 정정만, 코드 변경
+없음). `/board/admin` 전체 5,686줄을 실측했다 — 살아있는 경로가
+정확히 `ADMIN_TABS` 허용 5계열(`content`·`notices`·`parents`·
+`parent-inquiries`·`service-inquiries`, 허브 `page.tsx`·`layout.tsx`
+포함)과 삭제 대상 3계열(`diet/*` 2,082줄·`public-inquiries/*`
+515줄·`stats` 201줄, 외부링크 전부 0건)로 정확히 갈렸다. ★지난
+기록 정정 3건★ — ① `stats`는 이미 `next.config.mjs:61`에 `/erp/stats`
+리다이렉트가 걸려 있고 내용도 바이트 단위 동일한 도달 불가능한
+죽은 복사본이었다(09-07(4차) 기록엔 "대조 필요"로만 적혀 있었음).
+② `public-inquiries`는 "`service-inquiries`와 두 세대 혼재"가
+아니라 완전한 고아였다 — 09-07(4차) 기록이 인용한 줄번호
+(`service-inquiries/page.tsx:555,628,635,644`)가 실제로는 존재하지
+않는 줄번호였다(파일이 268줄). grep 결과의 줄번호만 보고 판단한
+실수 — 원칙에 그대로 걸렸다. ③ `branch-profile`(863줄)은 "ERP로
+이전"이 아니라 삭제 대상이다 — ERP에 이미 완전한 후계
+(`app/erp/(protected)/branches/[id]`, 서버 인증 +
+`BRANCH_ACCOUNT_ROLES`/`BRANCH_PROFILE_EDIT_ROLES` + `/api/branch-profiles/*`
+8종)가 있는데 board 쪽은 `'use client'` 단일 파일에 인증이 0건인
+구세대였다. 이 세션에서 `app/erp/(protected)/diet/page.tsx`의
+`branch-profile` 링크 3건(원래 죽은 링크 — 1건은 404, 2건은
+`weekly_menus.branch_id`를 `branch_id`로 잘못 조회해 빈 결과)을
+`/erp/branches`·`/erp/branches/${row.branchId}`로 전환 완료(커밋
+`049e083`). ★DB 함정 신규 기록★ — `weekly_menus.branch_id` 컬럼은
+이름과 달리 `branch_profiles.id`를 담는다(SQL 실측: 5행 전부
+`profile_id` 매칭 1 / `branch_id` 매칭 0). `erp/diet`의 `profileMap`이
+`p.id`를 키로 쓰는 것은 정상 — 앞으로 이 컬럼을 `branches.id`로
+오해하지 말 것. ★화이트리스트 확정안★ 별도 상수 불필요,
+`ADMIN_TABS`의 `href` 5개가 그대로 허용 목록이다. 예외 1건 —
+`/board/admin` 루트(허브)는 `ADMIN_TABS`에 없으므로 따로 허용해야
+한다. 현재 `middleware.ts`는 `pathname.startsWith('/board/admin')`
+한 줄로 통째 판정한다(블랙리스트조차 아님 — 관리자면 전부 열림).
+다음 순서는 ②화이트리스트 가드 신설(middleware가 `ADMIN_TABS`를
+SSOT로 읽는다) ③2,798줄 삭제(착수 전 `diet_pdfs` 실데이터 count
+확인). 자세한 내용은 아래 "`board/admin` 접근 제어" 섹션 참고.
+★이번 세션 부수 발견, 별건 판단 대기★ `branch_profiles.contract_type`
+실측 NULL 49 / `temporary` 4 / `permanent` 0. 코드는 "temporary가
+아니면 장기"로 동작해(뱃지·PPTX 검증 분기) 현재 동작은 정상이지만,
+`BranchProfileForm.tsx:285`가 이 필드를 필수로 잡아 NULL인 49개
+원은 상세에서 저장을 누르면(배포 이메일 하나만 고치려 해도)
+"계약유형을 선택해주세요"로 막힌다. 해법 후보는
+`update branch_profiles set contract_type='permanent' where
+contract_type is null`(동작 변화 없이 검증·데이터만 일치)이나,
+★선결 확인★ 임시 4곳 외 나머지가 전부 장기 계약이 맞는지 유대표님
+확인 먼저 필요 — 아직 착수 안 함.
+
+**2026-09-07(4차) 갱신:** ★`board/admin` 화이트리스트 가드
 설계 방향 확정(설계만, 코드 변경 없음)★. `diet` 클러스터를 조사하며
 "메뉴에서 지웠다"와 "접근이 막혔다"가 다른 층인데 `board` 쪽은
 메뉴 제거·링크 제거 두 층까지만 돼 있음을 확인했다 — 라우트 삭제
@@ -294,7 +340,7 @@ select 한 줄만 고치면 6곳이 따라온다(아래 권한 섹션 갱신분 
 
 ---
 
-## 🔍 `board/admin` 접근 제어 — 화이트리스트로 뒤집기 (2026-09-07 설계 방향, 코드 변경 없음)
+## 🔍 `board/admin` 접근 제어 — 화이트리스트로 뒤집기 (2026-09-08 전수 조사 완료, 코드 변경 없음)
 
 **문제의 본질** — "메뉴에서 지웠다"와 "접근이 막혔다"가 다른 층인데
 `board` 쪽은 앞의 두 층만 돼 있다.
@@ -320,37 +366,77 @@ select 한 줄만 고치면 6곳이 따라온다(아래 권한 섹션 갱신분 
 지금은 메뉴를 그리는 데만 쓰는데 middleware가 같은 상수를 읽어 가드로도
 쓰면 된다. ERP에서 `lib/erp-access.ts`로 한 것과 같은 구조(SSOT).
 
-### 실측 — 메뉴 허용 목록 vs 실제 살아있는 경로 (2026-09-07)
+### 전수 실측 결과 (2026-09-08, `/board/admin` 5,686줄 전부 확인)
 
-`ADMIN_TABS` 허용 5개:
+유지 5계열 = `ADMIN_TABS` 허용 목록과 정확히 일치:
 ```
-content / notices / parents / parent-inquiries / service-inquiries
-```
-
-메뉴에 없는데 살아있는 경로 3계열:
-```
-diet/*              2,082줄  ERP 후계 전부 있음 → 정리 대상(위 섹션 참고)
-public-inquiries/*    515줄  ★신규 발견★ service-inquiries와 두 세대 혼재
-                             getActiveAdminTab이 "구 public-inquiries 경로도
-                             포함"이라 주석까지 달아 탭을 service로 잡아주는데,
-                             정작 service-inquiries 목록 화면이
-                             public-inquiries/[id]로 링크한다(:555,628,635,644).
-                             어느 쪽이 정식인지 판단 필요
-stats                201줄  ERP에 /erp/stats 존재 — 대조 필요
+content 722 / notices 290 / parents 290 /
+parent-inquiries 557 / service-inquiries 559
++ page.tsx 436(허브) + layout.tsx 34
 ```
 
-### 착수 순서 (다음 세션)
+삭제 대상 2,798줄 (전부 외부링크 0건 확인):
+```
+diet/*              2,082줄  branch-profile 3건은 이번 세션에 ERP로 전환됨
+                             (아래 diet 클러스터 섹션 참고) — 나머지는 삭제 대상
+public-inquiries/*    515줄  외부링크 0
+stats                201줄  외부링크 0, /erp/stats 리다이렉트 이미 있음
++ components/board/AdminMobileNav.tsx 조건문 3줄(diet/public-inquiries/stats)
++ lib/admin-tabs.ts:70 getActiveAdminTab 구경로 호환 조건
+```
 
-1. `/board/admin/*` 전수 조사 — ERP 후계가 있는 것 / board에 남아야 할 것
+### ★정정 3건★ — 09-07(4차) 기록이 틀렸다 (2026-09-08 전수 조사로 확인)
+
+① **stats**: "ERP에 `/erp/stats` 존재 — 대조 필요"라고만 적었었으나,
+실은 이미 `next.config.mjs:61`에 `/erp/stats` 리다이렉트가 걸려 있고
+내용도 `erp/stats`와 바이트 단위 완전 동일했다. 도달 자체가
+불가능한 죽은 복사본 — 대조할 필요가 없었다.
+
+② **public-inquiries**: "service-inquiries와 두 세대 혼재"라고
+적었으나 실은 완전한 고아였다. 근거로 인용한 줄번호
+(`service-inquiries/page.tsx:555,628,635,644`)가 실제로는 존재하지
+않았다 — 그 파일은 268줄뿐이다. `public-inquiries` 네 곳 모두
+자기 상세로만 링크한다(외부 링크 0건). grep 결과의 줄번호만 보고
+판단한 실수 — "grep 줄번호만 보고 판단하지 말 것" 원칙에 그대로
+걸렸다.
+
+③ **branch-profile**(863줄): "ERP로 이전"이 아니라 **삭제 대상**이다.
+ERP에 이미 후계 화면이 완비돼 있다 — `app/erp/(protected)/branches/[id]`
+(서버 인증 + `BRANCH_ACCOUNT_ROLES`/`BRANCH_PROFILE_EDIT_ROLES` +
+`/api/branch-profiles/*` 8종). board 쪽은 `'use client'` 단일 파일에
+인증 로직이 0건인 구세대였다. 이 파일로 들어오던 링크 3건
+(`erp/(protected)/diet/page.tsx:1013,1239,1291`)은 이번 세션에
+`/erp/branches`·`/erp/branches/${row.branchId}`로 전환 완료했다
+(커밋 `049e083`) — 원래도 죽은 링크였다(1건은 대상 라우트 자체가
+없어 404, 2건은 `weekly_menus.branch_id`를 `.eq('branch_id', …)`로
+조회해 항상 빈 결과였음. 아래 ★DB 함정★ 참고).
+
+### ★DB 함정★ `weekly_menus.branch_id`
+
+`weekly_menus.branch_id` 컬럼은 이름과 달리 **`branch_profiles.id`를
+담는다**(SQL 실측: 5행 전부 `profile_id` 매칭 1 / `branch_id` 매칭 0).
+`erp/diet`의 `profileMap`이 `p.id`(branch_profiles.id)를 키로 쓰는
+것은 이 사실에 맞는 정상 동작이다 — 앞으로 이 컬럼을 `branches.id`로
+오해하지 말 것.
+
+### 화이트리스트 확정안
+
+`ADMIN_TABS`의 `href` 5개가 그대로 허용 목록이다. 별도 상수 불필요.
+예외 1건 — `/board/admin` 루트(허브)는 `ADMIN_TABS`에 없으므로
+따로 허용해야 한다. 현재 `middleware.ts`는
+`pathname.startsWith('/board/admin')` 한 줄로 통째 판정한다
+(블랙리스트조차 아님 — 관리자면 `board/admin` 전부 열림).
+
+### 착수 순서
+
+1. ~~`/board/admin/*` 전수 조사~~ — 완료(2026-09-08, 위 실측 결과)
 2. `ADMIN_TABS` 기준 화이트리스트 가드를 middleware에 신설
-   ⚠️ 허용 목록을 잘못 만들면 멀쩡한 화면이 막힌다. ERP는 1~4단계에 걸쳐
-      실측하며 갔으나 board는 그 작업을 안 했다 — 조사가 먼저다
-3. 가드가 선 뒤에 diet 클러스터·public-inquiries 삭제
-   (이 순서면 권팀장 북마크 여부를 물을 필요가 없다 — 가드가 이미 ERP로 보낸다)
+   (middleware가 `ADMIN_TABS`를 SSOT로 읽는다)
+3. 2,798줄 삭제 — 착수 전 `diet_pdfs` 실데이터 count 확인
 
 ---
 
-## 🔍 `board/admin/diet` 클러스터 — 다음 세션 판단 필요 (2026-09-07 조사, 코드 변경 없음)
+## 🔍 `board/admin/diet` 클러스터 — 삭제 대상 확정 (2026-09-07 조사 / 2026-09-08 정정, 코드 변경 없음)
 
 권한 5단계 준비 중 `/api/board/diet/generate-pdf`(269줄, `getUser` 없음)를
 조사하다 발견. 실측 결과:
@@ -366,7 +452,16 @@ stats                201줄  ERP에 /erp/stats 존재 — 대조 필요
   branch-profile/[branchId]   863줄
   ```
 - `ADMIN_TABS`에 diet 항목 없음. 외부 진입점은 `branch-profile` 하나뿐
-  (`erp/(protected)/diet/page.tsx:1013,1239,1291`에서 링크)
+  이었다(`erp/(protected)/diet/page.tsx:1013,1239,1291`에서 링크) —
+  ★2026-09-08 갱신★ 이 3개 링크는 이미 죽은 링크였다(1건은 대상
+  라우트가 없어 404, 2건은 `weekly_menus.branch_id`가 실은
+  `branch_profiles.id`를 담고 있는데 board 화면이 `.eq('branch_id', …)`로
+  조회해 항상 빈 결과 — 위 "`board/admin` 접근 제어" 섹션의 ★DB
+  함정★ 참고). `/erp/branches`·`/erp/branches/${row.branchId}`로
+  전환 완료(커밋 `049e083`) — 이제 `branch-profile`의 외부 진입점도
+  0건이라 `page`·`upload`·`generate`·`deploy`·`[branchId]`·`templates`와
+  같은 처지의 완전한 고아다. "ERP로 이전"할 게 아니라 **삭제 대상**
+  863줄로 재분류
 - 나머지 6개는 `page.tsx → upload → generate → deploy`로 자기들끼리만 연결
 - ERP에 후계 화면이 전부 존재: `/erp/diet`, `/erp/diet/templates`,
   `/erp/upload`, `/erp/review`, `/erp/history`
@@ -391,8 +486,8 @@ stats                201줄  ERP에 /erp/stats 존재 — 대조 필요
 
 ### 작업 후보
 
-- 삭제 1,219줄(6개 화면) + `generate-pdf` API 269줄
-- 이전 863줄: `branch-profile/[branchId]` → ERP로
+- 삭제 2,082줄(7개 화면 전부 — `branch-profile/[branchId]` 863줄
+  포함, 2026-09-08 재분류) + `generate-pdf` API 269줄
 - `/board/admin/diet/*` → `/erp/diet` 리다이렉트 추가 (오전 패턴)
 
 ---
