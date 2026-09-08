@@ -38,16 +38,18 @@
 다음 순서는 ②화이트리스트 가드 신설(middleware가 `ADMIN_TABS`를
 SSOT로 읽는다) ③2,798줄 삭제(착수 전 `diet_pdfs` 실데이터 count
 확인). 자세한 내용은 아래 "`board/admin` 접근 제어" 섹션 참고.
-★이번 세션 부수 발견, 별건 판단 대기★ `branch_profiles.contract_type`
-실측 NULL 49 / `temporary` 4 / `permanent` 0. 코드는 "temporary가
-아니면 장기"로 동작해(뱃지·PPTX 검증 분기) 현재 동작은 정상이지만,
+★이번 세션 부수 발견★ `branch_profiles.contract_type` 실측 NULL 49 /
+`temporary` 4 / `permanent` 0. 코드는 "temporary가 아니면 장기"로
+동작해(뱃지·PPTX 검증 분기) 현재 동작은 정상이지만,
 `BranchProfileForm.tsx:285`가 이 필드를 필수로 잡아 NULL인 49개
 원은 상세에서 저장을 누르면(배포 이메일 하나만 고치려 해도)
-"계약유형을 선택해주세요"로 막힌다. 해법 후보는
-`update branch_profiles set contract_type='permanent' where
-contract_type is null`(동작 변화 없이 검증·데이터만 일치)이나,
-★선결 확인★ 임시 4곳 외 나머지가 전부 장기 계약이 맞는지 유대표님
-확인 먼저 필요 — 아직 착수 안 함.
+"계약유형을 선택해주세요"로 막힌다.
+→ 처리 완료: `update branch_profiles set contract_type='permanent'
+   where contract_type is null;` (Supabase SQL Editor 수동 실행,
+   2026-09-08) 실행 후 `permanent` 49 / `temporary` 4 확인.
+   동작 변화 없음 — 코드는 원래 "temporary가 아니면 장기"로
+   처리해왔고, `BranchProfileForm.tsx:285`의 필수 검증과 데이터를
+   일치시킨 것뿐이다. 코드 수정 없음.
 
 **2026-09-07(4차) 갱신:** ★`board/admin` 화이트리스트 가드
 설계 방향 확정(설계만, 코드 변경 없음)★. `diet` 클러스터를 조사하며
