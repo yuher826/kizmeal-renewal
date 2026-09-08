@@ -588,12 +588,21 @@ export async function POST(req: NextRequest) {
       .is('branch_id', null)
       .maybeSingle()
 
+    // 도시락 날짜를 저장 시점에 정규화 ('N월 N일' 원본 → 'YYYY-MM-DD').
+    // pptx_generator._build_dosirak_map 이 iso 날짜로 조회하므로 DB에는
+    // 정규화된 값을 저장해야 매칭된다. 검증·집계(countDosirakPerWeek)는
+    // 내부에서 어차피 다시 정규화하므로 원본 dosirak 을 그대로 쓴다.
+    const dosirakNormalized = dosirak.map(item => ({
+      ...item,
+      date: normalizeDosirakDate(item.date, year),
+    }))
+
     const menuData = {
       source: 'excel_upload',
       year,
       month,
       weeks: weeks.reduce((acc, w) => { acc[w.week_num] = w; return acc }, {} as Record<number, ParsedWeek>),
-      dosirak,
+      dosirak: dosirakNormalized,
     }
 
     let saveError
