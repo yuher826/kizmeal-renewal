@@ -75,3 +75,24 @@ export function getActiveAdminTab(pathname: string): AdminTabKey {
   // 대시보드 포함 나머지는 홈페이지&포털
   return 'home'
 }
+
+/**
+ * 허용 목록 밖 /board/admin/* 를 전부 닫는다.
+ * 목록의 출처는 ADMIN_TABS 하나뿐 — 메뉴에서 지우면 접근도 함께 닫힌다.
+ *
+ * `/` 경계를 붙이는 이유 — 단순 startsWith면 /board/admin/notices 가
+ * /board/admin/notices-old 같은 경로까지 삼킨다.
+ * (lib/erp-access.ts canAccessErpPage와 같은 이유)
+ *
+ * 최장 prefix 매칭은 두지 않는다 — ERP는 규칙마다 allow 함수가 달라
+ * 어느 규칙이 이기는지가 결과를 바꾸지만, 여기는 판정이 boolean 하나라
+ * 겹쳐도 결과가 같다.
+ */
+export function canAccessAdminPage(pathname: string): boolean {
+  if (pathname === '/board/admin') return true   // 허브는 ADMIN_TABS에 없다
+  return ADMIN_TABS.some(tab =>
+    tab.items.some(item =>
+      pathname === item.href || pathname.startsWith(`${item.href}/`)
+    )
+  )
+}

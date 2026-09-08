@@ -2,6 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import { ROUTES } from '@/lib/routes'
 import { canAccessErpPage, landingPathFor } from '@/lib/erp-access'
+import { canAccessAdminPage } from '@/lib/admin-tabs'
 
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
@@ -67,6 +68,16 @@ export async function middleware(request: NextRequest) {
   if (!user && (isCustomerRoute || isAdminRoute || isChangePassword)) {
     const url = request.nextUrl.clone()
     url.pathname = '/board/login'
+    return NextResponse.redirect(url)
+  }
+
+  // ── Board admin 화이트리스트 가드 ──────────────────────────
+  // 허용 목록(ADMIN_TABS) 밖 경로는 전부 허브로 착지시킨다.
+  // role 판정이 필요 없으므로 admins 조회를 하지 않는다.
+  if (user && isAdminRoute && !canAccessAdminPage(pathname)) {
+    const url = request.nextUrl.clone()
+    url.pathname = '/board/admin'
+    url.search = ''
     return NextResponse.redirect(url)
   }
 
