@@ -17,10 +17,7 @@ function getPageTitle(pathname: string, searchParams: URLSearchParams): string {
   if (pathname.startsWith('/board/admin/content'))          return '콘텐츠 관리'
   if (pathname.startsWith('/board/admin/parent-inquiries')) return '학부모 문의'
   if (pathname.startsWith('/board/admin/service-inquiries'))return '서비스 문의'
-  if (pathname.startsWith('/board/admin/public-inquiries')) return '서비스 문의'
-  if (pathname.startsWith('/board/admin/diet'))             return '식단표 자동화'
   if (pathname.startsWith('/board/admin/parents'))          return '학부모 승인'
-  if (pathname.startsWith('/board/admin/stats'))            return '통계'
   if (pathname === '/board/admin')                          return '대시보드'
   return '소통채널'
 }

@@ -64,11 +64,8 @@ export function getActiveAdminTab(pathname: string): AdminTabKey {
     return 'home'
   }
 
-  // 서비스 문의 (구 public-inquiries 경로도 포함)
-  if (
-    pathname.startsWith('/board/admin/service-inquiries') ||
-    pathname.startsWith('/board/admin/public-inquiries')
-  ) {
+  // 서비스 문의
+  if (pathname.startsWith('/board/admin/service-inquiries')) {
     return 'service'
   }
 
