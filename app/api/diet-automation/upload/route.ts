@@ -83,6 +83,15 @@ function excelSerialToDay(serial: number): number {
   return jsDate.getUTCDate()
 }
 
+// ── Excel serial → ISO 날짜 (도시락 시트 전용) ─────────────────────────
+function excelSerialToIso(serial: number): string {
+  const d = new Date((serial - 25569) * 86400 * 1000)
+  const y = d.getUTCFullYear()
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0')
+  const dd = String(d.getUTCDate()).padStart(2, '0')
+  return `${y}-${m}-${dd}`
+}
+
 // ── 날짜 헤더 파싱 ────────────────────────────────────────────────────
 function parseDateCell(
   raw: unknown,
@@ -220,7 +229,10 @@ function parseDosirakSheet(sheet: XLSX.WorkSheet): DosirakItem[] {
   const items: DosirakItem[] = []
   for (let i = 3; i < rows.length; i++) {
     const row = rows[i] as unknown[]
-    const date       = String(row[0] ?? '').trim()
+    const rawDate = row[0]
+    const date = typeof rawDate === 'number'
+      ? excelSerialToIso(rawDate)
+      : String(rawDate ?? '').trim()
     const branchName = String(row[1] ?? '').trim()
     const type       = String(row[2] ?? '').trim()
     const menu       = String(row[3] ?? '').trim()
@@ -254,7 +266,7 @@ function suggestBranchName(input: string): string {
 // ── 도시락 날짜 정규화 (N/N → YYYY-MM-DD) ─────────────────────────────
 function normalizeDosirakDate(raw: string, year: number): string {
   if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw
-  const m = raw.match(/(\d+)[\/월](\d+)/)
+  const m = raw.match(/(\d+)\s*[\/월]\s*(\d+)/)
   if (m) {
     return `${year}-${String(parseInt(m[1])).padStart(2,'0')}-${String(parseInt(m[2])).padStart(2,'0')}`
   }
