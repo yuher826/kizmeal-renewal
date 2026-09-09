@@ -61,6 +61,7 @@ type DosirakItem = {
   type: string
   menu: string
   note: string
+  excel_row: number      // 실제 엑셀 행번호 (에러 위치 표기용)
 }
 
 type ValidationIssue = { location: string; message: string; suggestion: string }
@@ -238,7 +239,7 @@ function parseDosirakSheet(sheet: XLSX.WorkSheet): DosirakItem[] {
     const menu       = String(row[3] ?? '').trim()
     const note       = String(row[4] ?? '').trim()
     if (!date && !branchName && !menu) continue
-    items.push({ date, branch_name: branchName, type, menu, note })
+    items.push({ date, branch_name: branchName, type, menu, note, excel_row: i + 1 })
   }
   return items
 }
@@ -277,6 +278,8 @@ function normalizeDosirakDate(raw: string, year: number): string {
 function runValidations(
   weeks: ParsedWeek[],
   dosirak: DosirakItem[],
+  year: number,
+  month: number,
 ): { errors: ValidationIssue[]; warnings: ValidationIssue[] } {
   const errors: ValidationIssue[] = []
   const warnings: ValidationIssue[] = []
@@ -440,22 +443,77 @@ function runValidations(
     }
   }
 
-  // ── 규칙9: 도시락 원명 + 메뉴 검증 ──────────────────────────────
-  dosirak.forEach((item, idx) => {
-    const rowLabel = `도시락 시트 ${idx + 4}행`
-    if (item.branch_name && !VALID_BRANCHES.includes(item.branch_name)) {
+  // ── 규칙9: 도시락 필수값 · 원명 · 날짜 · 중복 검증 ──────────────────
+  const seenDosirak = new Map<string, number>()   // 'branch|iso' → 엑셀 행번호
+  dosirak.forEach(item => {
+    const rowLabel = `도시락 시트 ${item.excel_row}행`
+
+    // ── A. 필수값 누락 ────────────────────────────────────────
+    const missing: string[] = []
+    if (!item.date.trim())        missing.push('날짜')
+    if (!item.branch_name.trim()) missing.push('원명')
+    if (!item.menu.trim())        missing.push('메뉴')
+    if (missing.length > 0) {
+      errors.push({
+        location: rowLabel,
+        message: `${missing.join(', ')}이(가) 비어 있습니다`,
+        suggestion: '날짜·원명·메뉴는 모두 필수입니다',
+      })
+      return
+    }
+
+    // ── B. 원명 유효성 ────────────────────────────────────────
+    const validBranch = VALID_BRANCHES.includes(item.branch_name)
+    if (!validBranch) {
       errors.push({
         location: rowLabel,
         message: `원명 '${item.branch_name}'을 인식할 수 없습니다`,
         suggestion: suggestBranchName(item.branch_name),
       })
     }
-    if (item.branch_name && !item.menu.trim()) {
+
+    // ── C. 날짜 검사 ──────────────────────────────────────────
+    const iso = normalizeDosirakDate(item.date, year)
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) {
       errors.push({
         location: rowLabel,
-        message: '메뉴 내용이 비어있습니다',
-        suggestion: '메뉴 내용을 입력해주세요',
+        message: `날짜 '${item.date}' 를 인식할 수 없습니다`,
+        suggestion: "'10월 5일 (월)' 또는 '10/5' 형식으로 입력해주세요",
       })
+      return
+    }
+
+    if (!iso.startsWith(`${year}-${String(month).padStart(2,'0')}-`)) {
+      errors.push({
+        location: rowLabel,
+        message: `날짜 '${item.date}' 가 ${year}년 ${month}월 범위를 벗어납니다`,
+        suggestion: '해당 월의 날짜만 입력해주세요',
+      })
+      return
+    }
+
+    const dateExists = weeks.some(w => !w.is_skipped && w.days.some(d => d.date === iso))
+    if (!dateExists) {
+      errors.push({
+        location: rowLabel,
+        message: `날짜 '${item.date}' 에 해당하는 식단표 칸이 없습니다`,
+        suggestion: '주말이거나 그 달에 없는 날짜인지 확인해주세요',
+      })
+      return
+    }
+
+    // ── D. 같은 원 · 같은 날짜 중복 ───────────────────────────
+    if (!validBranch) return
+    const key = `${item.branch_name}|${iso}`
+    if (seenDosirak.has(key)) {
+      errors.push({
+        location: rowLabel,
+        message: `${item.branch_name} 의 ${iso} 도시락이 ${seenDosirak.get(key)}행과 중복입니다`,
+        suggestion: '한 원의 같은 날짜는 한 줄로 합쳐주세요',
+      })
+    } else {
+      seenDosirak.set(key, item.excel_row)
     }
   })
 
@@ -556,7 +614,7 @@ export async function POST(req: NextRequest) {
   const dosirak = parseDosirakSheet(workbook.Sheets['🍱 도시락·대체식 요청'])
 
   // Step 4: 검증
-  const { errors, warnings } = runValidations(weeks, dosirak)
+  const { errors, warnings } = runValidations(weeks, dosirak, year, month)
 
   // 요약 계산
   const dosirakPerWeek = countDosirakPerWeek(weeks, dosirak, year)
