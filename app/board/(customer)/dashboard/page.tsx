@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { KIZMEAL_LOGO_PATH } from '@/lib/brand'
 import { ROUTES } from '@/lib/routes'
-import type { Inquiry, Branch, Notification, SlaRule } from '@/lib/types'
+import type { Inquiry, Branch, Notification } from '@/lib/types'
 import InquiryCard from '@/components/board/InquiryCard'
 import AccountMismatchNotice from '@/components/board/AccountMismatchNotice'
 
@@ -23,7 +23,6 @@ export default function CustomerDashboardPage() {
   const [branch, setBranch] = useState<Branch | null>(null)
   const [inquiries, setInquiries] = useState<Inquiry[]>([])
   const [notifications, setNotifications] = useState<Notification[]>([])
-  const [slaRules, setSlaRules] = useState<Record<string, SlaRule>>({})
   const [loading, setLoading] = useState(true)
   const [noBranch, setNoBranch] = useState(false)
   const [userEmail, setUserEmail] = useState<string | null>(null)
@@ -64,14 +63,6 @@ export default function CustomerDashboardPage() {
         // ★branchId(실제 연결 여부)로만 판정 — memberRow.branches 조인이 null이어도
         // branchId 자체는 유효할 수 있어 branch 객체 유무로 판정하면 오안내 위험이 있음
         if (!branchId) { setNoBranch(true); return }
-
-        // Load SLA rules
-        const { data: rules } = await supabase.from('sla_rules').select('*')
-        if (rules) {
-          const rulesMap: Record<string, SlaRule> = {}
-          rules.forEach(r => { rulesMap[r.category] = r })
-          setSlaRules(rulesMap)
-        }
 
         // Load recent inquiries (last 5)
         const { data: inq } = await supabase
@@ -246,7 +237,6 @@ export default function CustomerDashboardPage() {
                 <InquiryCard
                   key={inq.id}
                   inquiry={inq}
-                  slaRules={slaRules}
                   href={`/board/inquiries/${inq.id}`}
                   unreadCount={inq.unread_count_branch}
                 />

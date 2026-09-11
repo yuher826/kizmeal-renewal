@@ -1,11 +1,14 @@
 import Link from 'next/link'
-import { CATEGORY_COLORS, CATEGORY_ICONS, CATEGORY_LABELS, type Inquiry, type SlaRule } from '@/lib/types'
+import { CATEGORY_COLORS, CATEGORY_ICONS, CATEGORY_LABELS, type Inquiry } from '@/lib/types'
 import StatusBadge from './StatusBadge'
-import SlaBadge from './SlaBadge'
+
+// SLA 배지는 고객사 화면에 노출하지 않는다.
+// 응답 시간은 내부 관리 지표이며, 고객사에 보이면 약속이 되어
+// 항의 근거가 된다. ERP(/erp/inquiries)에서만 표시한다.
+// 2026-09-11 제거.
 
 interface Props {
   inquiry: Inquiry
-  slaRules?: Record<string, SlaRule>
   href: string
   showBranch?: boolean
   unreadCount?: number
@@ -34,8 +37,7 @@ function fullDateTime(isoString: string) {
   })
 }
 
-export default function InquiryCard({ inquiry, slaRules, href, showBranch = false, unreadCount, matchPreview }: Props) {
-  const rule = slaRules?.[inquiry.category]
+export default function InquiryCard({ inquiry, href, showBranch = false, unreadCount, matchPreview }: Props) {
   const lastMessage = inquiry.messages?.[0]
   const preview = lastMessage?.content?.slice(0, 80) || '내용 없음'
 
@@ -48,7 +50,6 @@ export default function InquiryCard({ inquiry, slaRules, href, showBranch = fals
               {CATEGORY_ICONS[inquiry.category]} {CATEGORY_LABELS[inquiry.category]}
             </span>
             <StatusBadge status={inquiry.status} />
-            {rule && <SlaBadge inquiry={inquiry} rule={rule} />}
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
             {(unreadCount ?? 0) > 0 && (

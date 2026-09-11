@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { ROUTES } from '@/lib/routes'
-import type { Inquiry, InquiryStatus, SlaRule } from '@/lib/types'
+import type { Inquiry, InquiryStatus } from '@/lib/types'
 import { STATUS_LABELS } from '@/lib/types'
 import InquiryCard from '@/components/board/InquiryCard'
 import AccountMismatchNotice from '@/components/board/AccountMismatchNotice'
@@ -21,7 +21,6 @@ const TABS: { label: string; value: InquiryStatus | 'all' }[] = [
 export default function CustomerInquiriesPage() {
   const router = useRouter()
   const [inquiries, setInquiries] = useState<Inquiry[]>([])
-  const [slaRules, setSlaRules] = useState<Record<string, SlaRule>>({})
   const [activeTab, setActiveTab] = useState<InquiryStatus | 'all'>('all')
   // 대화 내용 검색(권팀장 요청 8-2). 이 화면은 이미 각 문의의 messages를
   // 통째로 로드해와서(위 select 참고) 별도 DB 조회 없이 클라이언트에서
@@ -68,13 +67,6 @@ export default function CustomerInquiriesPage() {
         }
 
         if (!branchId) { setNoBranch(true); return }
-
-        const { data: rules } = await supabase.from('sla_rules').select('*')
-        if (rules) {
-          const map: Record<string, SlaRule> = {}
-          rules.forEach(r => { map[r.category] = r })
-          setSlaRules(map)
-        }
 
         const { data: inq } = await supabase
           .from('inquiries')
@@ -207,7 +199,6 @@ export default function CustomerInquiriesPage() {
               <InquiryCard
                 key={inq.id}
                 inquiry={inq}
-                slaRules={slaRules}
                 href={`/board/inquiries/${inq.id}`}
                 unreadCount={inq.unread_count_branch}
                 matchPreview={matchPreviewFor(inq)}

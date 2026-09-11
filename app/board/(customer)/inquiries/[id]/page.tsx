@@ -3,11 +3,10 @@
 import { useEffect, useState, useRef, useCallback, Fragment } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
-import type { Inquiry, Message, SlaRule } from '@/lib/types'
+import type { Inquiry, Message } from '@/lib/types'
 import { CATEGORY_ICONS } from '@/lib/types'
 import MessageBubble from '@/components/board/MessageBubble'
 import StatusBadge from '@/components/board/StatusBadge'
-import SlaBadge from '@/components/board/SlaBadge'
 import FileUpload from '@/components/board/FileUpload'
 import { useNotifier } from '@/lib/useNotifier'
 import NotifyToggleButton from '@/components/NotifyToggleButton'
@@ -22,7 +21,6 @@ export default function CustomerInquiryDetailPage({ params }: { params: { id: st
   const { id } = params
   const [inquiry, setInquiry] = useState<Inquiry | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
-  const [slaRule, setSlaRule] = useState<SlaRule | undefined>()
   const [content, setContent] = useState('')
   const [files, setFiles] = useState<File[]>([])
   const [sending, setSending] = useState(false)
@@ -58,12 +56,6 @@ export default function CustomerInquiryDetailPage({ params }: { params: { id: st
 
       if (inq) {
         setInquiry(inq as unknown as Inquiry)
-        const { data: rule } = await supabase
-          .from('sla_rules')
-          .select('*')
-          .eq('category', inq.category)
-          .maybeSingle()
-        if (rule) setSlaRule(rule as SlaRule)
       }
 
       const { data: msgs } = await supabase
@@ -293,7 +285,6 @@ export default function CustomerInquiryDetailPage({ params }: { params: { id: st
           <div className="flex items-center gap-2 flex-shrink-0">
             <NotifyToggleButton enabled={notifyOn} onToggle={toggleNotify} />
             {inquiry && <StatusBadge status={inquiry.status} />}
-            {inquiry && slaRule && <SlaBadge inquiry={inquiry} rule={slaRule} />}
           </div>
         </div>
 
