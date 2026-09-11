@@ -33,12 +33,16 @@ export async function GET(req: NextRequest) {
   const generating = list.filter(r => r.status === 'generating').length
 
   // 활성 계약원 수를 DB에서 조회 (하드코딩 49 대신)
+  // 생성 대상 = active AND short_code 있음 AND contract_type != temporary
+  // (pptx-server/branch_filters.py 의 is_eligible_for_pptx 와 같은 규칙)
+  // neq 금지 — NULL 행이 함께 탈락한다. or(is.null, neq) 로 쓸 것.
   const { count: branchCount } = await dbClient
     .from('branch_profiles')
     .select('*', { count: 'exact', head: true })
     .eq('contract_status', 'active')
     .not('short_code', 'is', null)
     .neq('short_code', '')
+    .or('contract_type.is.null,contract_type.neq.temporary')
   const total = branchCount ?? (list.length > 0 ? list.length : 49)
 
   return NextResponse.json({
