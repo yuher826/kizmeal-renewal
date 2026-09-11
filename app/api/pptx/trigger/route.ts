@@ -31,15 +31,6 @@ export async function POST(req: NextRequest) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
   const dbClient    = serviceKey ? createAdminClient(supabaseUrl, serviceKey) : supabase
 
-  // 공통 row(branch_id IS NULL) status → 'generating'
-  await dbClient
-    .from('weekly_menus')
-    .update({ status: 'generating' })
-    .eq('year', year)
-    .eq('month', month)
-    .eq('diet_type', 'CK')
-    .is('branch_id', null)
-
   // GitHub Actions workflow_dispatch 트리거
   const pat = process.env.GITHUB_PAT
   if (!pat) {
@@ -49,22 +40,31 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  const ghRes = await fetch(
-    'https://api.github.com/repos/yuher826/kizmeal-renewal/actions/workflows/generate-pptx.yml/dispatches',
-    {
-      method: 'POST',
-      headers: {
-        Authorization:        `Bearer ${pat}`,
-        Accept:               'application/vnd.github+json',
-        'Content-Type':       'application/json',
-        'X-GitHub-Api-Version': '2022-11-28',
+  let ghRes: Response
+  try {
+    ghRes = await fetch(
+      'https://api.github.com/repos/yuher826/kizmeal-renewal/actions/workflows/generate-pptx.yml/dispatches',
+      {
+        method: 'POST',
+        headers: {
+          Authorization:        `Bearer ${pat}`,
+          Accept:               'application/vnd.github+json',
+          'Content-Type':       'application/json',
+          'X-GitHub-Api-Version': '2022-11-28',
+        },
+        body: JSON.stringify({
+          ref:    'master',
+          inputs: { year: String(year), month: String(month) },
+        }),
       },
-      body: JSON.stringify({
-        ref:    'master',
-        inputs: { year: String(year), month: String(month) },
-      }),
-    },
-  )
+    )
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    return NextResponse.json(
+      { error: `GitHub Actions 트리거 요청 실패: ${message}` },
+      { status: 500 },
+    )
+  }
 
   if (!ghRes.ok) {
     const errText = await ghRes.text()
@@ -73,6 +73,18 @@ export async function POST(req: NextRequest) {
       { status: 500 },
     )
   }
+
+  // dispatch 성공을 확인한 뒤에 상태를 바꾼다.
+  // 이 UPDATE 를 앞에 두면, 이후 단계가 실패했을 때 GitHub 에는
+  // 아무 요청도 안 갔는데 DB 만 generating 으로 남아 화면이
+  // '생성 중' 에 영구히 갇힌다 (2026-09-11 실제 발생).
+  await dbClient
+    .from('weekly_menus')
+    .update({ status: 'generating' })
+    .eq('year', year)
+    .eq('month', month)
+    .eq('diet_type', 'CK')
+    .is('branch_id', null)
 
   return NextResponse.json({ success: true, message: 'GitHub Actions 실행 시작' })
 }
