@@ -181,7 +181,11 @@ function parseWeekSheet(
       if (!info) continue
       const day = dayMap[info.date]
       if (!day) continue
-      const val = String(row[col + 1] ?? '').trim()
+      // '—'(U+2014)는 gen_form.py 가 넣는 '입력 금지' 잠금 표시다.
+      // 영양사 입력값이 아니므로 빈칸으로 취급한다. 이 한 곳에서
+      // 정규화하면 아래 switch 의 모든 필드가 함께 커버된다.
+      const raw = String(row[col + 1] ?? '').trim()
+      const val = raw === '—' ? '' : raw
 
       switch (label) {
         case '밥':       day.lunch.bap      = val; break
