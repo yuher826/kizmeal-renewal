@@ -13,6 +13,7 @@ import Link from 'next/link'
 import { getGroupStyle } from '@/lib/cs-group-styles'
 import { useNotifier } from '@/lib/useNotifier'
 import NotifyToggleButton from '@/components/NotifyToggleButton'
+import { useErpUser } from '@/components/erp/ErpUserProvider'
 
 const PAGE_SIZE = 20
 const UNGROUPED = '미분류'
@@ -112,6 +113,8 @@ function CsManagementInner() {
   const searchParams = useSearchParams()
   const pathname = usePathname()
   const urlId = searchParams.get('id')
+  const currentAdmin = useErpUser()
+  const canManageSlaSettings = ['super_admin', 'manager'].includes(currentAdmin.role)
 
   const [inquiries, setInquiries] = useState<ListInquiry[]>([])
   // branch_id → 원 프로파일 매핑 (branch_profiles 별도 조회 후 합침)
@@ -500,8 +503,22 @@ function CsManagementInner() {
           이력 검색
         </Link>
         {/* 새 문의/새 메시지 알림 ON/OFF */}
-        <div className="ml-auto flex items-center pr-3">
+        <div className="ml-auto flex items-center gap-1 pr-3">
           <NotifyToggleButton enabled={notifyOn} onToggle={toggleNotify} />
+          {/* SLA 기준 시간 설정 — super_admin·manager만 노출. 없는 사람에게
+              보이면 눌렀다가 막히는 경험이 된다(lib/erp-access.ts와 규칙 동일) */}
+          {canManageSlaSettings && (
+            <Link
+              href="/erp/inquiries/settings"
+              title="SLA 기준 시간 설정"
+              className="flex items-center gap-1 px-3 py-1.5 rounded-full border
+                         border-gray-300 text-xs font-medium text-gray-600
+                         hover:border-[#2D6A4F] hover:text-[#2D6A4F]
+                         transition-colors"
+            >
+              ⚙️ 설정
+            </Link>
+          )}
         </div>
       </div>
 

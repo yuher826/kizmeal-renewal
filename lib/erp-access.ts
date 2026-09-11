@@ -53,6 +53,13 @@ const RULES: Array<{ prefix: string; allow: (admin: ErpAccessAdmin) => boolean }
     prefix: '/erp/inquiries',
     allow: a => ['super_admin', 'manager', 'director'].includes(a.role) || canHandleCs(a),
   },
+  // SLA 기준 시간 설정 — director·can_handle_cs 영양사는 제외. 답변은
+  // 여러 명이 하지만, 팀 운영 기준인 SLA 시간은 한 명(super_admin·manager)만
+  // 바꿀 수 있어야 한다. /erp/inquiries 보다 prefix가 길어 위 규칙을 이긴다.
+  {
+    prefix: '/erp/inquiries/settings',
+    allow: a => ['super_admin', 'manager'].includes(a.role),
+  },
   { prefix: '/erp/files', allow: a => ['super_admin', 'manager', 'director'].includes(a.role) },
   { prefix: '/erp/admins', allow: a => ['super_admin', 'manager'].includes(a.role) },
   { prefix: '/erp/brands', allow: a => ['super_admin', 'manager'].includes(a.role) },
