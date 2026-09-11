@@ -28,17 +28,20 @@ PPTX 실물 (python-pptx로 셀 텍스트 실측):
 
 ### ★새로 확인된 버그 (오늘 발견, 미해결)★
 
-(1) actions-status total 불일치 — 완료 판정이 영원히 안 난다  [최우선]
-    app/api/pptx/actions-status/route.ts
-    total = branch_profiles(contract_status='active', short_code 있음) = 53
-    실제 생성 = 49  →  is_complete = (49+0 >= 53) = 영원히 거짓
-    증상: 49개 전부 generation_complete인데 화면은 '생성 중 49/53'에
-    갇히고 완료 토스트가 안 뜬다. 게다가 diet/page.tsx가 is_complete일
-    때만 fetchBranchMenuRows()를 부르므로 ★원별 목록이 화면에 안 뜬다★.
-    파일은 정상 생성됨(SQL로 pptx_url 직접 꺼내 받음).
-    주석엔 '하드코딩 49 대신 DB 조회'라고 적혀 있다 — 의도는 좋았으나
-    활성 계약원 수 ≠ 생성 대상 원 수임을 놓쳤다. 왜 4개가 빠지는지
-    (branch_filters.py) 먼저 규명해야 올바른 total을 정할 수 있다.
+(1) actions-status total 불일치 — 완료 판정이 영원히 안 난다  ★해결됨★
+    app/api/pptx/actions-status/route.ts (01494f3)
+    · 원인: actions-status가 contract_type 조건을 안 걸어 임시계약
+      4곳(테스트P·하남크레오·대치크레오·송파크레오)을 함께 셌다
+      (total=53, 실제 생성 대상=49)
+    · .or('contract_type.is.null,contract_type.neq.temporary') 로 수정.
+      .neq() 단독은 금지 — NULL 행이 함께 탈락한다
+    · 2026-09-11 실물 확인: total 49로 완료 판정 정상, 계열별 목록
+      정상 표시(ECC 6 / POLY 19 / 라이즈 7 / MB 2 / SLP 2 / 알티오라 4 /
+      기타 9 = 49)
+    ★남은 것: total 폴백이 `branchCount ?? (list.length > 0 ?
+      list.length : 49)` 라, 조회 실패 시 total=생성된 개수가 되어
+      is_complete가 항상 참이 된다. 덜 됐는데 완료로 뜨는 더 나쁜 고장.
+      기존 코드이며 이번 수정 대상이 아니었다. 별도 판단 필요.
 
 (2) trigger가 PAT 확인보다 먼저 DB를 바꾼다
     app/api/pptx/trigger/route.ts:34 에서 status='generating' UPDATE,
