@@ -1,5 +1,102 @@
 # HANDOFF
 
+## CS — SLA 설정 화면 설계 확정 (2026-09-11 조사, 다음 세션 구현)
+
+★근본 방향★: SLA 기준 시간을 SQL 로 박지 않고 권팀장이 직접
+설정하게 한다. 5/29 초기 INSERT 이후 한 번도 안 바뀐 이유가
+"바꿀 방법이 SQL 뿐"이어서다. 8/18 카테고리 개편 때 아무도
+따라가지 못한 것도 같은 원인이다.
+
+### 자리와 권한
+  · 경로 /erp/inquiries/settings, CS 화면 안 톱니바퀴로 진입.
+    사이드바 메뉴 추가 안 함 — /erp/upload·/erp/history·
+    /erp/branches/new 도 부모 화면 링크로만 들어가는 선례를 따른다
+  · lib/erp-access.ts RULES 에 한 줄 추가:
+      { prefix: '/erp/inquiries/settings',
+        allow: a => ['super_admin','manager'].includes(a.role) }
+    최장 prefix 매칭이라 기존 /erp/inquiries 규칙을 이긴다(82행 reduce)
+  · ★director 와 can_handle_cs 영양사는 설정에서 제외된다 — 의도★
+    director 는 읽기 전용 역할이고, SLA 기준은 CS 응대 규칙이 아니라
+    팀 운영 기준이라 여러 명이 바꾸면 안 된다. 답변은 여러 명이,
+    기준은 한 명이.
+  · middleware/layout 동시 수정 불필요 — 양쪽 select 에 role 이 이미
+    있다. RULES 배열 한 줄만 고치면 된다
+  · RLS: admin_write_sla 가 FOR ALL USING(is_admin()), WITH CHECK
+    생략 시 USING 이 재사용되므로 INSERT·UPDATE 둘 다 활성 admin 이면
+    된다. 마이그레이션 불필요.
+    ※ pg_policies 직접 조회 수단이 없어 라이브 DB 재검증은 못 했다
+
+### 입력 방식 — ★목표 시간 하나만 받는다★
+  · 세 값(response/warning/escalate)을 다 받지 않는다.
+    "목표 시간" 하나만 입력받고 warning·escalate 는 비율로 자동 계산
+  · 기존 8행 실측 비율: warning = 목표의 75~83%, escalate = 108~125%
+  · 근거: escalate <= warning 이면 ★노랑 구간이 죽는다★
+    (lib/sla.ts:11-12 가 빨강을 먼저 검사). 자동 계산이면 이 조합이
+    구조적으로 생길 수 없어 검증 코드가 거의 불필요해진다
+  · response_hours 는 배지 색에 관여하지 않고 "N시간 남음" 문구에만
+    쓰인다 — 권팀장의 실제 관심사와 정확히 일치하는 값이다
+  · 세분 통제가 필요해지면 그때 "고급설정"으로 접어 확장한다
+
+### 화면 구성 — ★DB 행을 나열하지 않는다★
+  · lib/types.ts 의 CATEGORY_LABELS 6종을 기준으로 행을 그리고,
+    sla_rules 에 없으면 "미설정"으로 표시한다
+  · 이유: 테이블 SELECT 를 그대로 나열하면 옛 5행
+    (MEAL_COUNT/MENU/PHOTO/CONTRACT/SCHEDULE)이 정체불명 카테고리로
+    함께 노출된다. 6종 고정이면 옛 행을 지우든 말든 화면에 영향 없다
+  · 저장은 on_conflict=category upsert (UNIQUE 제약 확인됨,
+    phase2_schema.sql:45). 겹치는 3종(ALLERGY/DELIVERY/OTHER)은
+    지우지 않고 값만 갱신한다 — 8월 개편에서 폐기되지 않은 코드값이다
+  · /erp/admins 패턴을 따른다: 행별 모달 편집, 저장 중 버튼 텍스트
+    전환 + disabled, 실패는 모달 안 인라인 빨간 박스
+
+### ★기준 없음 상태 — 별개 작업 2건★
+조사에서 내 전제가 일부 틀린 것이 확인됐다. InquiryDetailPanel 은
+이미 중립 처리되어 있다 — 헤더 배지(1261행)는 slaRule 없으면 아예
+안 뜨고, 우측 패널(1533-1538행)은 회색 '—' 를 그린다. 초록 아님.
+
+(a) 공용 함수에 'unknown' 상태 추가
+    lib/types.ts:33 SlaStatus 에 'unknown', lib/sla.ts:4 getSlaStatus
+    가 !rule 일 때 'ok' 대신 'unknown', :17 getSlaRemaining 은
+    '기준 없음', :36-42 getSlaBadgeColor 와 :44-50 getSlaIcon 에
+    case 추가(회색/⚪)
+
+(b) ★목록 화면 통계 카드가 진짜 문제다★
+    inquiries/page.tsx:356-357 stats.slaExceeded 와 :382 필터가
+    'exceeded' 만 센다. rule 이 없으면 'ok' 라 초과로 잘못 세지는
+    않지만, "SLA초과 0건"이 "다 안전해서 0"인지 "기준이 없어 셀 수
+    없어 0"인지 구분이 안 된다. (a)만 해서는 자동으로 안 고쳐진다 —
+    stats.slaUnknown 과 카드/필터 칩을 별도로 추가해야 한다
+
+### 반영 시점 — 즉시 반영 안 됨
+  · inquiries/page.tsx:154-171 마운트 시 1회 조회. sla_rules 구독
+    없음. erp-cs-list 채널이 inquiries 변경 시 load() 전체를 다시
+    부르므로 곁다리로 갱신되지만, 문의 활동이 있어야 일어나는
+    우연한 갱신이다
+  · InquiryDetailPanel.tsx:819-828 useEffect([id]) 에서 문의 선택 시
+    1회. realtime 은 messages/inquiries 부분 patch 만 한다
+  · → 설정 저장 후 안내 문구 필요: "새로고침 후 반영됩니다"
+
+### 검증 (DB CHECK 는 선택)
+  · 화면: 목표 시간 > 0
+  · DB: ALTER TABLE sla_rules ADD CONSTRAINT
+        CHECK (escalate_hours > warning_hours AND warning_hours > 0)
+    자동 계산 방식이면 화면은 항상 만족하지만, 이 화면을 거치지 않은
+    수동 INSERT 를 막는 방어선이다(현 8행이 수동 INSERT 전례).
+    마이그레이션 대상 — 급하지 않음
+
+### 부수 발견
+  · lib/sla.ts:52-66 getSlaDeadline·formatSlaDeadline 은 호출부가
+    저장소 어디에도 없다. 완전 미사용(dead code). 정리 대상 후보
+  · sla_rules 참조는 이제 2곳뿐(InquiryDetailPanel.tsx:823,
+    inquiries/page.tsx:170). board 3곳 제거 확인됨
+
+### 권팀장 확인 대기 (숫자는 물을 필요 없어졌다)
+설정 화면이 생기면 목표 시간은 직접 넣으시면 된다. 다만 계산 방식은
+코드라 확인이 필요하다:
+  (1) 이 신호등을 실제로 보고 계신가 — 안 보시면 착수 자체를 보류
+  (2) 주말·공휴일: ①24시간 내내 ②주말·공휴일 제외 ③평일 업무시간만
+  (3) 답변하면 시계를 멈출까: ①첫 답변에 멈춤 ②재질문 시 다시
+
 ## CS — 발신자 판정 버그 재조사 결과 ★이미 해결되어 있었다★ (2026-09-11)
 
 권팀장 9번 착수 전 선결 과제로 남아 있던 "테스트 매니저로 쓴 답변이
