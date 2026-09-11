@@ -94,10 +94,7 @@ export default function DietUploadPage() {
       setResult(data)
       if (data.success) {
         setExistingData(true)
-        setToast('✅ 업로드 완료! 잠시 후 허브로 이동합니다...')
-        setTimeout(() => {
-          router.push(`/erp/diet?year=${data.year}&month=${data.month}`)
-        }, 3000)
+        showToast('✅ 업로드 완료! 저장되었습니다')
       }
     } catch (err) {
       const error = err as { message?: string }
@@ -305,10 +302,10 @@ export default function DietUploadPage() {
                 {/* PPTX 생성 버튼 */}
                 <button
                   type="button"
-                  onClick={() => router.push('/erp/diet')}
+                  onClick={() => router.push(`/erp/diet?year=${result.year}&month=${result.month}`)}
                   className="w-full py-3 rounded-xl bg-[#1565C0] text-white text-sm font-semibold hover:bg-[#0D47A1] transition-colors"
                 >
-                  🖨️ PPTX 생성 페이지로 이동
+                  🖨️ PPTX 생성하러 가기
                 </button>
               </div>
             ) : (
