@@ -1,5 +1,41 @@
 # HANDOFF
 
+## CS — SLA 고객사 노출 제거 (2026-09-11 완료)
+
+★SLA 는 내부 관리 지표다. 고객사에 노출되면 응답 시간이 고객
+약속이 되어 항의 근거가 된다.★ 그런데 board(고객사) 3개 화면에서
+SlaBadge 를 실제로 렌더하고 있었다 — 지금은 sla_rules 가 구
+카테고리라 rule 이 undefined 가 되어 ★우연히★ 안 보이던 상태였고,
+sla_rules 를 새 카테고리로 고치는 순간 49개 원에 일제히 켜질
+상황이었다. 그래서 sla_rules 수정보다 board 차단을 먼저 했다.
+
+제거 내용:
+  · dashboard/page.tsx, inquiries/page.tsx, inquiries/[id]/page.tsx
+    세 곳에서 sla_rules 쿼리·state·prop·렌더를 전부 들어냄
+  · components/board/InquiryCard.tsx 에서 slaRules prop 과 렌더 제거,
+    상단에 사유 주석 명시
+  · components/board/SlaBadge.tsx ★파일 삭제★ — 참조 0건 확인 후
+  · 쿼리까지 지운 이유: prop 만 빼면 "한 줄 되돌리기"로 복구되지만,
+    쿼리가 없으면 데이터가 애초에 도착하지 않아 구조적으로 막힌다
+  · lib/sla.ts 와 ERP 쪽은 손대지 않음 (ERP 는 SlaBadge 컴포넌트가
+    아니라 lib/sla.ts 함수만 써서 자체 span 으로 그린다)
+
+★남은 것 — RLS★: sla_rules 의 SELECT 정책이 public_read_sla
+USING(true) 라 화면에서 빼도 REST API 로는 anon 도 읽힌다.
+USING(is_admin()) 으로 좁히면 ERP 는 그대로 읽히고 branch 계정만
+막힌다(ERP 조회가 로그인 세션 클라이언트라서). 단 마이그레이션이
+필요하고, 현재 pg_policies 를 직접 조회할 수단이 없어 실제 정책
+스냅샷 확보가 선행되어야 한다. 별도 세션에서 처리한다.
+
+## CS — 권팀장 9번(좌우 배치) 범위 축소 확인 (2026-09-11)
+
+★고객사 화면은 이미 구현되어 있다.★ /board/inquiries/[id] 실물
+확인 결과: 본인(강동E) 우측 초록 말풍선, 키즈밀 좌측 흰 말풍선 +
+K 아바타, 상태 변경 로그는 가운데 회색 작은 글씨.
+즉 9번은 ★ERP 화면(InquiryDetailPanel.tsx)만 남은 작업★이다.
+착수 전 선결 과제는 그대로다 — 발신자 판정 버그(테스트 매니저로
+쓴 답변이 '키즈밀 관리자' 이름으로 저장됨)를 먼저 고쳐야 한다.
+
 ## 2026-09-11 세션 — 업로드 자동이동 제거 · 도시락 10월 실물 검증 완료 · 신규 버그 5건 발견
 
 ### 오늘 커밋
