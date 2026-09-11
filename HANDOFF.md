@@ -26,6 +26,13 @@ PPTX 실물 (python-pptx로 셀 텍스트 실측):
   ※ 표 구조가 원마다 다르다: 덕양P 10행(오전만) / 광교SLP 15행(오전+오후).
     주차 행 인덱스가 다르므로 행번호 하드코딩 금지.
 
+### ★반복 교훈★
+· npm run build 는 ★dev 서버를 끄고 커밋 직전에 한 번만★ 돌린다.
+  dev 가 켜진 채로 build 를 같은 .next 에 돌리면 webpack 청크
+  매핑이 깨져 'Cannot find module ./NNNN.js' 로 화면이 백지가 된다.
+  2026-09-11 하루에 세 번 겪었다. 복구는 dev 종료 → .next 삭제 →
+  재기동. 검증 중에는 dev 의 자동 재컴파일로 충분하다.
+
 ### ★새로 확인된 버그 (오늘 발견, 미해결)★
 
 (1) actions-status total 불일치 — 완료 판정이 영원히 안 난다  ★해결됨★
@@ -43,13 +50,19 @@ PPTX 실물 (python-pptx로 셀 텍스트 실측):
       is_complete가 항상 참이 된다. 덜 됐는데 완료로 뜨는 더 나쁜 고장.
       기존 코드이며 이번 수정 대상이 아니었다. 별도 판단 필요.
 
-(2) trigger가 PAT 확인보다 먼저 DB를 바꾼다
-    app/api/pptx/trigger/route.ts:34 에서 status='generating' UPDATE,
-    :43 에서 GITHUB_PAT 확인. PAT 없으면 에러 반환하는데 ★롤백 없음★.
-    결과: GitHub엔 아무 요청도 안 갔는데 DB는 generating으로 남고,
-    새로고침하면 화면이 '생성 중'에 갇힌다. SQL로 draft 복구해야 풀린다.
-    (로컬 .env.local에 GITHUB_PAT이 없어 실제로 겪었다)
-    수정: PAT 확인을 UPDATE 앞으로 옮기고, dispatch 실패 시 원상복구.
+(2) trigger가 PAT 확인보다 먼저 DB를 바꾼다  ★해결됨★
+    app/api/pptx/trigger/route.ts (f72577a)
+    · UPDATE(구 35~41행)를 맨 뒤로 옮겼다. PAT 확인 → fetch → !ghRes.ok
+      확인 → 그 다음에야 status='generating'
+    · 되돌리기(rollback)가 아니라 ★애초에 쓰지 않는★ 방식을 택했다.
+      되돌리기 코드는 그 자체가 실패할 수 있고, 되돌릴 값(draft인지
+      correction_requested인지)을 코드가 알지 못한다
+    · 근거: UPDATE 반환값을 그 아래 어디에서도 참조하지 않아 뒤로
+      옮기는 데 걸림돌이 없었다
+    · fetch를 try/catch로 감쌌다 — 네트워크 오류로 throw 돼도 DB는
+      아직 안 건드린 상태라 안전하다
+    · 2026-09-11 실물 확인: PAT 없는 로컬에서 생성 클릭 → 에러 →
+      새로고침해도 대기 상태 유지, 갇히지 않음
 
 (3) '—'를 중식 입력으로 오판 — 빈 폼 그대로는 업로드가 막힌다  ★해결됨★
     app/api/diet-automation/upload/route.ts (966aa56)
