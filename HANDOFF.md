@@ -1,5 +1,56 @@
 # HANDOFF
 
+## CS — 발신자 판정 버그 재조사 결과 ★이미 해결되어 있었다★ (2026-09-11)
+
+권팀장 9번 착수 전 선결 과제로 남아 있던 "테스트 매니저로 쓴 답변이
+'키즈밀 관리자' 이름으로 저장된다"는 2026-09-04 수정(⑤ 항목)으로
+이미 해결된 상태다. 코드·데이터 둘 다 재현 조건이 없다.
+★따라서 9번을 바로 착수할 수 있다 — 선결 과제 없음.★
+
+실측 근거:
+  · messages INSERT 4곳 전부 sender_type 이 하드코딩 리터럴
+    (1017·1121·1151·1176행), sender_id 는 supabase.auth.getUser() 의
+    user.id = auth.uid(). 중간 변형 없음
+  · 표시는 resolveSenderName()(706-710행)이 senderNameMap[sender_id]
+    로 admins(auth_id, name)를 조회. 옛 버그 패턴
+    inquiry?.admins?.name 폴백은 현재 코드에 없다
+  · 데이터 22건(branch 7 / admin 7 / system 8) 실측 — 테스트 매니저가
+    쓴 2건의 sender_id 가 정확히 본인 auth_id(5999719c...)다
+  · '키즈밀 관리자'는 코드 상수가 아니라 실제 admins.name 이다
+    (super_admin 계정). 옛 버그 때 그 문의 담당자가 이 계정이라
+    스레드 전체가 그 이름으로 보였던 것
+
+## ★9번 착수 전 확인할 것 2건 (신규)★
+
+(a) 이상 데이터 1건 — messages 중 sender_type='branch' 인데
+    sender_id 가 권팀장 admin auth_id(14b5118d...)로 찍힌 건이 있다
+    ("[파일 1개 첨부]"). 좌우 배치가 sender_type 만 보고 갈리면
+    이 한 건이 반대편에 붙는다. 테스트 데이터면 지우고 착수한다.
+    INSERT 경로 원인은 미추적 — 재발하면 그때 추적한다.
+
+(b) 같은 파일에서 ID 공간이 둘로 갈려 있다
+      messages.sender_id     → auth_id
+      inquiry_notes.admin_id → admins.id (PK)
+      phone_logs.admin_id    → admins.id (PK)
+    현재는 각자 맞게 쓰고 있어 문제 없다. 단 admins 6명 중 2명
+    (키즈밀 관리자, 테스트 매니저)은 id ≠ auth_id 라, 새 코드에서
+    착각하면 조용히 어긋난다. 조인 전에 어느 ID 공간인지 확인할 것.
+
+## CS — 고객사 MessageBubble 에 옛 버그 패턴이 남아 있다 (미해결)
+
+app/board/(customer)/inquiries/[id]/page.tsx:353
+  <MessageBubble ... adminName={inquiry?.admins?.name || '키즈밀'} />
+ERP 가 2026-09-04에 고친 그 패턴이 고객사 쪽엔 그대로다 — sender_id
+로 발신자를 찾지 않고 문의 담당자 이름을 쓴다.
+지금은 branch 계정이 admins 를 RLS 로 못 읽어 조인이 항상 null 이
+되고, 결과적으로 폴백 '키즈밀'만 나와 증상이 안 보인다(실물 확인).
+★즉 "권팀장 답변으로 확정된 고객사 발신자 이름 표시"를 구현하려면
+이 경로부터 고쳐야 한다★ — ERP 의 resolveSenderName 방식이 고객사
+컴포넌트(MessageBubble)에는 이식된 적이 없다. ERP 는 자체 정의한
+ThreadMessage(416행)를 쓰고 MessageBubble 을 import 하지 않는다.
+※ 위 RLS 근거는 지난 세션 스냅샷 인용이며 이번에 pg_policies 로
+   재검증하지 못했다. 착수 전 재확인 필요.
+
 ## CS — SLA 고객사 노출 제거 (2026-09-11 완료)
 
 ★SLA 는 내부 관리 지표다. 고객사에 노출되면 응답 시간이 고객
