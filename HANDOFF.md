@@ -29,13 +29,11 @@
 
 3. **권팀장 회신 대기 2건** (사용자 보유 항목 — 상세는 다음 세션에 확인)
 
-4. **⚠️ ERP director 권한 갭 5번(마지막 미해결) — 고객사 공지 작성/수정**
-   (HANDOFF 3307~3324행). 원 담당자 계정 관리·템플릿·원 프로파일 3개는 이미
-   해결됐고 이게 마지막 남은 항목 — 문서 자체가 "다음 착수 대상"으로 명시해뒀던
-   것. 오늘 CS 조사 중 `app/api/notices/route.ts:59-60,127`도 같은 패턴(role은
-   select하지만 검사 안 함)으로 재확인됨. 오늘 CS에서 쓴 `canWriteCs`/
-   `can_write_cs()` 패턴을 그대로 적용할 수 있는 자리 — 오늘 작업과 성격이
-   가장 가까운 이월 항목.
+4. **🔴 우선순위 최상 — ERP director 권한 갭 5번(마지막 미해결), 고객사 공지 작성/수정.**
+   0단계 조사(pg_policies 실측) 완료, **다음 세션 1단계(코드 수정) 바로 착수
+   가능한 상태.** 상세는 바로 아래 "CS — 고객사 공지 권한 갭 0단계 조사 완료"
+   항목 참고. 공지는 학부모·고객사에 그대로 노출되는 글이라 CS 답변보다
+   파급 범위가 넓음 — 다른 후보보다 먼저 착수할 것.
 
 5. **sla_rules SELECT 정책이 anon에게 열려 있음** (HANDOFF 503~508행)
    `public_read_sla USING(true)` — board 화면에서는 뺐지만 REST API로는 로그인
@@ -47,6 +45,83 @@
 ### 참고 (우선순위 낮음, 존재만 기록)
 - CS 고객사 `MessageBubble`에 발신자 이름 옛 버그 패턴이 남아 있음(HANDOFF 468~481행).
   지금은 RLS가 조인을 막아 폴백 '키즈밀'만 보여 증상이 안 드러날 뿐.
+
+---
+
+## CS — 고객사 공지 권한 갭 0단계 조사 완료 (2026-09-14, 코드 변경 없음)
+
+  · 배경: ERP director 권한 갭 시리즈의 마지막 미해결 항목(5번, 고객사
+    공지 작성/수정) 착수. 코드 고치기 전에 조사부터 — UI/API/RLS 3층
+    전부 확인 후 계획만 세우고 이번 세션은 여기서 멈춤.
+
+  · **UI — 가드 0줄.** `notices/page.tsx`(공지 작성 링크, 팝업 끄기
+    버튼), `notices/new/page.tsx`(저장 버튼) 전부 `useErpUser()`조차
+    import 안 함. 오늘 아침 CS `InquiryDetailPanel.tsx` 고치기 전
+    상태와 동일 패턴.
+
+  · **API(`app/api/notices/route.ts`) — role을 조회만 하고 버림.**
+    `POST`(59행) `.select('id, role')`로 가져온 `role`을 비교하는 코드가
+    없음. `PATCH`(126행)는 `role` select조차 안 함. `GET`은 읽기라 문제
+    없음.
+
+  · **재사용 가능한 판정 함수는 이미 있음.** `lib/roles.ts:133`
+    `canWriteNotices(a)` — `canHandleCs`와 완전히 같은 모양
+    (`role==='super_admin' || can_write_notices===true`). 지금은
+    `lib/erp-access.ts:50`의 **페이지 접근(읽기)** 허용에만 쓰이고,
+    실제 쓰기 액션 가드엔 어디서도 안 쓰임.
+
+  · **RLS — 착수 전 조사에서 파일과 라이브가 완전히 다르다는 걸
+    발견해서 실측부터 함.** `supabase/migrations/notices_schema.sql:47-55`
+    원본은 `admin_notices_all` 정책이 `board_users` 테이블(role
+    IN ('admin','super_admin'))을 검사한다고 되어 있는데, 저장소
+    전체에 `board_users`를 쓰는 앱 코드가 이 파일 하나도 없어서
+    라이브 상태를 추정할 수 없었음. 후속 마이그레이션
+    (`add_popup_notices_260818.sql:4`) 주석은 같은 정책을 "admins
+    테이블 기준"이라고 다르게 설명해 파일 간 모순까지 있었음.
+
+### pg_policies 실측 결과 (2026-09-14, 사용자가 SQL Editor로 직접 조회)
+
+```
+admin_notices_all / ALL / public /
+USING: EXISTS (SELECT 1 FROM admins a WHERE a.auth_id = auth.uid())
++ parent_notices_select, parent_notices_select_branch (둘 다 SELECT)
+```
+`board_users` 테이블 존재 여부: **false(DB에 없음)**.
+
+  · **결론**: `notices_schema.sql:47-55`는 라이브와 완전히 불일치한다.
+    파일은 `board_users`를 참조하는데 그 테이블 자체가 DB에 없다 —
+    실제 정책은 `admins` 기준이고, 어느 시점에 대시보드에서 직접
+    교체된 것으로 보인다(파일이 안 따라감 — 오늘 SLA `sla_rules`
+    옛 이름 잔존, `parent_inq_admin_all` 등과 같은 반복 함정).
+
+  · **문제점 3가지 확정**:
+    1. **role 조건 없음** — director도 공지 작성·수정·삭제 가능
+    2. **is_active 조건 없음** — 비활성(퇴사) 계정도 통과. 오늘 아침
+       고친 `parent_inq_admin_all`과 정확히 같은 패턴
+    3. **`FOR ALL` 단일 정책이라 조회까지 함께 묶임** — 오늘 CS에서
+       `inquiry_notes`/`phone_logs`/`parent_inquiries`류에 썼던
+       "SELECT(`is_admin()`)/쓰기(`can_write_*()`) 분리" 처방과 동일하게
+       가야 함
+
+### 다음 세션 1단계 계획 — 오늘 CS와 동일한 3중 방어
+
+  · **DB**: `can_write_notices()` 함수 신설(`can_write_cs()`와 같은 모양:
+    `role='super_admin' OR can_write_notices=TRUE`) → `admin_notices_all`을
+    `SELECT(is_admin())`/쓰기(`can_write_notices()`)로 분리 교체.
+    `board_users` 참조 정리(파일이 이미 라이브와 안 맞으므로 이번 기회에
+    `notices_schema.sql`도 현재 상태에 맞게 후속 마이그레이션 파일로 기록)
+  · **화면**: `notices/page.tsx`에 `canWriteNotices(currentAdmin)` 추가 —
+    "공지 작성" 링크·"팝업 끄기" 버튼 숨김. `notices/new/page.tsx`는 저장
+    폼을 읽기전용 안내로 교체(오늘 만든 InquiryDetailPanel/
+    parent-inquiries 패턴 재사용)
+  · **API**: `POST`(59행)·`PATCH`(126행)에 `canWriteNotices(adminData)`
+    명시적 게이트 추가 — 지금은 `role`을 select만 하고 검사 안 함
+  · 실물 검증은 director 계정(차단 확인) + `can_write_notices=true`
+    계정(정상 동작 확인) 양쪽 다 할 것
+
+  · **우선순위 최상으로 판단한 이유(사용자 판단)**: 공지는 학부모·
+    고객사 포털에 그대로 노출되는 콘텐츠라 CS 답변(관리자↔지점 1:1)보다
+    파급 범위가 넓다.
 
 ---
 
