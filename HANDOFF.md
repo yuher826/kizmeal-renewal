@@ -1,5 +1,37 @@
 # HANDOFF
 
+## CS — ERP 메시지 수정·삭제 에러 처리 정리 (2026-09-14, 실물 검증 완료)
+
+  · 배경: CS 전체 기능 점검에서 `InquiryDetailPanel.tsx`의
+    `handleEditSave`/`handleDeleteConfirm`이 DB 에러를 사실상 무시한다는
+    게 드러남. 특히 삭제는 화면에서 먼저 지우고(`setMessages` 필터) DB
+    `delete()`의 `error`를 안 받아, 실패하면 **화면엔 없는데 DB엔 남는**
+    가장 위험한 어긋남이 생기는 구조였음.
+  · 조치:
+    - 삭제: 낙관적 업데이트 제거. DB delete 성공 확인 후에만 화면에서
+      제거, 실패 시 삭제확인 패널을 그대로 열어두고 그 안에 에러 표시
+      (취소도 계속 가능). `deleting` 로딩 상태로 중복 클릭 방지.
+    - 수정: 실패해도 `editingId`/`editContent`를 안 건드려 입력값 유지.
+      `EditTextarea`에 `error`/`saving` prop 추가, textarea 바로 아래
+      인라인 표시.
+    - 에러 표시 위치는 우측 패널 `actionError` 대신 **메시지 카드
+      로컬**로 결정 — 수정/삭제는 특정 메시지 하나에 대한 액션이라
+      멀리 있는 배너보다 그 자리에 붙이는 게 어느 메시지가 실패했는지
+      바로 보인다. `actionError`는 "우측 패널 자체가 무대"인
+      상태변경/담당자배정용으로 그대로 유지.
+    - `lib/supabase-error.ts`의 `toKoreanErrorMessage`에 세 번째 인자
+      `forbiddenMessage`(42501 전용 문구 override, 기본값은 기존 문구
+      유지 — 기존 호출부 전부 무영향) 추가. 이 두 함수에서만
+      "수정/삭제할 수 없습니다 — 권한이 없거나, 고객사가 이미 확인한
+      답변입니다."로 override — `messages_block_edit_after_read`/
+      `block_delete_after_read`(RESTRICTIVE) 위반과 `can_write_cs()`
+      권한 없음이 같은 SQLSTATE 42501이라 에러 코드만으론 구분이 안
+      돼서, 둘 다 참일 수 있는 문구로 통일함.
+  · 실물 검증 완료: 정상 저장, 삭제 확인/취소 전부 동작 확인.
+    `npm run build` 통과.
+
+---
+
 ## CS — 학부모문의 관리자 화면 canWriteCs 가드 이식 + 에러 처리 정리 (2026-09-14)
 
   · 배경: CS 전체 기능 점검(코드 기준)에서 `app/board/admin/parent-inquiries/[id]/page.tsx`에

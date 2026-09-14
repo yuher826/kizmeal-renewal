@@ -322,11 +322,15 @@ function EditTextarea({
   onChange,
   onSave,
   onCancel,
+  error,
+  saving = false,
 }: {
   value: string
   onChange: (v: string) => void
   onSave: () => void
   onCancel: () => void
+  error?: string
+  saving?: boolean
 }) {
   const ref = useRef<HTMLTextAreaElement>(null)
 
@@ -369,20 +373,29 @@ function EditTextarea({
         onChange={e => onChange(e.target.value)}
         onInput={handleInput}
         onKeyDown={handleKeyDown}
-        className="w-full px-3 py-2 rounded-lg border border-blue-300 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none leading-relaxed"
+        disabled={saving}
+        className="w-full px-3 py-2 rounded-lg border border-blue-300 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none leading-relaxed disabled:bg-gray-50 disabled:text-gray-400"
         style={{ minHeight: '60px' }}
       />
+      {/* 실패해도 입력값은 그대로 둔다 — 사용자가 쓴 내용이 날아가면 안 됨 */}
+      {error && (
+        <div className="mt-1.5 flex items-center gap-1.5 text-xs text-red-600">
+          <span>⚠️</span>
+          <span>{error}</span>
+        </div>
+      )}
       <div className="flex gap-2 mt-1.5">
         <button
           onClick={onSave}
-          disabled={!value.trim()}
+          disabled={!value.trim() || saving}
           className="text-xs px-3 py-1.5 rounded-lg bg-[#2D6A4F] text-white font-semibold disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
         >
-          저장
+          {saving ? '저장 중...' : '저장'}
         </button>
         <button
           onClick={onCancel}
-          className="text-xs px-3 py-1.5 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors"
+          disabled={saving}
+          className="text-xs px-3 py-1.5 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-50 transition-colors"
         >
           취소
         </button>
@@ -403,7 +416,11 @@ interface ThreadMessageProps {
   readByBranch?: boolean
   isEditing?: boolean
   editContent?: string
+  editError?: string
+  editSaving?: boolean
   isDeleting?: boolean
+  deleteError?: string
+  deleting?: boolean
   onEditStart?: () => void
   onEditChange?: (v: string) => void
   onEditSave?: () => void
@@ -423,7 +440,11 @@ function ThreadMessage({
   readByBranch = false,
   isEditing = false,
   editContent = '',
+  editError,
+  editSaving = false,
   isDeleting = false,
+  deleteError,
+  deleting = false,
   onEditStart,
   onEditChange,
   onEditSave,
@@ -449,21 +470,32 @@ function ThreadMessage({
     )
   }
 
-  // 삭제 확인 패널 — admin/internal 메시지에만 표시
+  // 삭제 확인 패널 — admin/internal 메시지에만 표시.
+  // ★ 실패해도 이 패널을 닫지 않는다(= 메시지를 화면에서 지우지 않는다).
+  //   DB delete 성공을 확인하기 전까지는 "삭제 확인" 상태 그대로 유지해,
+  //   화면과 DB가 어긋나는 상태(화면엔 없는데 DB엔 남음)를 만들지 않는다.
   if (isDeleting) {
     return (
       <div className="border border-red-200 rounded-lg p-4 mb-3 bg-red-50">
         <p className="text-sm font-semibold text-red-700 mb-3">이 답변을 삭제하시겠습니까?</p>
+        {deleteError && (
+          <div className="mb-3 flex items-center gap-1.5 text-xs text-red-700 bg-red-100 rounded-lg px-3 py-2">
+            <span>⚠️</span>
+            <span>{deleteError}</span>
+          </div>
+        )}
         <div className="flex gap-2">
           <button
             onClick={onDeleteConfirm}
-            className="text-xs px-4 py-1.5 rounded-lg bg-red-600 text-white font-semibold hover:bg-red-700 transition-colors"
+            disabled={deleting}
+            className="text-xs px-4 py-1.5 rounded-lg bg-red-600 text-white font-semibold hover:bg-red-700 disabled:bg-red-300 disabled:cursor-not-allowed transition-colors"
           >
-            삭제 확인
+            {deleting ? '삭제 중...' : '삭제 확인'}
           </button>
           <button
             onClick={onDeleteCancel}
-            className="text-xs px-4 py-1.5 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors"
+            disabled={deleting}
+            className="text-xs px-4 py-1.5 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-50 transition-colors"
           >
             취소
           </button>
@@ -512,6 +544,8 @@ function ThreadMessage({
               onChange={v => onEditChange?.(v)}
               onSave={() => onEditSave?.()}
               onCancel={() => onEditCancel?.()}
+              error={editError}
+              saving={editSaving}
             />
           ) : (
             <>
@@ -576,6 +610,8 @@ function ThreadMessage({
                 onChange={v => onEditChange?.(v)}
                 onSave={() => onEditSave?.()}
                 onCancel={() => onEditCancel?.()}
+                error={editError}
+                saving={editSaving}
               />
             ) : (
               <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">{content}</p>
@@ -656,7 +692,11 @@ export default function InquiryDetailPanel({ inquiryId, onNotify }: Props) {
   // ── 수정/삭제 상태 ────────────────────────────────────────────
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editContent, setEditContent] = useState('')
+  const [editError, setEditError] = useState('')
+  const [editSaving, setEditSaving] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [deleteError, setDeleteError] = useState('')
+  const [deleting, setDeleting] = useState(false)
 
   // ── 초안 자동저장 상태 ────────────────────────────────────────
   const [draftStatus, setDraftStatus] = useState<'idle' | 'saving' | 'saved'>('idle')
@@ -734,49 +774,84 @@ export default function InquiryDetailPanel({ inquiryId, onNotify }: Props) {
   function handleEditStart(msg: Message) {
     setEditingId(msg.id)
     setEditContent(msg.content)
+    setEditError('')
     setDeletingId(null)
+    setDeleteError('')
   }
 
   function handleEditCancel() {
     setEditingId(null)
     setEditContent('')
+    setEditError('')
   }
 
   async function handleEditSave(msgId: string) {
     const trimmed = editContent.trim()
-    if (!trimmed) return
+    if (!trimmed || editSaving) return
+    setEditError('')
+    setEditSaving(true)
     const supabase = createClient()
     const { error } = await supabase
       .from('messages')
       .update({ content: trimmed })
       .eq('id', msgId)
-    if (!error) {
-      const now = new Date().toISOString()
-      setMessages(prev => prev.map(m =>
-        m.id === msgId ? { ...m, content: trimmed, updated_at: now } : m
+    setEditSaving(false)
+    if (error) {
+      // ★ 실패해도 편집 상태를 유지한다 — 사용자가 쓴 내용이 날아가면
+      //   안 된다. 42501은 "권한 없음"과 "상대가 이미 읽어 RESTRICTIVE
+      //   정책(messages_block_edit_after_read)에 막힘" 둘 다일 수 있는데
+      //   에러 코드만으로는 어느 쪽인지 구분이 안 되므로, 둘 다 사실일
+      //   수 있는 문구로 안내한다.
+      setEditError(toKoreanErrorMessage(
+        error,
+        '수정에 실패했습니다. 다시 시도해주세요.',
+        '수정할 수 없습니다 — 권한이 없거나, 고객사가 이미 확인한 답변입니다.'
       ))
-      setEditingId(null)
-      setEditContent('')
+      return
     }
+    const now = new Date().toISOString()
+    setMessages(prev => prev.map(m =>
+      m.id === msgId ? { ...m, content: trimmed, updated_at: now } : m
+    ))
+    setEditingId(null)
+    setEditContent('')
   }
 
   // ── 삭제 핸들러 ───────────────────────────────────────────────
   function handleDeleteStart(msgId: string) {
     setDeletingId(msgId)
+    setDeleteError('')
     setEditingId(null)
     setEditContent('')
+    setEditError('')
   }
 
   function handleDeleteCancel() {
     setDeletingId(null)
+    setDeleteError('')
   }
 
   async function handleDeleteConfirm(msgId: string) {
-    // 낙관적 UI — 즉시 화면에서 제거
+    if (deleting) return
+    setDeleteError('')
+    setDeleting(true)
+    const supabase = createClient()
+    const { error } = await supabase.from('messages').delete().eq('id', msgId)
+    setDeleting(false)
+    if (error) {
+      // ★ 낙관적 업데이트를 하지 않는다 — DB delete 성공을 확인하기
+      //   전까지 화면에서 메시지를 지우지 않는다. 먼저 지우고 실패하면
+      //   "화면엔 없는데 DB엔 남아있는" 상태가 되는데, 이게 가장 위험한
+      //   어긋남이다. 삭제확인 패널은 열어둔 채로 에러만 보여준다.
+      setDeleteError(toKoreanErrorMessage(
+        error,
+        '삭제에 실패했습니다. 다시 시도해주세요.',
+        '삭제할 수 없습니다 — 권한이 없거나, 고객사가 이미 확인한 답변입니다.'
+      ))
+      return
+    }
     setMessages(prev => prev.filter(m => m.id !== msgId))
     setDeletingId(null)
-    const supabase = createClient()
-    await supabase.from('messages').delete().eq('id', msgId)
   }
 
   // ── 문의 로드 + Realtime 구독 ──────────────────────────────────
@@ -1341,7 +1416,11 @@ export default function InquiryDetailPanel({ inquiryId, onNotify }: Props) {
                         readByBranch={isReadByBranch(msg)}
                         isEditing={editingId === msg.id}
                         editContent={editingId === msg.id ? editContent : ''}
+                        editError={editingId === msg.id ? editError : ''}
+                        editSaving={editingId === msg.id && editSaving}
                         isDeleting={deletingId === msg.id}
+                        deleteError={deletingId === msg.id ? deleteError : ''}
+                        deleting={deletingId === msg.id && deleting}
                         onEditStart={() => handleEditStart(msg)}
                         onEditChange={v => setEditContent(v)}
                         onEditSave={() => handleEditSave(msg.id)}

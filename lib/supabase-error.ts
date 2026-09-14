@@ -7,14 +7,19 @@
  */
 export function toKoreanErrorMessage(
   error: unknown,
-  fallback = '처리 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.'
+  fallback = '처리 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.',
+  // 42501(RLS 위반) 전용 문구. 호출부가 "왜 막혔는지" 더 구체적으로 아는
+  // 경우(예: 메시지 수정·삭제엔 권한 없음 외에 "상대가 이미 읽음" RESTRICTIVE
+  // 정책도 있음) 여기로 맞춤 문구를 넘긴다. 에러 코드만으로는 어떤 정책이
+  // 막았는지 구분이 안 되므로, 둘 다 사실일 수 있는 문구를 넘길 것.
+  forbiddenMessage = '이 작업을 수행할 권한이 없습니다. 담당자에게 문의해주세요.'
 ): string {
   const code =
     error && typeof error === 'object' && 'code' in error
       ? (error as { code?: string }).code
       : undefined
 
-  if (code === '42501') return '이 작업을 수행할 권한이 없습니다. 담당자에게 문의해주세요.'
+  if (code === '42501') return forbiddenMessage
 
   return fallback
 }
