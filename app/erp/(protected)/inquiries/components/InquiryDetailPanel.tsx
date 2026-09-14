@@ -16,6 +16,8 @@ import ReplyTemplates from '@/components/board/ReplyTemplates'
 import InternalNote from '@/components/board/InternalNote'
 import FileUpload from '@/components/board/FileUpload'
 import { useErpUser } from '@/components/erp/ErpUserProvider'
+import { canHandleCs } from '@/lib/roles'
+import { toKoreanErrorMessage } from '@/lib/supabase-error'
 
 // ── 이메일 스레드 유틸 ──────────────────────────────────────────
 const STORAGE_BASE = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/kizmeal-files`
@@ -623,6 +625,9 @@ export default function InquiryDetailPanel({ inquiryId, onNotify }: Props) {
   const [phoneLogs, setPhoneLogs] = useState<PhoneLog[]>([])
   const [templates, setTemplates] = useState<ReplyTemplate[]>([])
   const currentAdmin = useErpUser()
+  // 화면 가드용 판정 — DB(RLS)와 같은 기준(super_admin 또는 can_handle_cs
+  // 플래그)을 재사용한다. 여기서 새 기준을 만들면 서버 판정과 갈라진다.
+  const canWriteCs = canHandleCs(currentAdmin)
   const [loading, setLoading] = useState(true)
   // 원 로고 로드 실패 시 폴백 (문의 전환 시 초기화)
   const [detailLogoError, setDetailLogoError] = useState(false)
@@ -634,6 +639,8 @@ export default function InquiryDetailPanel({ inquiryId, onNotify }: Props) {
   const [showAttach, setShowAttach] = useState(false)
   const [sending, setSending] = useState(false)
   const [sendError, setSendError] = useState('')
+  // 상태변경·담당자배정·내부메모·전화처리 공용 에러 배너 (우측 패널에 표시)
+  const [actionError, setActionError] = useState('')
 
   const [generatingAi, setGeneratingAi] = useState(false)
   const [showPhoneLog, setShowPhoneLog] = useState(false)
@@ -1001,7 +1008,9 @@ export default function InquiryDetailPanel({ inquiryId, onNotify }: Props) {
         const { data: up, error: upErr } = await supabase.storage
           .from('kizmeal-files')
           .upload(storagePath, file, { upsert: true })
-        if (upErr) throw new Error(upErr.message || '파일 업로드 실패')
+        // ★ upErr.message를 그대로 보여주지 않는다 — 스토리지 RLS 위반
+        //   메시지도 버킷/정책명을 그대로 노출한다.
+        if (upErr) throw new Error('파일 업로드에 실패했습니다.', { cause: '__safe__' })
         if (up) {
           const { data: urlData } = supabase.storage.from('kizmeal-files').getPublicUrl(storagePath)
           uploaded.push({ path: storagePath, url: urlData?.publicUrl ?? '', name: file.name, size: file.size, type: file.type })
@@ -1097,10 +1106,14 @@ export default function InquiryDetailPanel({ inquiryId, onNotify }: Props) {
         resolvedBannerTimerRef.current = setTimeout(() => setShowResolvedBanner(false), 5000)
       }
     } catch (err) {
-      const errMsg = err instanceof Error ? err.message
-        : typeof err === 'object' && err !== null && 'message' in err
-        ? (err as { message: string }).message
-        : '전송에 실패했습니다. 다시 시도해주세요.'
+      // ★ Supabase 원본 에러 메시지를 그대로 보여주지 않는다 — RLS 위반 시
+      //   Postgres가 `new row violates row-level security policy for table
+      //   "messages"`처럼 테이블명을 그대로 뱉어낸다. 위에서 직접 만들어
+      //   던진(cause: '__safe__') 메시지만 그대로 쓰고, 나머지는 전부
+      //   toKoreanErrorMessage로 한 번 걸러서 보여준다.
+      const errMsg = err instanceof Error && err.cause === '__safe__'
+        ? err.message
+        : toKoreanErrorMessage(err, '전송에 실패했습니다. 다시 시도해주세요.')
       setSendError(errMsg)
     } finally {
       setSending(false)
@@ -1109,11 +1122,15 @@ export default function InquiryDetailPanel({ inquiryId, onNotify }: Props) {
 
   async function updateStatus(status: InquiryStatus) {
     if (!id) return
+    setActionError('')
     const supabase = createClient()
     const updates: Record<string, unknown> = { status }
     if (status === 'resolved') updates.resolved_at = new Date().toISOString()
     if (status === 'closed') updates.closed_at = new Date().toISOString()
-    await supabase.from('inquiries').update(updates).eq('id', id)
+    const { error } = await supabase.from('inquiries').update(updates).eq('id', id)
+    // 실패 시 낙관적 업데이트를 하지 않는다 — 화면 상태와 DB가 어긋나면
+    // "바뀐 것처럼 보이는데 실제로는 안 바뀐" 상태로 남는다.
+    if (error) { setActionError(toKoreanErrorMessage(error)); return }
     setInquiry(prev => prev ? { ...prev, status } : null)
 
     await supabase.from('messages').insert({
@@ -1126,14 +1143,17 @@ export default function InquiryDetailPanel({ inquiryId, onNotify }: Props) {
 
   async function assignAdmin(adminId: string) {
     if (!id) return
+    setActionError('')
     const supabase = createClient()
-    await supabase.from('inquiries').update({ assigned_admin_id: adminId || null }).eq('id', id)
+    const { error } = await supabase.from('inquiries').update({ assigned_admin_id: adminId || null }).eq('id', id)
+    if (error) { setActionError(toKoreanErrorMessage(error)); return }
     const assigned = admins.find(a => a.id === adminId) || null
     setInquiry(prev => prev ? { ...prev, assigned_admin_id: adminId, admins: assigned || undefined } : null)
   }
 
   async function addNote(noteContent: string) {
     if (!id || !currentAdmin) return
+    setActionError('')
     const supabase = createClient()
     const [noteRes, { data: { user } }] = await Promise.all([
       supabase
@@ -1143,6 +1163,7 @@ export default function InquiryDetailPanel({ inquiryId, onNotify }: Props) {
         .single(),
       supabase.auth.getUser(),
     ])
+    if (noteRes.error) { setActionError(toKoreanErrorMessage(noteRes.error)); return }
     if (noteRes.data) setNotes(prev => [noteRes.data as unknown as InquiryNote, ...prev])
     if (user) {
       await supabase.from('messages').insert({
@@ -1157,13 +1178,16 @@ export default function InquiryDetailPanel({ inquiryId, onNotify }: Props) {
 
   async function savePhoneLog() {
     if (!id || !currentAdmin || !phoneMemo.trim()) return
+    setActionError('')
     const supabase = createClient()
-    const { data: logData } = await supabase.from('phone_logs').insert({
+    const { data: logData, error } = await supabase.from('phone_logs').insert({
       inquiry_id: id,
       admin_id: currentAdmin.id,
       memo: phoneMemo.trim(),
       duration_minutes: phoneDuration ? parseInt(phoneDuration) : null,
     }).select('*, admins(name)').single()
+
+    if (error) { setActionError(toKoreanErrorMessage(error)); return }
 
     if (logData) setPhoneLogs(prev => [logData as unknown as PhoneLog, ...prev])
 
@@ -1329,8 +1353,9 @@ export default function InquiryDetailPanel({ inquiryId, onNotify }: Props) {
             )}
           </div>
 
-          {/* 전화 처리 로그 패널 */}
-          {showPhoneLog && (
+          {/* 전화 처리 로그 패널 — 토글 버튼이 답변 입력창 안에 있어 canWriteCs일
+              때만 열리지만, 방어적으로 여기서도 한 번 더 막는다 */}
+          {canWriteCs && showPhoneLog && (
             <div className="bg-blue-50 border-t border-blue-200 px-4 py-3 flex-shrink-0 space-y-2">
               <p className="text-xs font-bold text-blue-700">📞 전화 처리 기록</p>
               <div className="flex gap-2">
@@ -1405,7 +1430,15 @@ export default function InquiryDetailPanel({ inquiryId, onNotify }: Props) {
             </div>
           )}
 
-          {/* 답변 입력창 (고정) */}
+          {/* 답변 입력창 (고정) — CS 쓰기 권한(canWriteCs) 없으면 아예 숨긴다.
+              전송·AI초안·전화처리·내부메모 버튼이 전부 여기 한 덩어리에
+              있어 통째로 감추는 편이 개별 버튼마다 막는 것보다 확실하다. */}
+          {!canWriteCs ? (
+            <div className="bg-white border-t border-gray-100 px-4 py-3 flex-shrink-0 flex items-center gap-2 text-sm text-gray-400">
+              <span>🔒</span>
+              <span>이 문의에 답변할 권한이 없습니다. CS 담당자로 배정된 관리자만 답변할 수 있습니다.</span>
+            </div>
+          ) : (
           <div className={`bg-white border-t border-gray-100 px-4 py-3 flex-shrink-0 ${isAnyEditing ? 'opacity-50 pointer-events-none' : ''}`}>
             {sendError && (
               <div className="mb-2 flex items-center gap-2 text-xs bg-red-50 text-red-700 px-3 py-2 rounded-lg border border-red-200">
@@ -1508,6 +1541,7 @@ export default function InquiryDetailPanel({ inquiryId, onNotify }: Props) {
               </div>
             )}
           </div>
+          )}
         </div>
 
         {/* 우측: 정보/처리 패널 */}
@@ -1546,40 +1580,56 @@ export default function InquiryDetailPanel({ inquiryId, onNotify }: Props) {
               </div>
             </div>
 
-            {/* 상태 변경 */}
-            <div>
-              <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-2">상태 변경</h3>
-              <div className="grid grid-cols-2 gap-1.5">
-                {(Object.entries(STATUS_LABELS) as [InquiryStatus, string][]).map(([k, v]) => (
-                  <button
-                    key={k}
-                    onClick={() => updateStatus(k)}
-                    disabled={inquiry?.status === k}
-                    className={`text-xs py-1.5 rounded-lg font-medium transition-colors ${
-                      inquiry?.status === k
-                        ? `${STATUS_COLORS[k]} cursor-default`
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                    }`}
-                  >
-                    {v}
-                  </button>
-                ))}
+            {/* 쓰기 액션 공용 에러 배너 — 상태변경·담당자배정·내부메모·전화처리 */}
+            {actionError && (
+              <div className="flex items-center gap-2 text-xs bg-red-50 text-red-700 px-3 py-2 rounded-lg border border-red-200">
+                <span>⚠️</span>
+                <span className="flex-1">{actionError}</span>
+                <button type="button" onClick={() => setActionError('')} className="text-red-400 hover:text-red-600 font-bold">✕</button>
               </div>
-            </div>
+            )}
 
-            {/* 담당자 배정 */}
+            {/* 상태 변경 — canWriteCs 없으면 섹션 자체를 숨긴다. 현재 상태는
+                위 "문의 정보"에 이미 표시돼 있어 읽기 기능은 그대로 유지된다. */}
+            {canWriteCs && (
+              <div>
+                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-2">상태 변경</h3>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {(Object.entries(STATUS_LABELS) as [InquiryStatus, string][]).map(([k, v]) => (
+                    <button
+                      key={k}
+                      onClick={() => updateStatus(k)}
+                      disabled={inquiry?.status === k}
+                      className={`text-xs py-1.5 rounded-lg font-medium transition-colors ${
+                        inquiry?.status === k
+                          ? `${STATUS_COLORS[k]} cursor-default`
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}
+                    >
+                      {v}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* 담당자 배정 — 쓰기 권한 없으면 select 대신 현재 담당자만 읽기로 보여준다 */}
             <div>
               <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-2">담당자 배정</h3>
-              <select
-                value={inquiry?.assigned_admin_id || ''}
-                onChange={e => assignAdmin(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#2D6A4F]"
-              >
-                <option value="">미배정</option>
-                {admins.map(a => (
-                  <option key={a.id} value={a.id}>{a.name}</option>
-                ))}
-              </select>
+              {canWriteCs ? (
+                <select
+                  value={inquiry?.assigned_admin_id || ''}
+                  onChange={e => assignAdmin(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#2D6A4F]"
+                >
+                  <option value="">미배정</option>
+                  {admins.map(a => (
+                    <option key={a.id} value={a.id}>{a.name}</option>
+                  ))}
+                </select>
+              ) : (
+                <p className="text-sm text-gray-700 px-1">{inquiry?.admins?.name || '미배정'}</p>
+              )}
             </div>
 
             {/* 고객사 정보 */}
@@ -1688,7 +1738,7 @@ export default function InquiryDetailPanel({ inquiryId, onNotify }: Props) {
             <div>
               <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-2">내부 메모</h3>
               {currentAdmin && (
-                <InternalNote notes={notes} onAdd={addNote} />
+                <InternalNote notes={notes} onAdd={addNote} readOnly={!canWriteCs} />
               )}
             </div>
           </div>

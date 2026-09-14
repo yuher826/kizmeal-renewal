@@ -1,5 +1,178 @@
 # HANDOFF
 
+## CS — 답변 권한 화면 가드 구현 + 역할·카테고리 범위 확인 (2026-09-14)
+
+  · 배경: `/erp/inquiries` 답변 저장이 API 라우트 없이 브라우저→Supabase
+    직접 호출 구조였고, 전송·상태변경·담당자배정·내부메모·전화처리
+    5개 컨트롤에 role 가드가 전혀 없었다(director도 화면상 완전한
+    쓰기 가능 상태) — 이번 세션 조사에서 확인.
+  · 조치: `lib/roles.ts`의 기존 `canHandleCs`(super_admin 또는
+    `can_handle_cs` 플래그)를 재사용해 `InquiryDetailPanel.tsx`에
+    `canWriteCs` 판정 추가, 5개 컨트롤 전부 화면에서 숨김/읽기전용
+    처리. Supabase 에러(code 42501)는 `lib/supabase-error.ts`로 한글
+    고정 문구 치환 — 원본 RLS 에러 메시지(테이블명 포함)를 그대로
+    보여주던 지점(sendMessage catch)이 실제 누출 지점이었음.
+    `npm run build` 통과, 커밋은 아직 안 함.
+
+  · ✅ **해결 — `canHandleCs` ↔ DB `can_write_cs()` 불일치**: 발견 당시
+    DB 함수는 `role IN ('super_admin','manager') OR can_handle_cs`였는데
+    `lib/roles.ts`의 `canHandleCs`는 `role === 'super_admin' OR
+    can_handle_cs`뿐이라 manager를 role만으로는 통과시키지 않아 기준이
+    갈라져 있었다. → **DB `can_write_cs()`를 프론트 기준에 맞춰
+    `role = 'super_admin' OR can_handle_cs = TRUE`로 변경**해 일치시켰다
+    (반대 방향이 아니라 DB를 프론트에 맞춘 이유 — 판정 기준은
+    "super_admin은 항상 허용, 나머지는 전부 플래그로만 판단"이 맞고,
+    manager를 role에서 뺀 것은 CS 담당이 역할이 아니라 사람 단위로
+    지정되는 배정 구조이기 때문). SQL 전문은 아래 "2026-09-14 DB 변경"
+    참고.
+
+  · 권팀장 확인(2026-09-14): CS 카테고리 중 **메뉴 관련 문의는 배서영
+    매니저도 답변자에 포함**시켜야 한다. 그런데 현재 `can_write_cs()`는
+    카테고리 구분이 없다 — `can_handle_cs` 플래그가 있으면 전
+    카테고리에 답변 가능한 전부-아니면-전무 구조.
+    → **향후 카테고리별 답변자 지정이 필요해지면 재설계**: 담당자×
+    카테고리 매핑(예: 배서영은 MENU만, CS 전담자는 전체)으로 세분화.
+    → **지금은 운영 합의로 처리** — 코드는 안 건드림. 인원이 늘거나
+    SaaS로 전환할 때 재검토 대상으로 기록만 남김.
+
+### 2026-09-14 DB 변경 — ⚠️ 수동 적용 필요 (Supabase 대시보드 SQL Editor)
+
+Supabase CLI 미사용. 아래 SQL을 **Supabase 대시보드 → SQL Editor에
+직접 붙여넣어 실행**했다(오늘 실행 완료 — 이 프로젝트 환경 기준).
+다른 환경(스테이징 등)에 동일하게 반영하려면 이 SQL 전문을 그대로
+다시 실행할 것. `CREATE OR REPLACE` / `DROP POLICY IF EXISTS` 패턴이라
+재실행해도 무해하다(멱등).
+
+```sql
+-- ============================================================
+-- 1) can_write_cs() — CS(문의) 쓰기 가능 여부 판정 함수 (신설)
+--    판정 기준: super_admin은 항상 허용, 나머지는 admins.can_handle_cs
+--    플래그로만 판단한다. manager를 role로 넣지 않은 이유 — CS 담당은
+--    역할이 아니라 사람 단위로 지정되는 배정 구조이기 때문(플래그가
+--    곧 배정 기록). 프론트 lib/roles.ts의 canHandleCs와 기준을 반드시
+--    일치시킨다 — 한쪽만 바꾸면 화면 가드와 DB 허용 범위가 갈라진다.
+-- ============================================================
+CREATE OR REPLACE FUNCTION can_write_cs()
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1 FROM admins
+    WHERE auth_id = auth.uid()
+      AND is_active = TRUE
+      AND (role = 'super_admin' OR can_handle_cs = TRUE)
+  );
+END;
+$$;
+
+-- ============================================================
+-- 2) messages — 쓰기(UPDATE/DELETE) 정책을 is_admin() → can_write_cs()로 교체
+--    SELECT/INSERT(고객 발신 포함)는 손대지 않는다 — 읽기와 "문의에
+--    답장 가능"은 이번에 좁히는 대상이 아니다.
+-- ============================================================
+DROP POLICY IF EXISTS "messages_update_admin" ON messages;
+CREATE POLICY "messages_update_admin" ON messages
+  FOR UPDATE
+  USING (can_write_cs());
+
+DROP POLICY IF EXISTS "messages_delete_admin" ON messages;
+CREATE POLICY "messages_delete_admin" ON messages
+  FOR DELETE
+  USING (can_write_cs());
+
+-- ============================================================
+-- 3) inquiries — 상태/담당자 변경(UPDATE) 정책을 can_write_cs()로 교체
+--    SELECT/INSERT는 기존 그대로(관리자 전체 조회, 지점 본인 문의 생성)
+-- ============================================================
+DROP POLICY IF EXISTS "inquiries_update_admin" ON inquiries;
+CREATE POLICY "inquiries_update_admin" ON inquiries
+  FOR UPDATE
+  USING (can_write_cs());
+
+-- ============================================================
+-- 4) inquiry_notes / phone_logs — 기존 FOR ALL USING(is_admin()) 단일
+--    정책(phase2_schema.sql: admin_all_notes/admin_all_phone)을
+--    SELECT(열람)와 쓰기(작성)로 분리한다.
+--    이유: FOR ALL 그대로 can_write_cs()로만 바꾸면 열람까지 같이
+--    막혀 "메모는 못 쓰지만 남이 쓴 메모는 봐야 하는" 읽기전용
+--    역할(director 등)이 열람조차 막힌다.
+-- ============================================================
+DROP POLICY IF EXISTS "admin_all_notes" ON inquiry_notes;
+CREATE POLICY "inquiry_notes_select" ON inquiry_notes
+  FOR SELECT USING (is_admin());
+CREATE POLICY "inquiry_notes_insert" ON inquiry_notes
+  FOR INSERT WITH CHECK (can_write_cs());
+CREATE POLICY "inquiry_notes_update" ON inquiry_notes
+  FOR UPDATE USING (can_write_cs());
+CREATE POLICY "inquiry_notes_delete" ON inquiry_notes
+  FOR DELETE USING (can_write_cs());
+
+DROP POLICY IF EXISTS "admin_all_phone" ON phone_logs;
+CREATE POLICY "phone_logs_select" ON phone_logs
+  FOR SELECT USING (is_admin());
+CREATE POLICY "phone_logs_insert" ON phone_logs
+  FOR INSERT WITH CHECK (can_write_cs());
+CREATE POLICY "phone_logs_update" ON phone_logs
+  FOR UPDATE USING (can_write_cs());
+CREATE POLICY "phone_logs_delete" ON phone_logs
+  FOR DELETE USING (can_write_cs());
+
+-- ============================================================
+-- 5) parent_inquiries / parent_inquiry_messages — admin 쪽 정책 교체
+--    기존 "parent_inq_admin_all"/"parent_inq_msg_admin_all"
+--    (inquiry_restructure.sql)은 FOR ALL USING (EXISTS admins WHERE
+--    auth_id=auth.uid())로, is_active 조건이 아예 없었다 — 퇴사·비활성
+--    admin도 전체 CRUD가 통과되는 완전 permissive 정책이었다
+--    (★이번에 같이 고치는 누락 버그). is_admin()/can_write_cs()로
+--    교체해 is_active 조건을 되살리고, SELECT와 쓰기를 분리한다.
+--    ⚠️ 지점(고객사) 쪽 SELECT/INSERT/UPDATE 정책(parent_inq_select_own,
+--    parent_inq_msg_select_own 등, inquiry_restructure.sql)은 별개라
+--    이번 변경에서 건드리지 않는다.
+-- ============================================================
+DROP POLICY IF EXISTS "parent_inq_admin_all" ON parent_inquiries;
+CREATE POLICY "parent_inq_admin_select" ON parent_inquiries
+  FOR SELECT USING (is_admin());
+CREATE POLICY "parent_inq_admin_insert" ON parent_inquiries
+  FOR INSERT WITH CHECK (can_write_cs());
+CREATE POLICY "parent_inq_admin_update" ON parent_inquiries
+  FOR UPDATE USING (can_write_cs());
+CREATE POLICY "parent_inq_admin_delete" ON parent_inquiries
+  FOR DELETE USING (can_write_cs());
+
+DROP POLICY IF EXISTS "parent_inq_msg_admin_all" ON parent_inquiry_messages;
+CREATE POLICY "parent_inq_msg_admin_select" ON parent_inquiry_messages
+  FOR SELECT USING (is_admin());
+CREATE POLICY "parent_inq_msg_admin_insert" ON parent_inquiry_messages
+  FOR INSERT WITH CHECK (can_write_cs());
+CREATE POLICY "parent_inq_msg_admin_update" ON parent_inquiry_messages
+  FOR UPDATE USING (can_write_cs());
+CREATE POLICY "parent_inq_msg_admin_delete" ON parent_inquiry_messages
+  FOR DELETE USING (can_write_cs());
+
+-- ============================================================
+-- 6) admins.can_handle_cs 플래그 설정 — 권팀장·배서영
+-- ============================================================
+UPDATE admins SET can_handle_cs = TRUE
+WHERE email IN ('desafinado@kizmeal.com', 'sy226@kizmeal.com');
+```
+
+★위 SQL 전문은 `supabase/migrations/can_write_cs_and_rls_260914.sql`로도
+저장해 뒀다(`add_staff_role_and_flags_260904.sql` 선례와 동일하게
+"이미 실행 완료된 것의 기록"용 — 재실행 불필요, 멱등).
+
+### 실기기 검증 완료 (2026-09-14)
+  · 허이사(director) 계정: 쓰기 컨트롤(전송·상태변경·담당자배정·
+    내부메모·전화처리) 전부 숨김 확인. 읽기(대화·내부메모·고객사정보)
+    정상 확인.
+  · 권팀장(manager, can_handle_cs=true) 계정: 전부 정상 동작 확인.
+  · DB 레벨 차단도 42501로 거부되는 것 확인 완료(화면 가드를 우회해도
+    RLS가 실제로 막음 — 화면 따로, 서버 따로 이중 확인됨).
+
+---
+
 ## CS — SLA 설정 화면 ★구현 완료★ (2026-09-11 조사·구현·검증)
 
   · 2026-09-11 구현·검증 완료
