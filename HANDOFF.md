@@ -1,5 +1,36 @@
 # HANDOFF
 
+## CS — 학부모문의 관리자 화면 canWriteCs 가드 이식 + 에러 처리 정리 (2026-09-14)
+
+  · 배경: CS 전체 기능 점검(코드 기준)에서 `app/board/admin/parent-inquiries/[id]/page.tsx`에
+    role/`canHandleCs` 가드가 전혀 없다는 게 재확인됐다(ERP `InquiryDetailPanel.tsx`엔
+    오늘 이미 이식했는데 이 화면만 빠져 있었음). 같은 세션에서 이어서 처리.
+  · 에러 처리: `sendMessage()`의 메시지 insert·inquiry update 두 곳,
+    `updateStatus()` 전부 `lib/supabase-error.ts`의 `toKoreanErrorMessage`
+    적용. 원래 `updateStatus()`는 `error` 자체를 안 받고 무조건 낙관적
+    업데이트하던 버그였음(CS `InquiryDetailPanel.tsx`의 예전 버그와 동일
+    패턴) — 실패 시 로컬 상태 안 바꾸도록 같이 고침.
+  · 화면 가드: 이 페이지엔 ERP의 `useErpUser()` 같은 컨텍스트가 없다
+    (`app/board/admin/layout.tsx:13-17`이 role·can_handle_cs를 조회는
+    하지만 라우트 진입 가드용일 뿐 자식에 안 넘김) — `board/login/page.tsx`
+    패턴대로 페이지 자체에서 `admins` 테이블을 직접 조회해 로컬 state로
+    보관, `canWriteCs = admin ? canHandleCs(admin) : false`(admin 로드
+    전엔 fail-closed). **`lib/roles.ts`의 기존 `canHandleCs`를 그대로
+    재사용** — 새 판정 기준 안 만듦, DB `can_write_cs()`와도 동일 기준.
+    답변 입력창은 `!loading` 확인 후 canWriteCs면 기존 UI, 아니면 CS와
+    같은 문구의 🔒 안내로 교체. 상태 변경 버튼 섹션은 통째 숨김. 대화
+    내용·학부모 정보 읽기 영역은 손 안 댐. `npm run build` 통과.
+
+  · ⚠️ **실물 검증 미완료 — 학부모 문의 데이터가 0건이라 화면에서
+    확인 못 했다.** CS `InquiryDetailPanel.tsx`와 코드 패턴이 동일하고
+    빌드도 통과했지만, 실제 학부모 문의가 들어오면(또는 테스트 데이터로)
+    입력창 숨김/노출과 상태 변경 버튼 숨김이 실제로 의도대로 동작하는지
+    반드시 확인할 것. 특히 `admin` state가 로드되기 전 잠깐 컴포저가
+    안 보이는 타이밍(loading 게이트)이 실사용에서 거슬리지 않는지도
+    함께 볼 것.
+
+---
+
 ## CS — ERP 대화 좌우 정렬 추가 (2026-09-14)
 
   · 배경: 포털(`/board`)은 대화가 좌우로 나뉘어 보이는데 ERP

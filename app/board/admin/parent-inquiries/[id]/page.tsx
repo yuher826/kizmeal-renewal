@@ -5,6 +5,8 @@ import Link from 'next/link'
 import { KIZMEAL_LOGO_PATH } from '@/lib/brand'
 import { useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
+import { toKoreanErrorMessage } from '@/lib/supabase-error'
+import { canHandleCs } from '@/lib/roles'
 
 const CAT_MAP: Record<string, { icon: string; label: string }> = {
   ALLERGY:   { icon: '🚨', label: '알레르기 관련' },
@@ -48,6 +50,11 @@ export default function AdminParentInquiryDetailPage() {
   const { id } = useParams<{ id: string }>()
   const [inquiry, setInquiry] = useState<Inquiry | null>(null)
   const [messages, setMessages] = useState<Msg[]>([])
+  // 이 페이지엔 ERP의 useErpUser() 같은 컨텍스트가 없다(/board/admin
+  // layout.tsx는 라우트 진입 가드용으로만 admins를 조회하고 자식에
+  // 넘기지 않는다) — 페이지 자체에서 직접 조회해 들고 있는다.
+  // null = 아직 로드 전, canWriteCs 판정은 로드 완료 전까지 항상 false.
+  const [admin, setAdmin] = useState<{ role: string; can_handle_cs: boolean | null } | null>(null)
   const [loading, setLoading] = useState(true)
   const [content, setContent] = useState('')
   const [sending, setSending] = useState(false)
@@ -59,12 +66,17 @@ export default function AdminParentInquiryDetailPage() {
   useEffect(() => {
     const supabase = createClient()
     async function load() {
-      const [inqRes, msgRes] = await Promise.all([
+      const { data: { user } } = await supabase.auth.getUser()
+      const [inqRes, msgRes, adminRes] = await Promise.all([
         supabase.from('parent_inquiries').select('id, category, title, status, created_at, parents(name, email), children(name_ko), branches(name, brands(name))').eq('id', id).single(),
         supabase.from('parent_inquiry_messages').select('id, sender_type, content, image_urls, created_at').eq('inquiry_id', id).order('created_at', { ascending: true }),
+        user
+          ? supabase.from('admins').select('role, can_handle_cs').eq('auth_id', user.id).maybeSingle()
+          : Promise.resolve({ data: null }),
       ])
       if (inqRes.data) setInquiry(inqRes.data as unknown as Inquiry)
       if (msgRes.data) setMessages(msgRes.data as Msg[])
+      if (adminRes.data) setAdmin(adminRes.data as { role: string; can_handle_cs: boolean | null })
       await supabase.from('parent_inquiries').update({ unread_count_admin: 0 }).eq('id', id)
       setLoading(false)
     }
@@ -99,11 +111,12 @@ export default function AdminParentInquiryDetailPage() {
         inquiry_id: id, sender_type: 'admin', sender_id: user.id, content: replyText,
       })
       if (error) throw error
-      await supabase.from('parent_inquiries').update({
+      const { error: inqErr } = await supabase.from('parent_inquiries').update({
         last_message_at: now,
         unread_count_parent: 1,
         status: inquiry?.status === 'pending' ? 'in_progress' : inquiry?.status,
       }).eq('id', id)
+      if (inqErr) throw inqErr
       setInquiry(prev => prev ? { ...prev, status: prev.status === 'pending' ? 'in_progress' : prev.status } : null)
       setContent('')
 
@@ -118,8 +131,11 @@ export default function AdminParentInquiryDetailPage() {
       } catch {
         showToast('답변이 전송되었습니다.')
       }
-    } catch {
-      showToast('전송에 실패했습니다.')
+    } catch (err) {
+      // ★ 원본 Supabase 에러 메시지를 그대로 띄우지 않는다 — RLS 위반 시
+      //   테이블명이 그대로 노출된다. toKoreanErrorMessage가 code 42501을
+      //   권한 안내 문구로, 나머지는 뭉뚱그린 문구로 치환해준다.
+      showToast(toKoreanErrorMessage(err, '전송에 실패했습니다. 다시 시도해주세요.'))
     } finally {
       setSending(false)
     }
@@ -127,9 +143,16 @@ export default function AdminParentInquiryDetailPage() {
 
   async function updateStatus(status: string) {
     const supabase = createClient()
-    await supabase.from('parent_inquiries').update({ status }).eq('id', id)
+    const { error } = await supabase.from('parent_inquiries').update({ status }).eq('id', id)
+    // 실패 시 로컬 상태를 바꾸지 않는다 — 화면과 DB가 어긋나면 "바뀐
+    // 것처럼 보이는데 실제로는 안 바뀐" 상태로 남는다.
+    if (error) { showToast(toKoreanErrorMessage(error)); return }
     setInquiry(prev => prev ? { ...prev, status } : null)
   }
+
+  // CS InquiryDetailPanel.tsx와 같은 기준 재사용 — admin이 아직 로드
+  // 전(null)이면 항상 false(숨김)로 fail-closed.
+  const canWriteCs = admin ? canHandleCs(admin) : false
 
   const cat = inquiry ? (CAT_MAP[inquiry.category] || CAT_MAP.GENERAL) : null
   const branchLabel = inquiry ? [inquiry.branches?.brands?.name, inquiry.branches?.name].filter(Boolean).join(' ') : ''
@@ -225,27 +248,38 @@ export default function AdminParentInquiryDetailPage() {
           )}
         </div>
 
-        {/* 입력창 */}
-        <div className="bg-white border-t border-gray-100 px-4 py-3 flex-shrink-0">
-          <div className="flex gap-2 items-end">
-            <textarea
-              rows={1}
-              value={content}
-              onChange={e => setContent(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() } }}
-              placeholder="답변을 입력하세요... (Enter 전송, 학부모에게 이메일 알림)"
-              className="flex-1 px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#2D6A4F] resize-none"
-              style={{ minHeight: '42px', maxHeight: '120px' }}
-            />
-            <button
-              onClick={sendMessage}
-              disabled={!content.trim() || sending}
-              className="bg-[#2D6A4F] hover:bg-[#1B4332] disabled:bg-gray-300 text-white rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors flex-shrink-0"
-            >
-              {sending ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin block" /> : '전송'}
-            </button>
-          </div>
-        </div>
+        {/* 입력창 — canWriteCs 없으면 숨긴다. loading 중엔 판정이 아직
+            없어(fail-closed) 잘못된 "권한 없음" 문구가 잠깐 보이지
+            않도록 로드 완료 후에만 둘 중 하나를 그린다. */}
+        {!loading && (
+          !canWriteCs ? (
+            <div className="bg-white border-t border-gray-100 px-4 py-3 flex-shrink-0 flex items-center gap-2 text-sm text-gray-400">
+              <span>🔒</span>
+              <span>이 문의에 답변할 권한이 없습니다. CS 담당자로 배정된 관리자만 답변할 수 있습니다.</span>
+            </div>
+          ) : (
+            <div className="bg-white border-t border-gray-100 px-4 py-3 flex-shrink-0">
+              <div className="flex gap-2 items-end">
+                <textarea
+                  rows={1}
+                  value={content}
+                  onChange={e => setContent(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() } }}
+                  placeholder="답변을 입력하세요... (Enter 전송, 학부모에게 이메일 알림)"
+                  className="flex-1 px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#2D6A4F] resize-none"
+                  style={{ minHeight: '42px', maxHeight: '120px' }}
+                />
+                <button
+                  onClick={sendMessage}
+                  disabled={!content.trim() || sending}
+                  className="bg-[#2D6A4F] hover:bg-[#1B4332] disabled:bg-gray-300 text-white rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors flex-shrink-0"
+                >
+                  {sending ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin block" /> : '전송'}
+                </button>
+              </div>
+            </div>
+          )
+        )}
       </div>
 
       {/* 우측 패널 */}
@@ -270,23 +304,27 @@ export default function AdminParentInquiryDetailPage() {
             </div>
           </div>
 
-          <div>
-            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-2">상태 변경</h3>
-            <div className="grid grid-cols-2 gap-1.5">
-              {Object.entries(STATUS_LABELS).map(([k, v]) => (
-                <button
-                  key={k}
-                  onClick={() => updateStatus(k)}
-                  disabled={inquiry?.status === k}
-                  className={`text-xs py-1.5 rounded-lg font-medium transition-colors ${
-                    inquiry?.status === k ? `${STATUS_COLORS[k]} cursor-default` : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
-                >
-                  {v}
-                </button>
-              ))}
+          {/* 상태 변경 — canWriteCs 없으면 섹션 자체를 숨긴다. 현재 상태는
+              위 "문의 정보"에 이미 표시돼 있어 읽기 기능은 그대로 유지된다. */}
+          {canWriteCs && (
+            <div>
+              <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-2">상태 변경</h3>
+              <div className="grid grid-cols-2 gap-1.5">
+                {Object.entries(STATUS_LABELS).map(([k, v]) => (
+                  <button
+                    key={k}
+                    onClick={() => updateStatus(k)}
+                    disabled={inquiry?.status === k}
+                    className={`text-xs py-1.5 rounded-lg font-medium transition-colors ${
+                      inquiry?.status === k ? `${STATUS_COLORS[k]} cursor-default` : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    {v}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
     </div>
