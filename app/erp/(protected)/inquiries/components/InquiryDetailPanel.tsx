@@ -10,7 +10,7 @@ import {
   CATEGORY_COLORS, CATEGORY_ICONS, CATEGORY_LABELS,
   STATUS_COLORS, STATUS_LABELS, formatCategory,
 } from '@/lib/types'
-import { getSlaStatus, getSlaRemaining, getSlaBadgeColor } from '@/lib/sla'
+import { getSlaStatus, getSlaRemaining, getSlaBadgeColor, getSlaIcon } from '@/lib/sla'
 import StatusBadge from '@/components/board/StatusBadge'
 import ReplyTemplates from '@/components/board/ReplyTemplates'
 import InternalNote from '@/components/board/InternalNote'
@@ -1311,8 +1311,11 @@ export default function InquiryDetailPanel({ inquiryId, onNotify }: Props) {
     }
   }
 
-  const slaStatus = inquiry && slaRule ? getSlaStatus(inquiry, slaRule) : 'ok'
-  const slaRemaining = inquiry && slaRule ? getSlaRemaining(inquiry, slaRule) : '—'
+  // slaRule이 없어도(카테고리에 SLA 기준 미설정) getSlaStatus/getSlaRemaining이
+  // 내부적으로 'unknown'/'미설정'을 반환하므로 여기서 따로 분기하지 않는다.
+  // inquiry 자체가 아직 로드 전일 때만 '—'로 방어한다.
+  const slaStatus = inquiry ? getSlaStatus(inquiry, slaRule) : 'unknown'
+  const slaRemaining = inquiry ? getSlaRemaining(inquiry, slaRule) : '—'
 
   // 수정 중인 메시지가 있으면 하단 입력창 비활성화
   const isAnyEditing = editingId !== null
@@ -1363,9 +1366,11 @@ export default function InquiryDetailPanel({ inquiryId, onNotify }: Props) {
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
               {inquiry && <StatusBadge status={inquiry.status} />}
-              {inquiry && slaRule && (
+              {/* slaRule 유무로 숨기지 않는다 — 규칙 미설정도 '미설정' 회색
+                  배지로 명시해야 초록(ok)과 안 헷갈린다 */}
+              {inquiry && (
                 <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${getSlaBadgeColor(slaStatus)}`}>
-                  {slaStatus === 'ok' ? '🟢' : slaStatus === 'warning' ? '🟡' : '🔴'} {slaRemaining}
+                  {getSlaIcon(slaStatus)} {slaRemaining}
                 </span>
               )}
             </div>
@@ -1650,7 +1655,7 @@ export default function InquiryDetailPanel({ inquiryId, onNotify }: Props) {
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-gray-500">SLA</span>
-                  {inquiry && slaRule ? (
+                  {inquiry ? (
                     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${getSlaBadgeColor(slaStatus)}`}>
                       {slaRemaining}
                     </span>

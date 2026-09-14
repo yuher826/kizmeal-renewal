@@ -1,5 +1,41 @@
 # HANDOFF
 
+## CS — 카테고리 정합성 점검 + SlaStatus 'unknown' 추가 (2026-09-14)
+
+  · 배경: 8/18 카테고리 개편(`inquiry_category_restructure_260818.sql`)이
+    `inquiries.category`만 6종(SCHEDULE_OPS/DELIVERY/COMPLAINT/
+    ACCOUNTING/ALLERGY/OTHER)으로 옮기고 `sla_rules`는 옛 이름
+    (SCHEDULE/MEAL_COUNT/MENU/PHOTO/CONTRACT 등 9행)으로 안 건드려
+    남아 있었다. `lib/sla.ts:4`가 규칙 없으면 `'ok'`(초록)를 반환해
+    `SCHEDULE_OPS` 문의가 SLA 얼마나 초과됐든 항상 초록불로 보이고
+    있었다(2026-09-11 조사 때 "설계만, 미구현"으로 기록했던 항목).
+  · DB는 이번 세션에서 이미 정리 완료(6종 전부 sla_rules 규칙 있음,
+    옛 5행 정리) — 사용자가 직접 확인.
+  · 코드 조치: 근본 원인(규칙 없음="모른다"를 "괜찮다"로 답하던 것)을
+    구조적으로 고침.
+    - `lib/types.ts:33` `SlaStatus`에 `'unknown'` 추가
+    - `lib/sla.ts` `getSlaStatus`: `!rule` 시 `'ok'` → `'unknown'`.
+      `getSlaRemaining`: 같은 조건에서 `'—'` → `'미설정'`.
+      `getSlaBadgeColor`/`getSlaIcon`에 `'unknown'` case 추가
+      (회색 `bg-gray-100 text-gray-500` / `⚪`)
+    - `InquiryDetailPanel.tsx`: 헤더·우측패널 SLA 배지가 `slaRule` 없으면
+      아예 숨거나 무색 `—`로 뭉개던 걸 **항상 표시**하도록 변경 — 이제
+      규칙 미설정이면 `⚪ 미설정`으로 명시. 헤더의 수동 이모지 삼항연산자는
+      `getSlaIcon()` 호출로 교체(중복 제거)
+  · 확인만 하고 변경 안 한 것(코드상 이미 안전함을 확인):
+    - "SLA 초과" 통계 카드(`page.tsx:360,385`)는 `=== 'exceeded'`
+      완전일치라 `'unknown'`이 자동으로 안 섞임
+    - SLA 상태 기준 정렬·필터 로직 자체가 저장소에 없음(정렬은
+      sortOrder→isUrgentComplaint→created_at뿐) — unknown이 끼어들
+      지점이 없어 손댈 게 없었음
+  · 목록 화면에 "SLA 미설정" 별도 통계 카드를 추가하는 것(2026-09-11
+    기록의 "(b) 목록 화면 통계 카드" 항목)은 이번 범위에 포함 안 함 —
+    지금은 6종 전부 규칙이 있어 당장 증상 없음, 카테고리가 또 늘 때를
+    위한 방어선으로 (a)만 먼저 넣음. 필요해지면 별도 작업.
+  · `npm run build` 통과.
+
+---
+
 ## CS — ERP 메시지 수정·삭제 에러 처리 정리 (2026-09-14, 실물 검증 완료)
 
   · 배경: CS 전체 기능 점검에서 `InquiryDetailPanel.tsx`의
@@ -290,13 +326,8 @@ WHERE email IN ('desafinado@kizmeal.com', 'sy226@kizmeal.com');
 (2) npm run build 미실행 — dev 유지 상태로 핫리로드만 확인했다.
     다음 세션 시작 시 build 검증 먼저(Vercel 배포 안전 확인).
 
-(3) 'unknown' 상태 추가 — 미설정 카테고리는 rule 이 없어
-    getSlaStatus 가 'ok' 를 반환한다. "모른다"를 "괜찮다"로
-    답하는 셈이다. 상세 화면은 회색 '—' 라 정직하지만,
-    ★목록 상단 'SLA 초과' 카드가 미설정분을 못 세면서도 그 사실을
-    드러내지 않는다★. 6종을 다 채우면 증상은 사라지지만, 카테고리가
-    늘거나 누가 비우면 같은 자리에 다시 빠지므로 구조적으로 고친다.
-    (상세 설계는 아래 "기준 없음 상태 — 별개 작업 2건" 참조)
+(3) ✅ 'unknown' 상태 추가 — 2026-09-14 완료. 맨 위 "CS — 카테고리
+    정합성 점검 + SlaStatus 'unknown' 추가" 항목 참고.
 
 (4) 권팀장 확인 3건 — 신호등 보는가 / 주말·공휴일 제외 여부 /
     답변 시 시계 정지 여부
@@ -356,11 +387,10 @@ WHERE email IN ('desafinado@kizmeal.com', 'sy226@kizmeal.com');
 이미 중립 처리되어 있다 — 헤더 배지(1261행)는 slaRule 없으면 아예
 안 뜨고, 우측 패널(1533-1538행)은 회색 '—' 를 그린다. 초록 아님.
 
-(a) 공용 함수에 'unknown' 상태 추가
-    lib/types.ts:33 SlaStatus 에 'unknown', lib/sla.ts:4 getSlaStatus
-    가 !rule 일 때 'ok' 대신 'unknown', :17 getSlaRemaining 은
-    '기준 없음', :36-42 getSlaBadgeColor 와 :44-50 getSlaIcon 에
-    case 추가(회색/⚪)
+(a) ✅ 공용 함수에 'unknown' 상태 추가 — 2026-09-14 완료(맨 위 항목 참고).
+    실제로는 getSlaRemaining 문구를 '기준 없음'이 아니라 '미설정'으로
+    맞춤(화면 다른 곳의 "미설정" 표기와 통일). 헤더·우측패널 배지도
+    slaRule 유무로 숨기던 걸 항상 표시하도록 같이 바꿈(회색 ⚪ 미설정).
 
 (b) ★목록 화면 통계 카드가 진짜 문제다★
     inquiries/page.tsx:356-357 stats.slaExceeded 와 :382 필터가

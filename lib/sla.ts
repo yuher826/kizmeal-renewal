@@ -1,7 +1,9 @@
 import type { Inquiry, SlaRule, SlaStatus } from './types'
 
 export function getSlaStatus(inquiry: Inquiry, rule?: SlaRule): SlaStatus {
-  if (!rule || !inquiry.created_at) return 'ok'
+  // 규칙이 없으면 "괜찮다"가 아니라 "모른다" — ok로 합치면 규칙 없는
+  // 카테고리가 항상 초록불로 보인다(2026-08-18 SCHEDULE_OPS가 이렇게 샜음).
+  if (!rule || !inquiry.created_at) return 'unknown'
   if (inquiry.status === 'resolved' || inquiry.status === 'closed') return 'ok'
 
   const created = new Date(inquiry.created_at).getTime()
@@ -14,7 +16,7 @@ export function getSlaStatus(inquiry: Inquiry, rule?: SlaRule): SlaStatus {
 }
 
 export function getSlaRemaining(inquiry: Inquiry, rule?: SlaRule): string {
-  if (!rule || !inquiry.created_at) return '—'
+  if (!rule || !inquiry.created_at) return '미설정'
   if (inquiry.status === 'resolved' || inquiry.status === 'closed') return '완료'
 
   const created = new Date(inquiry.created_at).getTime()
@@ -38,6 +40,7 @@ export function getSlaBadgeColor(status: SlaStatus): string {
     case 'ok': return 'bg-green-100 text-green-700'
     case 'warning': return 'bg-yellow-100 text-yellow-700'
     case 'exceeded': return 'bg-red-100 text-red-700'
+    case 'unknown': return 'bg-gray-100 text-gray-500'
   }
 }
 
@@ -46,6 +49,7 @@ export function getSlaIcon(status: SlaStatus): string {
     case 'ok': return '🟢'
     case 'warning': return '🟡'
     case 'exceeded': return '🔴'
+    case 'unknown': return '⚪'
   }
 }
 

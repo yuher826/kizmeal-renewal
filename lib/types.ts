@@ -30,7 +30,11 @@ export type ComplaintSubcategory =
 
 export type SenderType = 'branch' | 'admin' | 'system'
 export type Priority = 'low' | 'medium' | 'high' | 'urgent'
-export type SlaStatus = 'ok' | 'warning' | 'exceeded'
+// 'unknown' = sla_rules에 해당 카테고리 규칙이 없어 판정 불가.
+// "규칙이 없음"과 "규칙상 괜찮음(ok)"은 다른 사실이라 분리한다 —
+// 합쳐두면 카테고리가 새로 생기거나 규칙이 비면 조용히 초록불로
+// 보인다(2026-08-18 카테고리 개편 때 SCHEDULE_OPS가 실제로 이렇게 샜음).
+export type SlaStatus = 'ok' | 'warning' | 'exceeded' | 'unknown'
 
 export const CATEGORY_LABELS: Record<InquiryCategory, string> = {
   SCHEDULE_OPS: '일정/운영',
