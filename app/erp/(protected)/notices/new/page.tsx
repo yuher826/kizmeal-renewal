@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Loader2, CheckCircle2, AlertTriangle, Search } from 'lucide-react'
 import type { BranchProfileRow } from '@/types/branch-profile'
+import { useErpUser } from '@/components/erp/ErpUserProvider'
+import { canWriteNotices } from '@/lib/roles'
 
 // ── 토스트 ──────────────────────────────────────────────────────────
 function Toast({ msg, type }: { msg: string; type: 'success' | 'error' }) {
@@ -22,6 +24,8 @@ type TargetType = 'all' | 'specific'
 
 export default function NoticesNewPage() {
   const router = useRouter()
+  const currentAdmin = useErpUser()
+  const canWrite = canWriteNotices(currentAdmin)
 
   const [title, setTitle] = useState('')
   const [content, setContent] = useState('')
@@ -132,7 +136,16 @@ export default function NoticesNewPage() {
         <h1 className="text-xl font-semibold text-slate-900">공지 작성</h1>
       </div>
 
-      {/* 폼 */}
+      {/* 폼 — 공지 작성 권한(canWriteNotices) 없으면 읽기전용 안내로 대체한다.
+          패턴 출처: InquiryDetailPanel.tsx의 답변 입력창 잠금 안내 */}
+      {!canWrite ? (
+        <div className="bg-white border border-slate-200 rounded-xl p-10 flex flex-col items-center justify-center gap-3 text-center">
+          <span className="text-3xl">🔒</span>
+          <p className="text-sm text-slate-500">
+            공지 작성 권한이 없습니다. 공지 담당자로 지정된 관리자만 작성할 수 있습니다.
+          </p>
+        </div>
+      ) : (
       <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-6">
 
         {/* 제목 */}
@@ -270,6 +283,7 @@ export default function NoticesNewPage() {
           )}
         </div>
       </div>
+      )}
 
       {/* 하단 버튼 */}
       <div className="flex justify-end gap-3 mt-6">
@@ -279,21 +293,23 @@ export default function NoticesNewPage() {
         >
           취소
         </Link>
-        <button
-          type="button"
-          onClick={handleSave}
-          disabled={isSaving}
-          className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-70 flex items-center gap-2"
-        >
-          {isSaving ? (
-            <>
-              <Loader2 size={15} className="animate-spin" />
-              저장 중...
-            </>
-          ) : (
-            '저장'
-          )}
-        </button>
+        {canWrite && (
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={isSaving}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-70 flex items-center gap-2"
+          >
+            {isSaving ? (
+              <>
+                <Loader2 size={15} className="animate-spin" />
+                저장 중...
+              </>
+            ) : (
+              '저장'
+            )}
+          </button>
+        )}
       </div>
     </main>
   )

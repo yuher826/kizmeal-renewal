@@ -50,9 +50,8 @@ export default function AdminParentInquiryDetailPage() {
   const { id } = useParams<{ id: string }>()
   const [inquiry, setInquiry] = useState<Inquiry | null>(null)
   const [messages, setMessages] = useState<Msg[]>([])
-  // 이 페이지엔 ERP의 useErpUser() 같은 컨텍스트가 없다(/board/admin
-  // layout.tsx는 라우트 진입 가드용으로만 admins를 조회하고 자식에
-  // 넘기지 않는다) — 페이지 자체에서 직접 조회해 들고 있는다.
+  // Provider 신설됨(components/board/BoardAdminUserProvider.tsx), 추후 이관.
+  // 이 페이지는 아직 이걸 안 쓰고 직접 조회해 들고 있는다(실물 검증 미완료).
   // null = 아직 로드 전, canWriteCs 판정은 로드 완료 전까지 항상 false.
   const [admin, setAdmin] = useState<{ role: string; can_handle_cs: boolean | null } | null>(null)
   const [loading, setLoading] = useState(true)

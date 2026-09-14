@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase-server'
+import { canWriteNotices } from '@/lib/roles'
 
 export async function GET() {
   try {
@@ -56,8 +57,9 @@ export async function POST(request: NextRequest) {
     if (!user) return NextResponse.json({ error: '인증이 필요합니다' }, { status: 401 })
 
     const { data: adminData } = await supabase
-      .from('admins').select('id, role').eq('auth_id', user.id).maybeSingle()
+      .from('admins').select('id, role, can_write_notices').eq('auth_id', user.id).eq('is_active', true).maybeSingle()
     if (!adminData) return NextResponse.json({ error: '접근 권한이 없습니다' }, { status: 403 })
+    if (!canWriteNotices(adminData)) return NextResponse.json({ error: '공지 작성 권한이 없습니다' }, { status: 403 })
 
     const body = await request.json()
     const { title, content, target_type, branch_ids, is_popup, popup_until } = body
@@ -123,8 +125,9 @@ export async function PATCH(request: NextRequest) {
     if (!user) return NextResponse.json({ error: '인증이 필요합니다' }, { status: 401 })
 
     const { data: adminData } = await supabase
-      .from('admins').select('id').eq('auth_id', user.id).maybeSingle()
+      .from('admins').select('id, role, can_write_notices').eq('auth_id', user.id).eq('is_active', true).maybeSingle()
     if (!adminData) return NextResponse.json({ error: '접근 권한이 없습니다' }, { status: 403 })
+    if (!canWriteNotices(adminData)) return NextResponse.json({ error: '공지 작성 권한이 없습니다' }, { status: 403 })
 
     const { id, is_popup } = await request.json()
     if (!id) return NextResponse.json({ error: 'id가 필요합니다' }, { status: 400 })

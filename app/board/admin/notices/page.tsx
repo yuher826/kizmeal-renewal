@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useBoardAdminUser } from '@/components/board/BoardAdminUserProvider'
+import { canWriteNotices } from '@/lib/roles'
 
 type Notice = {
   id: string
@@ -13,6 +15,8 @@ type Notice = {
 }
 
 export default function AdminNoticesPage() {
+  const currentAdmin = useBoardAdminUser()
+  const canWrite = canWriteNotices(currentAdmin)
   const [notices, setNotices] = useState<Notice[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -69,12 +73,14 @@ export default function AdminNoticesPage() {
           <h1 className="font-bold text-[#1C2B1E] text-base">홈페이지 공지</h1>
           <p className="text-gray-400 text-xs">학부모 포털에 게시되는 공지를 관리합니다</p>
         </div>
-        <Link
-          href="/board/admin/notices/new"
-          className="bg-[#2D6A4F] hover:bg-[#1B4332] text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors inline-flex items-center gap-1.5"
-        >
-          <span>✏️</span> 공지 작성
-        </Link>
+        {canWrite && (
+          <Link
+            href="/board/admin/notices/new"
+            className="bg-[#2D6A4F] hover:bg-[#1B4332] text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors inline-flex items-center gap-1.5"
+          >
+            <span>✏️</span> 공지 작성
+          </Link>
+        )}
       </header>
 
       <div className="px-4 sm:px-6 py-6 space-y-4">
@@ -100,20 +106,22 @@ export default function AdminNoticesPage() {
                       <h3 className="font-semibold text-[#1C2B1E] truncate">{n.title}</h3>
                       <p className="text-xs text-gray-400 mt-1">{n.created_at.slice(0, 10)}</p>
                     </div>
-                    <div className="flex gap-2 flex-shrink-0">
-                      <button
-                        onClick={() => handleTogglePin(n)}
-                        className="text-xs px-3 py-1.5 rounded-lg border border-[#2D6A4F] text-[#2D6A4F] hover:bg-[#E8F5E9] transition-colors"
-                      >
-                        고정 해제
-                      </button>
-                      <button
-                        onClick={() => handleDelete(n.id)}
-                        className="text-xs px-3 py-1.5 rounded-lg border border-red-200 text-red-500 hover:bg-red-50 transition-colors"
-                      >
-                        삭제
-                      </button>
-                    </div>
+                    {canWrite && (
+                      <div className="flex gap-2 flex-shrink-0">
+                        <button
+                          onClick={() => handleTogglePin(n)}
+                          className="text-xs px-3 py-1.5 rounded-lg border border-[#2D6A4F] text-[#2D6A4F] hover:bg-[#E8F5E9] transition-colors"
+                        >
+                          고정 해제
+                        </button>
+                        <button
+                          onClick={() => handleDelete(n.id)}
+                          className="text-xs px-3 py-1.5 rounded-lg border border-red-200 text-red-500 hover:bg-red-50 transition-colors"
+                        >
+                          삭제
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -142,20 +150,28 @@ export default function AdminNoticesPage() {
                         <td className="px-5 py-4 text-sm font-medium text-[#1C2B1E]">{n.title}</td>
                         <td className="px-5 py-4 text-sm text-gray-500 whitespace-nowrap">{n.created_at.slice(0, 10)}</td>
                         <td className="px-5 py-4">
-                          <button
-                            onClick={() => handleTogglePin(n)}
-                            className="text-xs px-3 py-1 rounded-lg border border-gray-200 text-gray-500 hover:border-[#2D6A4F] hover:text-[#2D6A4F] transition-colors"
-                          >
-                            상단 고정
-                          </button>
+                          {canWrite ? (
+                            <button
+                              onClick={() => handleTogglePin(n)}
+                              className="text-xs px-3 py-1 rounded-lg border border-gray-200 text-gray-500 hover:border-[#2D6A4F] hover:text-[#2D6A4F] transition-colors"
+                            >
+                              상단 고정
+                            </button>
+                          ) : (
+                            <span className="text-gray-300">—</span>
+                          )}
                         </td>
                         <td className="px-5 py-4">
-                          <button
-                            onClick={() => handleDelete(n.id)}
-                            className="text-xs px-3 py-1 rounded-lg border border-red-200 text-red-400 hover:bg-red-50 transition-colors"
-                          >
-                            삭제
-                          </button>
+                          {canWrite ? (
+                            <button
+                              onClick={() => handleDelete(n.id)}
+                              className="text-xs px-3 py-1 rounded-lg border border-red-200 text-red-400 hover:bg-red-50 transition-colors"
+                            >
+                              삭제
+                            </button>
+                          ) : (
+                            <span className="text-gray-300">—</span>
+                          )}
                         </td>
                       </tr>
                     ))}
@@ -165,14 +181,16 @@ export default function AdminNoticesPage() {
             </div>
 
             {/* 모바일 공지 작성 버튼 */}
-            <div className="sm:hidden">
-              <Link
-                href="/board/admin/notices/new"
-                className="w-full flex items-center justify-center gap-2 bg-[#2D6A4F] text-white text-sm font-semibold py-3 rounded-2xl transition-colors hover:bg-[#1B4332]"
-              >
-                <span>✏️</span> 공지 작성
-              </Link>
-            </div>
+            {canWrite && (
+              <div className="sm:hidden">
+                <Link
+                  href="/board/admin/notices/new"
+                  className="w-full flex items-center justify-center gap-2 bg-[#2D6A4F] text-white text-sm font-semibold py-3 rounded-2xl transition-colors hover:bg-[#1B4332]"
+                >
+                  <span>✏️</span> 공지 작성
+                </Link>
+              </div>
+            )}
           </>
         )}
       </div>

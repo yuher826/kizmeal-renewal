@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase-server'
 import AdminMobileNav from '@/components/board/AdminMobileNav'
 import AdminTabBar from '@/components/board/AdminTabBar'
 import { landingPathFor } from '@/lib/erp-access'
+import { BoardAdminUserProvider } from '@/components/board/BoardAdminUserProvider'
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const supabase = createClient()
@@ -25,10 +26,10 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   if (adminData.access_scope === 'erp_only') redirect(landingPathFor(adminData))
 
   return (
-    <>
+    <BoardAdminUserProvider user={adminData}>
       <AdminMobileNav />
       <AdminTabBar />
       {children}
-    </>
+    </BoardAdminUserProvider>
   )
 }

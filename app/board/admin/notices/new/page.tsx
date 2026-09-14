@@ -3,9 +3,13 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { useBoardAdminUser } from '@/components/board/BoardAdminUserProvider'
+import { canWriteNotices } from '@/lib/roles'
 
 export default function AdminNoticesNewPage() {
   const router = useRouter()
+  const currentAdmin = useBoardAdminUser()
+  const canWrite = canWriteNotices(currentAdmin)
   const [title, setTitle] = useState('')
   const [content, setContent] = useState('')
   const [isPinned, setIsPinned] = useState(false)
@@ -50,6 +54,17 @@ export default function AdminNoticesNewPage() {
       </header>
 
       <div className="px-4 sm:px-6 py-6 max-w-2xl mx-auto space-y-4">
+        {/* 공지 작성 권한(canWriteNotices) 없으면 읽기전용 안내로 대체한다.
+            패턴 출처: InquiryDetailPanel.tsx의 답변 입력창 잠금 안내 */}
+        {!canWrite ? (
+          <div className="bg-white border border-gray-200 rounded-2xl p-10 flex flex-col items-center justify-center gap-3 text-center">
+            <span className="text-3xl">🔒</span>
+            <p className="text-sm text-gray-500">
+              공지 작성 권한이 없습니다. 공지 담당자로 지정된 관리자만 작성할 수 있습니다.
+            </p>
+          </div>
+        ) : (
+        <>
         <div>
           <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">제목</label>
           <input
@@ -86,6 +101,8 @@ export default function AdminNoticesNewPage() {
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-600 text-sm rounded-xl px-4 py-3">{error}</div>
         )}
+        </>
+        )}
 
         <div className="flex gap-3 pt-2">
           <Link
@@ -94,14 +111,16 @@ export default function AdminNoticesNewPage() {
           >
             취소
           </Link>
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={!title.trim() || saving}
-            className="flex-1 py-3 rounded-xl bg-[#2D6A4F] text-white text-sm font-semibold transition-colors hover:bg-[#1B4332] disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed"
-          >
-            {saving ? '저장 중...' : '저장'}
-          </button>
+          {canWrite && (
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={!title.trim() || saving}
+              className="flex-1 py-3 rounded-xl bg-[#2D6A4F] text-white text-sm font-semibold transition-colors hover:bg-[#1B4332] disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed"
+            >
+              {saving ? '저장 중...' : '저장'}
+            </button>
+          )}
         </div>
       </div>
     </div>

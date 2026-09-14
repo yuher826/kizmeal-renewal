@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Plus, Loader2 } from 'lucide-react'
+import { useErpUser } from '@/components/erp/ErpUserProvider'
+import { canWriteNotices } from '@/lib/roles'
 
 type Notice = {
   id: string
@@ -17,6 +19,8 @@ type Notice = {
 }
 
 export default function AdminNoticesPage() {
+  const currentAdmin = useErpUser()
+  const canWrite = canWriteNotices(currentAdmin)
   const [notices, setNotices] = useState<Notice[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -70,13 +74,15 @@ export default function AdminNoticesPage() {
           <h1 className="text-xl font-bold text-slate-900">고객사 공지</h1>
           <p className="text-sm text-slate-500 mt-0.5">계약 원 담당자에게 전달할 공지를 관리합니다</p>
         </div>
-        <Link
-          href="/erp/notices/new"
-          className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-4 py-2.5 rounded-lg transition-colors whitespace-nowrap flex-shrink-0"
-        >
-          <Plus size={15} />
-          공지 작성
-        </Link>
+        {canWrite && (
+          <Link
+            href="/erp/notices/new"
+            className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-4 py-2.5 rounded-lg transition-colors whitespace-nowrap flex-shrink-0"
+          >
+            <Plus size={15} />
+            공지 작성
+          </Link>
+        )}
       </div>
 
       {loading ? (
@@ -103,7 +109,7 @@ export default function AdminNoticesPage() {
                     <h3 className="font-semibold text-slate-800 truncate">{n.title}</h3>
                     <p className="text-xs text-slate-400 mt-1">{formatDate(n.created_at)}</p>
                   </div>
-                  {n.is_popup && (
+                  {n.is_popup && canWrite && (
                     <button
                       type="button"
                       onClick={() => turnOffPopup(n.id)}
@@ -145,14 +151,18 @@ export default function AdminNoticesPage() {
                       <td className="px-5 py-4 text-sm text-slate-500">{formatDate(n.created_at)}</td>
                       <td className="px-5 py-4 text-sm">
                         {n.is_popup ? (
-                          <button
-                            type="button"
-                            onClick={() => turnOffPopup(n.id)}
-                            disabled={togglingId === n.id}
-                            className="text-xs font-medium text-orange-600 border border-orange-200 hover:bg-orange-50 px-2.5 py-1 rounded-lg transition-colors disabled:opacity-50"
-                          >
-                            🔔 끄기
-                          </button>
+                          canWrite ? (
+                            <button
+                              type="button"
+                              onClick={() => turnOffPopup(n.id)}
+                              disabled={togglingId === n.id}
+                              className="text-xs font-medium text-orange-600 border border-orange-200 hover:bg-orange-50 px-2.5 py-1 rounded-lg transition-colors disabled:opacity-50"
+                            >
+                              🔔 끄기
+                            </button>
+                          ) : (
+                            <span className="text-xs font-medium text-orange-600">🔔 팝업 중</span>
+                          )
                         ) : (
                           <span className="text-slate-300">—</span>
                         )}
