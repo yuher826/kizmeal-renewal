@@ -526,59 +526,63 @@ function ThreadMessage({
   }
 
   // [2] 관리자 답변 — sender_type = 'admin', is_internal = false
+  // 포털(MessageBubble.tsx)과 좌우가 반대다: 포털은 지점이 보는 화면이라
+  // branch가 오른쪽, 여기는 키즈밀이 보는 화면이라 admin이 오른쪽이다.
   if (sender_type === 'admin') {
     const name = adminName || '키즈밀'
     return (
-      <div className="relative group bg-white border border-gray-200 border-l-[3px] border-l-green-600 rounded-lg p-4 mb-3">
-        {/* 수정/삭제 버튼 (hover 시 표시) */}
-        {canEditDelete && !isEditing && (
-          <div className="absolute top-2 right-2 flex gap-1 z-10">
-            <button
-              onClick={onEditStart}
-              title="수정"
-              className="w-6 h-6 flex items-center justify-center rounded hover:bg-gray-100 text-gray-500 transition-colors text-xs"
-            >
-              ✏️
-            </button>
-            <button
-              onClick={onDeleteStart}
-              title="삭제"
-              className="w-6 h-6 flex items-center justify-center rounded hover:bg-red-100 text-red-500 transition-colors text-xs"
-            >
-              🗑️
-            </button>
-          </div>
-        )}
-        <div className="flex items-center gap-2 mb-2">
-          <span className="w-7 h-7 rounded-full bg-green-100 text-green-700 flex items-center justify-center text-xs font-bold flex-shrink-0">{avatarInitial(name)}</span>
-          <span className="text-sm font-semibold text-[#1C2B1E]">{name}</span>
-          <span className="text-xs text-gray-400">영양팀</span>
-          <span className="ml-auto text-xs text-gray-400 flex-shrink-0">
-            {time}
-            {edited && !isEditing && <span className="ml-1 text-gray-400">(수정됨)</span>}
-            {readByBranch && !isEditing && (
-              <span
-                className="inline-flex items-center gap-0.5 ml-1.5 text-[10px] font-medium text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded-full align-middle"
-                title="원 담당자가 읽어 더 이상 수정·삭제할 수 없습니다"
+      <div className="flex justify-end mb-3">
+        <div className="relative group bg-white border border-gray-200 border-l-[3px] border-l-green-600 rounded-lg p-4 max-w-[75%]">
+          {/* 수정/삭제 버튼 (hover 시 표시) */}
+          {canEditDelete && !isEditing && (
+            <div className="absolute top-2 right-2 flex gap-1 z-10">
+              <button
+                onClick={onEditStart}
+                title="수정"
+                className="w-6 h-6 flex items-center justify-center rounded hover:bg-gray-100 text-gray-500 transition-colors text-xs"
               >
-                ✓ 읽음
-              </span>
-            )}
-          </span>
-        </div>
-        <div className="border-t border-gray-100 pt-2">
-          {isEditing ? (
-            <EditTextarea
-              value={editContent}
-              onChange={v => onEditChange?.(v)}
-              onSave={() => onEditSave?.()}
-              onCancel={() => onEditCancel?.()}
-            />
-          ) : (
-            <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">{content}</p>
+                ✏️
+              </button>
+              <button
+                onClick={onDeleteStart}
+                title="삭제"
+                className="w-6 h-6 flex items-center justify-center rounded hover:bg-red-100 text-red-500 transition-colors text-xs"
+              >
+                🗑️
+              </button>
+            </div>
           )}
+          <div className="flex items-center gap-2 mb-2">
+            <span className="w-7 h-7 rounded-full bg-green-100 text-green-700 flex items-center justify-center text-xs font-bold flex-shrink-0">{avatarInitial(name)}</span>
+            <span className="text-sm font-semibold text-[#1C2B1E]">{name}</span>
+            <span className="text-xs text-gray-400">영양팀</span>
+            <span className="ml-auto text-xs text-gray-400 flex-shrink-0">
+              {time}
+              {edited && !isEditing && <span className="ml-1 text-gray-400">(수정됨)</span>}
+              {readByBranch && !isEditing && (
+                <span
+                  className="inline-flex items-center gap-0.5 ml-1.5 text-[10px] font-medium text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded-full align-middle"
+                  title="원 담당자가 읽어 더 이상 수정·삭제할 수 없습니다"
+                >
+                  ✓ 읽음
+                </span>
+              )}
+            </span>
+          </div>
+          <div className="border-t border-gray-100 pt-2">
+            {isEditing ? (
+              <EditTextarea
+                value={editContent}
+                onChange={v => onEditChange?.(v)}
+                onSave={() => onEditSave?.()}
+                onCancel={() => onEditCancel?.()}
+              />
+            ) : (
+              <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">{content}</p>
+            )}
+          </div>
+          {!isEditing && <AttachmentBlock attachments={attachments} onImageClick={onImageClick} />}
         </div>
-        {!isEditing && <AttachmentBlock attachments={attachments} onImageClick={onImageClick} />}
       </div>
     )
   }
@@ -586,17 +590,19 @@ function ThreadMessage({
   // [1] 원(고객사) 메시지 — sender_type = 'branch' / 'branch_member'
   const name = branchName || '지점'
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-4 mb-3">
-      <div className="flex items-center gap-2 mb-2">
-        <span className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold flex-shrink-0">{avatarInitial(name)}</span>
-        <span className="text-sm font-semibold text-[#1C2B1E]">{name}</span>
-        <span className="text-xs text-gray-400">원 담당자</span>
-        <span className="ml-auto text-xs text-gray-400 flex-shrink-0">{time}</span>
+    <div className="flex justify-start mb-3">
+      <div className="bg-white border border-gray-200 rounded-lg p-4 max-w-[75%]">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold flex-shrink-0">{avatarInitial(name)}</span>
+          <span className="text-sm font-semibold text-[#1C2B1E]">{name}</span>
+          <span className="text-xs text-gray-400">원 담당자</span>
+          <span className="ml-auto text-xs text-gray-400 flex-shrink-0">{time}</span>
+        </div>
+        <div className="border-t border-gray-100 pt-2">
+          <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">{content}</p>
+        </div>
+        <AttachmentBlock attachments={attachments} onImageClick={onImageClick} />
       </div>
-      <div className="border-t border-gray-100 pt-2">
-        <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">{content}</p>
-      </div>
-      <AttachmentBlock attachments={attachments} onImageClick={onImageClick} />
     </div>
   )
 }
