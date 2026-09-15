@@ -1,50 +1,187 @@
 # HANDOFF
 
-## 🚀 다음 세션 시작 순서 (2026-09-14 세션 마무리 기록)
+## 🚀 다음 세션 시작 순서 (2026-09-15 세션 마무리 기록)
 
-### 오늘 완료 (전부 커밋·push 완료, 실물 검증까지 끝난 항목만 ✅)
-1. ✅ CS 답변 권한 화면 가드(`canWriteCs`) + DB RLS(`can_write_cs()`) 동반 구현 — director 쓰기 차단
-2. ✅ 학부모문의 관리자 화면(`board/admin/parent-inquiries/[id]`)에 같은 가드 이식 — ⚠️ 아래 "다음 우선순위 2" 참고, 실물 검증만 미완
-3. ✅ CS 메시지 수정·삭제 에러 처리 정리 — 낙관적 삭제 제거, RLS 거부 시 화면·DB 어긋남 방지
-4. ✅ ERP 대화 좌우 정렬 추가(포털과 반대 방향: admin 오른쪽·branch 왼쪽)
-5. ✅ ERP 사이드바 메뉴 그룹 순서 변경 — 소통 관리를 맨 위로
-6. ✅ `SlaStatus`에 `'unknown'` 추가 — 규칙 없음(모른다)과 ok(괜찮다) 구분, 배지 회색 "미설정"으로 명시
+### 오늘 완료 (커밋 `7af55af`, 실물 검증까지 끝남 ✅)
+
+**고객사 공지 권한 갭 1단계 — director 권한 갭 시리즈 5번(마지막) 해결.**
+어제 0단계 조사에서 확인한 UI·API·RLS 3층 무방비 상태를 전부 채웠다.
+
+1. ✅ DB — `can_write_notices()` 신설(`can_write_cs()`와 같은 모양).
+   `parent_notices`의 `admin_notices_all`(FOR ALL, is_active·role 조건 없음)을
+   SELECT(`is_admin()`)/쓰기(`can_write_notices()`) 4개로 분리 교체.
+   기록: `supabase/migrations/can_write_notices_and_rls_260915.sql`
+   ⚠️ 함수명과 `admins.can_write_notices` 컬럼명이 같아 함수 본문에서
+   반드시 별칭(`a.`)으로 한정해야 한다.
+2. ✅ DB — `parent_notice_reads`도 같은 처방. 삭제 권한을 공지와 같은
+   기준(`can_write_notices()`)으로 맞췄다 — `/api/board/notices` DELETE가
+   reads를 먼저 지우고 공지를 지우기 때문에(103~112행), 두 기준이 다르면
+   "읽음 기록만 사라지고 공지는 남는" 부분 삭제가 난다.
+3. ✅ DB — **깨져 있던 기능 수리.** `parent_notice_reads`의 학부모·고객사용
+   정책(`notices_schema.sql:38-44` 설계분)이 라이브에서 증발해 있었고 RLS는
+   켜져 있어(실측 `rls_on=true`), 고객사 포털의 읽음 SELECT·UPSERT가 전부
+   막히고 있었다. select/insert/update 3개 복원. UPDATE까지 만든 이유 —
+   `board/customer/notices/page.tsx:88`이 upsert(onConflict)라 기존 행과
+   충돌하면 UPDATE 경로를 탄다.
+4. ✅ API — `/api/notices`(POST/PATCH), `/api/board/notices`(POST/PATCH/DELETE)
+   전부 `canWriteNotices` 게이트 + `.eq('is_active', true)` 추가.
+   GET은 전부 무변경(★라우트가 아니라 메서드를 막는다 — director 조회 유지).
+   DELETE 게이트는 reads 삭제보다 앞에 세웠다.
+5. ✅ 화면 — `/erp/notices`, `/erp/notices/new`는 `useErpUser()`로 가드.
+   `/board/admin/notices`, `.../new`는 `BoardAdminUserProvider` 신설해 가드
+   (`board/admin/layout.tsx`가 이미 조회하던 adminData를 Context로 내림 —
+   추가 쿼리 0회). 진입점이 데스크탑·모바일 2벌인 화면이 있어 양쪽 다 가드함.
+6. ✅ 플래그는 SQL로 박지 않고 `/erp/admins` 화면에서 사람별로 부여하는
+   방식으로 확정(사용자 결정). 화면·API가 이미 지원하고 있었다.
+
+**실물 검증 완료 (2026-09-15, 브라우저 분리)**
+- director(허이사): `/erp/notices` 목록 2건 정상 조회 ✅ / "공지 작성" 버튼
+  미노출 ✅ / 팝업 ON 공지에 "🔔 팝업 중" 배지, OFF 공지는 "—" 유지 ✅ /
+  `/erp/notices/new` 주소 직접 입력 시 🔒 안내만 ✅
+- `can_write_notices=true`(권팀장): 공지 작성·저장 정상("권팀장 공지 작성
+  테스트 01", 전체 원) ✅
+- ★검증 중 발견 — `git push`를 안 한 상태로 실서버를 보면 예전 화면이 나온다.
+  커밋만 하고 검증하려다 한 번 헛돌았다. 실물 검증 전에 push 확인할 것.
+- ⬜ 미검증 — 고객사 포털 읽음 표시(위 3번). 원 담당자 계정으로
+  `/board/customer/notices` 공지 펼친 뒤 새로고침해 읽음이 유지되는지 확인
+  필요. 오늘 유일하게 "고장나 있던 걸 고친" 항목이라 확인 가치가 크다.
 
 ### 다음 우선순위 후보 (번호는 순서 아님 — 착수 전 재확인부터)
 
-1. **`gen_form.py` 서식 리셋 버그 — 생일주 금요일(F열) 칸이 다른 달에 8pt 연회색으로 리셋됨**
-   (HANDOFF 2182~2195행 "신규 미해결 — 생성 빈 폼에서 생일간식 칸이 8pt 연회색" 참고)
-   ⚠️ **주의**: `gen_form.py`의 "6월 서식 잔재 제거" 버그(1주차 선거일 회색·생일 주황·
-   해당없음 회색이 다른 달에 눌어붙던 문제)는 **이미 커밋 `cb82311`로 해결·실물
-   검증 완료**된 별개 항목이다(HANDOFF 3635~3644행). 지금 열려있는 건 그 반대 방향 —
-   6월 기준폼에만 살아있던 F열(생일주 금요일) 9pt 서식이 다른 달 생성분에서는
-   B열을 표본삼아 덮어써지며 사라지는 문제. 해결 방향 미정 상태로 남아 있음.
-   착수 전에 사용자에게 "이 항목이 맞는지"(생일주 금요일 서식 vs 이미 해결된 잔재
-   제거) 한 번 확인할 것.
+1. **🔴 공지 화면 2벌 문제 — 설계 결정이 먼저다.**
+   2026-09-15 실물로 드러남: 소통채널 "홈페이지 공지"(`/board/admin/notices`,
+   설명은 "학부모 포털에 게시되는 공지") 화면에 **ERP에서 만든 원별 지정
+   고객사 공지가 그대로 섞여 보이고, 거기 삭제 버튼으로 지워진다.** 같은
+   `parent_notices` 테이블을 필터 없이 읽기 때문(HANDOFF "공지 API·화면이
+   2벌이다" 항목과 동일 건, 이번에 증상까지 확인됨).
+   **선결 결정**: ①두 화면을 하나로 합칠지 ②둘로 유지하되
+   `/board/admin/notices`를 `branch_id IS NULL`만 보이게 필터할지.
+   이걸 정하기 전에 아래 2번(상세·수정 화면)에 손대면 2벌이 3벌이 된다.
 
-2. **학부모 문의 가드 실물 검증** — `canWriteCs` 이식은 커밋 완료(`4d4ca76`)했지만
-   학부모 문의 데이터가 0건이라 화면에서 확인 못 함. 실제 문의가 들어오면
-   입력창/상태버튼 숨김이 의도대로 동작하는지, `admin` state 로드 전 잠깐
-   컴포저가 안 보이는 타이밍이 실사용에서 거슬리지 않는지 확인할 것.
+2. **공지 상세·수정 화면이 없다** — `/erp/notices/[id]`가 아예 없어 목록에서
+   행을 눌러도 아무 일이 없고, 작성한 공지 본문을 다시 볼 방법도 고칠 방법도
+   없다. ERP 공지 API에는 DELETE도 없고 PATCH는 `is_popup`만 바꾼다.
+   권한은 이미 열려 있다(권팀장은 수정·삭제 전부 허용) — 누를 버튼이 없을 뿐.
+   1번 결정 후 착수할 것.
 
-3. **권팀장 회신 대기 2건** (사용자 보유 항목 — 상세는 다음 세션에 확인)
+3. **★신규 미해결 — 학부모 SELECT 정책이 라이브에서 깨져 있다.**
+   `parent_notices_select`의 조건이 `c.parent_id = auth.uid()`인데, 이 프로젝트에서
+   `children.parent_id`는 `parents.id`를 참조한다(`weekly_menus_rls_parents.sql:7`,
+   같은 파일 `wm_select_parent`는 `JOIN parents p ON p.id = c.parent_id
+   WHERE p.auth_id = auth.uid()`로 제대로 조인). `parents.id ≠ auth.uid()`이므로
+   이 EXISTS는 영원히 false다 → **학부모는 `branch_id IS NULL` 전체 공지만
+   보이고 원별 지정 공지는 한 건도 안 보인다.**
+   지금 안 드러나는 이유: `app/parent/(portal)/notices/page.tsx`가 아직
+   `MOCK_NOTICES` 상태(92행 upsert도 주석). **학부모 포털 실연동 착수 전에
+   반드시 고칠 것.** 2026-09-15 권한 작업 중 발견, 범위가 달라(학부모에게
+   보이는 공지 범위가 바뀜, 별도 실물 검증 필요) 이번엔 손대지 않았다.
 
-4. **🔴 우선순위 최상 — ERP director 권한 갭 5번(마지막 미해결), 고객사 공지 작성/수정.**
-   0단계 조사(pg_policies 실측) 완료, **다음 세션 1단계(코드 수정) 바로 착수
-   가능한 상태.** 상세는 바로 아래 "CS — 고객사 공지 권한 갭 0단계 조사 완료"
-   항목 참고. 공지는 학부모·고객사에 그대로 노출되는 글이라 CS 답변보다
-   파급 범위가 넓음 — 다른 후보보다 먼저 착수할 것.
+4. **`gen_form.py` 서식 리셋 버그 — 생일주 금요일(F열) 칸이 다른 달에
+   8pt 연회색으로 리셋됨** (HANDOFF 2182~2195행)
+   ⚠️ "6월 서식 잔재 제거" 버그는 커밋 `cb82311`로 이미 해결된 별개 항목.
+   착수 전 사용자에게 어느 쪽인지 한 번 확인할 것.
 
-5. **sla_rules SELECT 정책이 anon에게 열려 있음** (HANDOFF 503~508행)
-   `public_read_sla USING(true)` — board 화면에서는 뺐지만 REST API로는 로그인
-   안 한 사용자도 SLA 기준시간을 읽을 수 있다. 당시 "pg_policies 직접 조회
-   수단이 없어 보류"라고 적어뒀는데, **이번 세션에 Supabase 대시보드 SQL
-   Editor로 pg_policies 조회하는 방법을 이미 썼다(9/14 초반, can_write_cs()
-   확인 때)** — 그 방법 그대로 쓰면 되므로 더 이상 막혀 있지 않음.
+5. **학부모 문의 가드 실물 검증** — `canWriteCs` 이식은 커밋 완료(`4d4ca76`),
+   학부모 문의 데이터가 0건이라 화면 확인 못 함.
+
+6. **권팀장 회신 대기 2건** (사용자 보유 항목)
+
+7. **sla_rules SELECT 정책이 anon에게 열려 있음** (HANDOFF 503~508행)
+   `public_read_sla USING(true)`. pg_policies 조회 수단은 이제 확보돼 있어
+   더는 막혀 있지 않다.
 
 ### 참고 (우선순위 낮음, 존재만 기록)
-- CS 고객사 `MessageBubble`에 발신자 이름 옛 버그 패턴이 남아 있음(HANDOFF 468~481행).
-  지금은 RLS가 조인을 막아 폴백 '키즈밀'만 보여 증상이 안 드러날 뿐.
+- CS 고객사 `MessageBubble`에 발신자 이름 옛 버그 패턴이 남아 있음(468~481행).
+- `app/board/admin/parent-inquiries/[id]/page.tsx`는 `BoardAdminUserProvider`가
+  생겼으므로 추후 그쪽으로 이관 가능(53행 주석 참고). 이번엔 실물 검증이
+  안 끝난 파일이라 건드리지 않았다.
+- `parent_notices.created_by`는 여전히 죽은 컬럼(두 API가 다르게 동작하는
+  상태를 새로 만들지 않기 위해 `null` 유지 확정).
+
+---
+
+## CS — 고객사 공지 권한 갭 1단계 완료 (2026-09-15, 커밋 `7af55af`)
+
+배경·문제점 상세는 바로 아래 "CS — 고객사 공지 권한 갭 0단계 조사 완료" 참고.
+이번 세션에서 그 조사 결과를 코드로 옮겼다 — UI·API·RLS 3층 전부.
+
+### DB (Supabase 대시보드 SQL Editor 수동 실행, 기록:
+`supabase/migrations/can_write_notices_and_rls_260915.sql`)
+
+1. `can_write_notices()` 함수 신설 — `can_write_cs()`와 같은 모양
+   (`role='super_admin' OR can_write_notices=TRUE`, `is_active=TRUE` 조건 포함).
+   ⚠️ 함수명과 `admins.can_write_notices` 컬럼명이 같아 함수 본문에서
+   반드시 별칭(`a.`)으로 한정해야 한다.
+2. `parent_notices`의 `admin_notices_all`(FOR ALL, is_active·role 조건 없음)을
+   `notices_admin_select`(`is_admin()`) / `notices_admin_insert`·`_update`·
+   `_delete`(`can_write_notices()`) 4개로 분리 교체. `parent_notices_select`·
+   `parent_notices_select_branch`는 관심사가 달라 손대지 않음.
+3. `parent_notice_reads`도 같은 처방 — 관리자 SELECT(`is_admin()`)·DELETE
+   (`can_write_notices()`) 분리. 삭제 권한을 공지와 같은 기준으로 맞춘
+   이유: `app/api/board/notices/route.ts` DELETE가 reads를 먼저 지우고
+   공지를 지우기 때문에(107~111행), 두 기준이 다르면 "읽음 기록만 사라지고
+   공지는 남는" 부분 삭제가 난다.
+4. **깨져 있던 기능 수리** — `parent_notice_reads`의 학부모·고객사용 정책
+   (`notices_schema.sql:38-44` 설계분)이 라이브에서 증발해 있었고 RLS는
+   켜져 있어(실측 `rls_on=true`) 고객사 포털의 읽음 SELECT·UPSERT가 전부
+   막히고 있었다. `parent_notice_reads_select`·`_insert`·`_update`
+   (`user_id = auth.uid()`) 3개 복원. UPDATE까지 만든 이유 —
+   `board/customer/notices/page.tsx:88`이 upsert(onConflict)라 기존 행과
+   충돌하면 UPDATE 경로를 탄다.
+
+### API
+
+- `app/api/notices/route.ts` — POST(59~62행)·PATCH(127~130행) 둘 다
+  select를 `id, role, can_write_notices` + `.eq('is_active', true)`로
+  확장하고 `canWriteNotices(adminData)` 게이트 추가. GET(4~49행)은 무변경.
+- `app/api/board/notices/route.ts` — POST(35~38행)·PATCH(73~76행)·
+  DELETE(99~102행) 동일 처리. DELETE 게이트는 `parent_notice_reads` 삭제
+  (107~111행)보다 반드시 앞에 뒀다 — 뒤에 있으면 "읽음 기록은 지워지고
+  공지는 남는" 부분 삭제가 재현된다. GET(4~25행) 무변경.
+
+### 화면
+
+- `app/erp/(protected)/notices/page.tsx` — `useErpUser()`(6행)+
+  `canWriteNotices`(7행)로 `canWrite` 계산(22~23행). "공지 작성" Link(77행),
+  고정 카드의 "팝업 끄기" 버튼(112행), 목록 표의 팝업 셀(154행 —
+  `canWrite`면 끄기 버튼, 아니면 `🔔 팝업 중` 배지로 상태는 그대로 보여줌)
+  전부 가드. 목록 조회·표시는 무변경(director 열람 유지).
+- `app/erp/(protected)/notices/new/page.tsx` — 같은 방식으로 `canWrite`
+  계산(27~28행). `canWrite=false`면 폼 전체(139~141행)를 🔒 읽기전용
+  안내로 대체하고 "저장" 버튼만 숨김(296행), "취소" Link는 유지해 목록으로
+  돌아갈 수 있게 함. 패턴 출처: `InquiryDetailPanel.tsx`의 답변 입력창
+  잠금 안내.
+- `components/board/BoardAdminUserProvider.tsx` (신설) — `ErpUserProvider`를
+  그대로 본뜬 Context(`useBoardAdminUser`, 31~33행). `app/board/admin/layout.tsx`가
+  이미 조회하던 adminData를 그대로 Provider로 내려줌 — 추가 쿼리 0회.
+- `app/board/admin/notices/page.tsx` — "공지 작성" Link가 데스크탑 헤더
+  (76행)·모바일 전용 블록(184행) 2벌이라 양쪽 다 가드. 고정 카드의
+  "고정 해제"·"삭제" 버튼(109행), 목록 표의 "상단 고정"·"삭제" 셀(153행·
+  165행, `canWrite`면 버튼 아니면 "—") 전부 가드.
+- `app/board/admin/notices/new/page.tsx` — ERP `new` 페이지와 동일한
+  읽기전용 안내 패턴(57~59행), "저장" 버튼만 숨김(114행).
+- `app/board/admin/parent-inquiries/[id]/page.tsx:53` — 리팩터링은 이번
+  범위 밖(실물 검증 미완료 파일)이라 주석만 "Provider 신설됨, 추후 이관"으로
+  갱신.
+
+### 플래그 부여 방식
+SQL로 특정 계정에 `can_write_notices=true`를 박지 않고, `/erp/admins`
+화면에서 사람별로 부여하는 기존 방식을 그대로 쓰기로 확정(사용자 결정).
+화면·API가 이미 이 플래그를 지원하고 있어 추가 작업 없음.
+
+### 실물 검증 (2026-09-15, 브라우저 분리)
+- director(허이사): `/erp/notices` 목록 2건 정상 조회, "공지 작성" 버튼
+  미노출, 팝업 ON 공지는 "🔔 팝업 중" 배지·OFF 공지는 "—" 유지,
+  `/erp/notices/new` 직접 진입 시 🔒 안내만 노출.
+- `can_write_notices=true`(권팀장): 공지 작성·저장 정상
+  ("권팀장 공지 작성 테스트 01", 전체 원).
+- ★검증 중 발견 — `git push` 전 상태로 실서버를 보면 예전 화면이 나온다.
+  커밋만 하고 검증하려다 한 번 헛돌았다. 실물 검증 전에 push 여부부터
+  확인할 것.
+- ⬜ 미검증 — 고객사 포털 읽음 표시(DB 4번). 원 담당자 계정으로
+  `/board/customer/notices` 공지를 펼친 뒤 새로고침해 읽음이 유지되는지
+  확인 필요. 이번 세션에서 유일하게 "고장나 있던 걸 고친" 항목이라
+  확인 가치가 크다.
 
 ---
 
