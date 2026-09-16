@@ -27,6 +27,9 @@ export default function CustomerInquiryDetailPage({ params }: { params: { id: st
   const [showAttach, setShowAttach] = useState(false)
   const [loading, setLoading] = useState(true)
   const [toast, setToast] = useState('')
+  // auth_id → 발신자 이름(+직책). admins는 RLS로 못 읽으므로 서버 API
+  // (/api/board/inquiries/[id]/senders)를 거쳐서만 채운다.
+  const [senderMap, setSenderMap] = useState<Record<string, { name: string; role?: string }>>({})
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -66,6 +69,18 @@ export default function CustomerInquiryDetailPage({ params }: { params: { id: st
         .order('created_at', { ascending: true })
 
       if (msgs) setMessages(msgs as unknown as Message[])
+
+      // 발신자 이름 — setLoading(false)보다 먼저 채운다. 뒤에 채우면 첫
+      // 렌더에서 전부 '키즈밀'/'고객사'로 보였다가 이름으로 바뀌는 깜빡임이 난다.
+      try {
+        const res = await fetch(`/api/board/inquiries/${id}/senders`)
+        if (res.ok) {
+          const { senders } = await res.json()
+          setSenderMap(senders || {})
+        }
+      } catch (e) {
+        console.error('[CS] 발신자 이름 조회 실패:', e)
+      }
 
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
@@ -244,6 +259,15 @@ export default function CustomerInquiryDetailPage({ params }: { params: { id: st
     }
   }
 
+  // 발신자 이름 해석 — inquiry.admins.name(담당자)은 "이 문의 담당자"이지
+  // "이 메시지를 쓴 사람"이 아니라 쓰지 않는다. sender_type은 'parent'가
+  // 아니라 'branch'다(헷갈리면 좌우가 뒤집힌다).
+  function resolveSenderName(msg: Message): string {
+    const sender = msg.sender_id ? senderMap[msg.sender_id] : undefined
+    if (sender) return sender.name
+    return msg.sender_type === 'admin' ? '키즈밀' : '고객사'
+  }
+
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
@@ -350,7 +374,8 @@ export default function CustomerInquiryDetailPage({ params }: { params: { id: st
                 key={msg.id}
                 message={msg}
                 branchName={inquiry?.branches?.name}
-                adminName={inquiry?.admins?.name || '키즈밀'}
+                senderName={resolveSenderName(msg)}
+                senderRole={msg.sender_id ? senderMap[msg.sender_id]?.role : undefined}
               />
             ))}
           </>

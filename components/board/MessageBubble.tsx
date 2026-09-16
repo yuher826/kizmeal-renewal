@@ -2,8 +2,12 @@ import type { Message, MessageAttachment } from '@/lib/types'
 
 interface Props {
   message: Message
+  /** 원(지점) 이름 — 발신자 이름 자리와 다르다. 현재 렌더에서는 쓰지 않는다. */
   branchName?: string
-  adminName?: string
+  /** 이 메시지를 쓴 사람 이름. branch·admin 공통 */
+  senderName?: string
+  /** 직책 — branch 메시지에만 채워짐 */
+  senderRole?: string
 }
 
 function formatTime(isoString: string) {
@@ -92,7 +96,7 @@ function AttachmentList({ attachments, variant }: { attachments: MessageAttachme
   )
 }
 
-export default function MessageBubble({ message, branchName, adminName }: Props) {
+export default function MessageBubble({ message, senderName, senderRole }: Props) {
   const { sender_type, content, created_at, is_internal, message_attachments } = message
 
   // System message — centered
@@ -117,7 +121,7 @@ export default function MessageBubble({ message, branchName, adminName }: Props)
           </div>
           <p className="text-sm text-yellow-900 whitespace-pre-wrap">{content}</p>
           <div className="mt-1.5 text-right">
-            <span className="text-xs text-yellow-600">{adminName || '관리자'} · {formatTime(created_at)}</span>
+            <span className="text-xs text-yellow-600">{senderName || '관리자'} · {formatTime(created_at)}</span>
           </div>
         </div>
       </div>
@@ -135,7 +139,9 @@ export default function MessageBubble({ message, branchName, adminName }: Props)
           </div>
           <div className="text-right mt-1">
             <span className="text-xs text-gray-400">
-              {branchName || '지점'} · {formatTime(created_at)}
+              {senderName || '고객사'}
+              {senderRole && <span className="text-[10px] text-gray-300"> · {senderRole}</span>}
+              {' '}· {formatTime(created_at)}
             </span>
           </div>
         </div>
@@ -156,7 +162,7 @@ export default function MessageBubble({ message, branchName, adminName }: Props)
         </div>
         <div className="mt-1">
           <span className="text-xs text-gray-400">
-            {adminName || '키즈밀'} · {formatTime(created_at)}
+            {senderName || '키즈밀'} · {formatTime(created_at)}
           </span>
         </div>
       </div>
