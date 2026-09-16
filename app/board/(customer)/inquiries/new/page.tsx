@@ -178,20 +178,34 @@ export default function NewInquiryPage() {
 
       if (msgError) throw msgError
 
+      let attachFailCount = 0
       if (files.length > 0 && message) {
         for (const file of files) {
-          const path = `${branchId}/${inquiry.id}/${message.id}/${file.name}`
-          const { data: uploaded } = await supabase.storage
+          // 원본 파일명(한글·공백 등)을 경로에 그대로 쓰면 Storage가 조용히
+          // 거부한다 — 대화창 첨부(inquiries/[id]/page.tsx)와 같은 방식으로 안전화.
+          const ext = file.name.split('.').pop()?.toLowerCase() || 'bin'
+          const safeFileName = `${Date.now()}_${Math.random().toString(36).slice(2, 7)}.${ext}`
+          const path = `${branchId}/${inquiry.id}/${message.id}/${safeFileName}`
+          const { data: uploaded, error: upErr } = await supabase.storage
             .from('kizmeal-files')
             .upload(path, file, { upsert: true })
+
+          // ★upErr.message를 화면에 그대로 보여주지 않는다 — 버킷명·정책명이
+          //   새어나간다(InquiryDetailPanel.tsx와 같은 이유). 문의 등록 자체는
+          //   실패시키지 않고 실패 건수만 세어 아래에서 안내한다.
+          if (upErr) {
+            console.error('Storage 업로드 실패:', upErr.message)
+            attachFailCount++
+            continue
+          }
 
           if (uploaded) {
             await supabase.from('message_attachments').insert({
               message_id: message.id,
-              file_name: file.name,
+              file_name: file.name, // 원본 파일명 — 화면 표시용
               file_size: file.size,
               file_type: file.type,
-              storage_path: uploaded.path,
+              storage_path: uploaded.path, // 안전화된 실제 경로
             })
           }
         }
@@ -213,8 +227,15 @@ export default function NewInquiryPage() {
         console.error('[CS] 새 문의 이메일 알림 실패:', e)
       }
 
-      setToast('문의가 접수되었습니다! 🎉')
-      setTimeout(() => router.push(`/board/inquiries/${inquiry.id}`), 1200)
+      // 첨부 실패가 있으면 접수 완료는 그대로 두되 토스트를 더 오래 띄워서
+      // 페이지 이동으로 안내가 씹히지 않게 한다.
+      if (attachFailCount > 0) {
+        setToast(`문의는 접수되었습니다. 다만 파일 ${attachFailCount}개를 첨부하지 못했습니다. 문의 상세 화면에서 다시 올려주세요.`)
+        setTimeout(() => router.push(`/board/inquiries/${inquiry.id}`), 3000)
+      } else {
+        setToast('문의가 접수되었습니다! 🎉')
+        setTimeout(() => router.push(`/board/inquiries/${inquiry.id}`), 1200)
+      }
     } catch (err) {
       const msg =
         err instanceof Error ? err.message
@@ -229,7 +250,7 @@ export default function NewInquiryPage() {
   return (
     <div className="min-h-screen bg-[#F6FAF6] font-sans">
       {toast && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-[#2D6A4F] text-white px-6 py-3 rounded-2xl shadow-lg text-sm font-semibold animate-fade-in">
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-[#2D6A4F] text-white px-6 py-3 rounded-2xl shadow-lg text-sm font-semibold animate-fade-in max-w-[90vw] text-center">
           {toast}
         </div>
       )}
