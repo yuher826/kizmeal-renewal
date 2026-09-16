@@ -34,6 +34,31 @@
 6. ✅ 플래그는 SQL로 박지 않고 `/erp/admins` 화면에서 사람별로 부여하는
    방식으로 확정(사용자 결정). 화면·API가 이미 지원하고 있었다.
 
+✅ **권팀장 9번 잔여 완료 — 고객사 화면 발신자 이름 표시 (2026-09-16, 실물 검증 완료)**
+  · A안 채택: `/api/board/inquiries/[id]/senders` API 라우트 신설. 고객사 계정은
+    admins를 RLS로 못 읽으므로(정책이 is_admin() 또는 본인 행), 서버가 소속을 검증한 뒤
+    그 문의에 등장한 발신자 이름만 반환한다. ★admins 테이블은 계속 닫아둔 상태★
+    (B안=이름 전용 뷰는 기각 — 로그인한 고객사가 키즈밀 전 직원 이름을 조회하게 된다)
+  · MessageBubble Props 정리: adminName 제거, senderName·senderRole로 분리.
+    branchName(원 이름)은 남아 있으나 현재 렌더에서 미사용 — 아래 미해결 3번 참고
+  · 실물 검증: 테스트폴리 계정 `/board/inquiries` 에서 관리자 답변 아래 "유성모" 표시 확인.
+    이전에는 전부 '키즈밀' 폴백이었다
+  · ⚠️ 현재 고객사는 전원 원 마스터 계정이라 원 메시지엔 원 이름만 뜬다. 정상이다.
+    멤버 계정을 쓰기 시작하면 코드 수정 없이 이름+직책이 뜬다
+
+✅ **첨부 유실 버그 수정 (2026-09-16, 실물 검증 완료)**
+  · 증상: 고객사 새 문의 작성에서 "스크린샷 2026-01-30 074832.png"(한글+공백) 첨부가
+    조용히 사라짐. 문의는 정상 등록되고 에러도 안 뜸. storage.objects·message_attachments
+    양쪽 다 0건 → Storage 업로드 단계에서 거부
+  · 원인 2가지: ①원본 파일명을 경로에 그대로 사용 ②upload의 error를 아예 안 받고
+    `if (uploaded)`로만 분기 → 실패 시 조용히 건너뜀
+  · ★이 프로젝트의 나머지 업로드 3곳(대화창 첨부·ERP 답변·학부모 문의)은 이미 safeFileName +
+    upErr throw로 올바르게 돼 있었다. 새 문의 작성 한 곳만 누락돼 있던 것★
+  · 수정: safeFileName(`${Date.now()}_${랜덤5자}.${ext}`) 적용, file_name엔 원본 이름 보존.
+    실패 시 A안 — 문의 등록은 살리고 토스트로 실패 건수 안내(3초, max-w-90vw).
+    upErr.message는 화면에 노출하지 않음(버킷·정책명 유출 방지)
+  · 실물 검증: 같은 한글 파일명으로 재시도 → 썸네일 정상 표시, DB에 file_name 원본 보존 확인
+
 **실물 검증 완료 (2026-09-15, 브라우저 분리)**
 - director(허이사): `/erp/notices` 목록 2건 정상 조회 ✅ / "공지 작성" 버튼
   미노출 ✅ / 팝업 ON 공지에 "🔔 팝업 중" 배지, OFF 공지는 "—" 유지 ✅ /
@@ -55,35 +80,38 @@
 
 ### 다음 우선순위 후보 (번호는 순서 아님 — 착수 전 재확인부터)
 
-1. **권팀장 9번 잔여 — 고객사 화면 발신자 이름 표시 (2026-09-16 조사 완료, 착수 직전)**
-   조사 결과 스키마 작업은 필요 없다. 재료가 이미 다 있다:
-   · `messages.sender_id` 전건 저장됨. 실측: admin 9건/4명, branch 7건/4명, NULL 0건
-   · `sender_type`은 `parent`가 아니라 **`branch`**다. 헷갈리면 좌우가 뒤집힌다
-   · `branch_members`에 `name`·`role` 둘 다 있음 → 권팀장이 원한 "원장/교수부장/
-     A반 담임"이 `role` 컬럼 그대로다
-   · 고객사 멤버 관리 화면 `/board/(customer)/settings/members` 이미 존재
-   **★막히는 지점** — 고객사 계정은 `admins`를 RLS로 못 읽는다(정책이 `is_admin()`
-   또는 본인 행). ERP의 `resolveSenderName`(InquiryDetailPanel.tsx:759, senderNameMap은
-   admins 직접 조회)을 복사해와도 고객사 화면에선 전부 '키즈밀' 폴백만 나온다.
-   **결정 대기** — 이름 통로를 어떻게 낼 것인가:
-     A안(솔아 권고) `/api/board/inquiries/[id]/senders` API 라우트. 서버가 소속 확인 후
-       그 문의에 등장한 발신자 이름만 반환. admins 테이블은 계속 닫아둠
-     B안 이름 전용 뷰(admins+branch_members+branches) 신설. 코드는 적지만 로그인한
-       고객사 계정이 키즈밀 전 직원 이름 목록을 조회 가능해짐
-   이름 해석 순서(확정): branch → ①branch_members.name(+role) ②branches.name ③'고객사'
-                          admin  → ①admins.name ②'키즈밀'
-   ⚠️ 실측 중 발견 — `sender_type='branch'`인데 sender_id가 권팀장 admin auth_id
-   (`14b5118d…`)인 행이 1건 있다(테스트 중 섞인 것으로 추정). 폴백이 이 경우에도
-   깨지지 않아야 한다.
-   ⚠️ 지금 문의를 쓰는 고객사 계정은 전부 원 마스터(`branches`)다 — 멤버 계정으로
-   쓴 사례 0건. 따라서 구현 직후 화면엔 원 이름만 보인다. 정상이다.
+1. **★신규 — 화면과 DB가 branches.is_active 기준을 다르게 본다 (2026-09-16 발견)**
+   `app/board/(customer)/inquiries/new/page.tsx:105-109`는 branches를 auth_id로만 조회한다.
+   반면 DB의 `get_my_branch_id()`는 auth_id + is_active=TRUE를 본다.
+   그래서 비활성 원 계정으로 로그인하면 화면은 branchId를 찾아내 폼을 정상으로 보여주고,
+   제출한 뒤에야 "new row violates row-level security policy for table inquiries"를
+   만난다. 2026-09-16 테스트폴리(is_active=false)에서 실제로 재현됨.
+   계약 종료된 원이 로그인하면 실제 고객에게도 똑같이 일어난다.
+   수정 방향: 화면 조회에 `.eq('is_active', true)` 추가 → 이미 준비된 `submitNoBranch`
+   분기(126~131행, 폼 내용을 지우지 않고 안내만 띄움)가 제대로 동작하게 된다.
+   ⚠️ 테스트폴리는 2026-09-16에 is_active=TRUE로 수동 변경해 둔 상태다.
 
-   **운영 확인 완료 (2026-09-16 권기범 팀장 카톡)** — "한 원에서 여러 담당자가
-   접속하는 경우, 원 대표 계정 아래 아이디를 여러 개 생성할 수 있나?" → 유대표님
-   "처음부터 그렇게 설계했다". **멤버 계정 방향 확정.** 다만 원 쪽에 멤버 계정
-   생성 안내가 나간 적이 없어 사용 이력이 0건이다 — 안내 발송 필요(별도 항목).
+2. **★신규 — inquiries INSERT 정책이 2개다 (AND로 겹침)**
+   `branch_can_insert_inquiries`(마스터 OR 멤버) + `inquiries_insert`(branch_id =
+   get_my_branch_id())가 동시에 걸려 있다.
+   ★RLS에서 SELECT·UPDATE는 정책이 여러 개면 OR이지만, INSERT의 with_check는 전부
+   통과해야 한다(AND). 정책을 늘리면 열리는 게 아니라 조여진다★
+   지금은 두 정책이 사실상 같은 걸 검사해 중복이다. 하나로 정리할지 검토 필요.
+   정리 전에 반드시 두 조건의 차이를 따져볼 것(멤버 계정 is_active 처리가 서로 다르다).
 
-2. **🔴 공지 화면 2벌 문제 — 설계 결정이 먼저다.**
+3. **★신규 — 고객사 문의 상세에 빈 말풍선이 하나 더 그려진다 (원인 미상)**
+   2026-09-16 접수 #401C7F29에서 발견. 왼쪽에 내용·발신자 없이 첨부 이미지만 희미하게
+   보이는 영역이 하나 더 나온다. Ctrl+F5 강력 새로고침에도 남는다.
+   ★DB는 정상★ — 해당 inquiry의 messages 1건, message_attachments 1건뿐임을 SQL로 확인.
+   코드 정적 분석으로는 설명 안 됨: messages.map 한 곳뿐, 실시간 구독은 id로 dedupe,
+   MessageBubble 분기는 system/내부메모/branch/admin 중 하나만 실행, AttachmentList는
+   첨부 1개당 img 1개.
+   다음 착수 시: 정적 분석 말고 브라우저 개발자도구(F12) Elements에서 그 빈 영역이
+   무슨 요소인지 직접 확인할 것. 2026-09-16 MessageBubble Props 변경(adminName 제거,
+   senderName·senderRole 추가) 직후 발견됐으므로 그 변경과의 연관도 함께 볼 것.
+   데이터는 멀쩡하므로 긴급도는 낮다.
+
+4. **🔴 공지 화면 2벌 문제 — 설계 결정이 먼저다.**
    2026-09-15 실물로 드러남: 소통채널 "홈페이지 공지"(`/board/admin/notices`,
    설명은 "학부모 포털에 게시되는 공지") 화면에 **ERP에서 만든 원별 지정
    고객사 공지가 그대로 섞여 보이고, 거기 삭제 버튼으로 지워진다.** 같은
@@ -93,13 +121,13 @@
    `/board/admin/notices`를 `branch_id IS NULL`만 보이게 필터할지.
    이걸 정하기 전에 아래 2번(상세·수정 화면)에 손대면 2벌이 3벌이 된다.
 
-3. **공지 상세·수정 화면이 없다** — `/erp/notices/[id]`가 아예 없어 목록에서
+5. **공지 상세·수정 화면이 없다** — `/erp/notices/[id]`가 아예 없어 목록에서
    행을 눌러도 아무 일이 없고, 작성한 공지 본문을 다시 볼 방법도 고칠 방법도
    없다. ERP 공지 API에는 DELETE도 없고 PATCH는 `is_popup`만 바꾼다.
    권한은 이미 열려 있다(권팀장은 수정·삭제 전부 허용) — 누를 버튼이 없을 뿐.
-   2번 결정 후 착수할 것.
+   4번 결정 후 착수할 것.
 
-4. **★신규 미해결 — 학부모 SELECT 정책이 라이브에서 깨져 있다.**
+6. **★신규 미해결 — 학부모 SELECT 정책이 라이브에서 깨져 있다.**
    `parent_notices_select`의 조건이 `c.parent_id = auth.uid()`인데, 이 프로젝트에서
    `children.parent_id`는 `parents.id`를 참조한다(`weekly_menus_rls_parents.sql:7`,
    같은 파일 `wm_select_parent`는 `JOIN parents p ON p.id = c.parent_id
@@ -111,21 +139,28 @@
    반드시 고칠 것.** 2026-09-15 권한 작업 중 발견, 범위가 달라(학부모에게
    보이는 공지 범위가 바뀜, 별도 실물 검증 필요) 이번엔 손대지 않았다.
 
-5. **`gen_form.py` 서식 리셋 버그 — 생일주 금요일(F열) 칸이 다른 달에
+7. **`gen_form.py` 서식 리셋 버그 — 생일주 금요일(F열) 칸이 다른 달에
    8pt 연회색으로 리셋됨** (HANDOFF 2182~2195행)
    ⚠️ "6월 서식 잔재 제거" 버그는 커밋 `cb82311`로 이미 해결된 별개 항목.
    착수 전 사용자에게 어느 쪽인지 한 번 확인할 것.
 
-6. **학부모 문의 가드 실물 검증** — `canWriteCs` 이식은 커밋 완료(`4d4ca76`),
+8. **학부모 문의 가드 실물 검증** — `canWriteCs` 이식은 커밋 완료(`4d4ca76`),
    학부모 문의 데이터가 0건이라 화면 확인 못 함.
 
-7. **권팀장 회신 대기 2건** (사용자 보유 항목)
+9. **권팀장 회신 대기 2건** (사용자 보유 항목)
 
-8. **sla_rules SELECT 정책이 anon에게 열려 있음** (HANDOFF 503~508행)
+10. **sla_rules SELECT 정책이 anon에게 열려 있음** (HANDOFF 503~508행)
    `public_read_sla USING(true)`. pg_policies 조회 수단은 이제 확보돼 있어
    더는 막혀 있지 않다.
 
 ### 참고 (우선순위 낮음, 존재만 기록)
+- MessageBubble의 `branchName` prop은 현재 렌더에서 쓰이지 않는다. 원 메시지 줄이
+  발신자 이름으로 바뀌면서 원 이름 표시 자리가 없어졌다. 고객사 화면은 자기 원
+  대화만 보므로 원 이름이 불필요할 수 있다 — 지울지 결정 필요.
+- 파일명 안전화 인라인 패턴이 이제 4곳(대화창 첨부·ERP 답변·학부모 문의·새 문의
+  작성)에 중복됐다(공통화는 별도 과제).
+- 첨부 실패 안내가 토스트 3초뿐이라 사용자가 놓칠 수 있다 — 상세 화면에 실패
+  표시를 남기는 보강 여지 있음.
 - CS 고객사 `MessageBubble`에 발신자 이름 옛 버그 패턴이 남아 있음(468~481행).
 - `app/board/admin/parent-inquiries/[id]/page.tsx`는 `BoardAdminUserProvider`가
   생겼으므로 추후 그쪽으로 이관 가능(53행 주석 참고). 이번엔 실물 검증이
