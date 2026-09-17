@@ -31,6 +31,7 @@ export default function CustomerMembersPage() {
         .from('branches')
         .select('id')
         .eq('auth_id', user.id)
+        .eq('is_active', true)
         .maybeSingle()
 
       // ★branch_members(직원) fallback은 의도적으로 추가하지 않음 —
@@ -105,7 +106,7 @@ export default function CustomerMembersPage() {
           <AccountMismatchNotice
             email={userEmail}
             title="직원 관리 화면을 이용할 수 없습니다"
-            message="이 화면은 원 마스터 계정에서만 이용할 수 있습니다. 마스터 계정이 아니거나 계정 연결에 문제가 있을 수 있으니, 다른 계정으로 로그인하셨다면 로그아웃 후 다시 확인해 주세요."
+            message="직원 관리는 원 마스터 계정에서만 이용할 수 있으며, 계정이 비활성 상태인 경우에도 이용이 제한됩니다. 확인이 필요하시면 담당 매니저에게 문의해 주세요."
           />
         ) : (
         <>

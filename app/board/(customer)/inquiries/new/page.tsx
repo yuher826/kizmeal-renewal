@@ -54,6 +54,7 @@ export default function NewInquiryPage() {
           .from('branches')
           .select('name')
           .eq('auth_id', user.id)
+          .eq('is_active', true)
           .maybeSingle()
         if (branchRow?.name) { setBranchName(branchRow.name); return }
         const { data: memberRow } = await supabase
@@ -106,6 +107,7 @@ export default function NewInquiryPage() {
         .from('branches')
         .select('id, brand_id')
         .eq('auth_id', user.id)
+        .eq('is_active', true)
         .maybeSingle()
 
       if (branchRow) {
@@ -384,7 +386,11 @@ export default function NewInquiryPage() {
           </div>
 
           {submitNoBranch && (
-            <AccountMismatchNotice email={userEmail} title="지점 정보를 찾을 수 없습니다" />
+            <AccountMismatchNotice
+              email={userEmail}
+              title="지점 정보를 찾을 수 없습니다"
+              message="이 계정은 현재 서비스 이용이 중단된 상태입니다. 다른 계정으로 로그인하신 것이 아니라면 담당 매니저에게 확인해 주세요."
+            />
           )}
 
           {error && (
