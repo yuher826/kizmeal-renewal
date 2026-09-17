@@ -1021,7 +1021,18 @@ export default function InquiryDetailPanel({ inquiryId, onNotify, onInquiryChang
         event: 'UPDATE', schema: 'public', table: 'inquiries',
         filter: `id=eq.${id}`,
       }, (payload) => {
-        setInquiry(prev => prev ? { ...prev, ...payload.new } : null)
+        // payload.new는 컬럼 값만 담고 있고 admins(join) 정보가 없어, 담당자가
+        // 바뀌어도 이름은 옛 값으로 남는다(예: A가 열어둔 화면에서 B가 이어받으면
+        // assigned_admin_id는 B인데 admins.name은 여전히 A로 보임).
+        // ★prev와 비교해 실제로 바뀐 경우에만 이름까지 다시 조회한다.
+        let assigneeChanged = false
+        setInquiry(prev => {
+          if (!prev) return null
+          const newAssignee = (payload.new as { assigned_admin_id?: string | null }).assigned_admin_id
+          if (newAssignee !== prev.assigned_admin_id) assigneeChanged = true
+          return { ...prev, ...payload.new }
+        })
+        if (assigneeChanged) refreshAssignedAdmin()
       })
       .subscribe()
 
@@ -1404,11 +1415,17 @@ export default function InquiryDetailPanel({ inquiryId, onNotify, onInquiryChang
     // 전화 처리도 고객사에 보이는 실제 대응(is_internal: false)이다 — 답변과
     // 동일하게 상태 전환·담당자 자동 지정 대상으로 취급한다(2026-09-17).
     if (inquiry?.status === 'pending') {
-      await supabase.from('inquiries').update({
+      const { error: statusErr } = await supabase.from('inquiries').update({
         status: 'in_progress',
         first_response_at: new Date().toISOString(),
       }).eq('id', id)
-      setInquiry(prev => prev ? { ...prev, status: 'in_progress' } : null)
+      // 전화 기록 자체는 이미 저장됐으므로 actionError는 띄우지 않는다 — 기록만.
+      // 실패했는데 화면만 in_progress로 바뀌면 DB와 어긋난다.
+      if (statusErr) {
+        console.error('전화 처리 후 상태 전환 실패:', statusErr.message)
+      } else {
+        setInquiry(prev => prev ? { ...prev, status: 'in_progress' } : null)
+      }
     }
     await autoAssignIfEmpty()
     onInquiryChanged?.()
