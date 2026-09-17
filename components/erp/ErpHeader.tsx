@@ -16,10 +16,17 @@ interface CsNotification {
   id: string
   inquiry_id: string
   message_id: string | null
-  kind: 'new_inquiry' | 'new_message'
+  kind: 'new_inquiry' | 'new_message' | 'takeover'
   branch_name: string | null
   preview: string | null
   created_at: string
+}
+
+// takeover만 구분 표시한다 — new_inquiry/new_message는 지금처럼 branch_name +
+// preview로 이미 구분되지만, takeover의 preview는 "누가 이어받았다"는 문장이라
+// branch_name만 보면 평범한 새 메시지처럼 보인다.
+const KIND_TAG: Partial<Record<CsNotification['kind'], string>> = {
+  takeover: '🔄 이어받음',
 }
 
 function timeAgo(iso: string) {
@@ -244,8 +251,13 @@ export default function ErpHeader({ user, onMenuClick }: Props) {
                         className="w-full text-left px-4 py-3 border-b border-slate-50 last:border-b-0 hover:bg-slate-50 transition-colors"
                       >
                         <div className="flex items-center justify-between gap-2">
-                          <span className="text-sm font-semibold text-slate-800 truncate">
-                            {n.branch_name || '고객사'}
+                          <span className="text-sm font-semibold text-slate-800 truncate flex items-center gap-1.5">
+                            {KIND_TAG[n.kind] && (
+                              <span className="text-[10px] font-semibold text-amber-700 bg-amber-100 rounded px-1.5 py-0.5 flex-shrink-0">
+                                {KIND_TAG[n.kind]}
+                              </span>
+                            )}
+                            <span className="truncate">{n.branch_name || '고객사'}</span>
                           </span>
                           <span className="text-xs text-slate-400 flex-shrink-0">{timeAgo(n.created_at)}</span>
                         </div>

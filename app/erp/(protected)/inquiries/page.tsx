@@ -773,8 +773,10 @@ function CsManagementInner() {
 
       {/* ── 오른쪽 패널 (62%) ────────────────────────────────── */}
       <div className="flex-1 min-w-0 overflow-hidden">
-        {/* onNotify: 상단 토글과 공유되는 알림 함수 (고객이 보낸 메시지에만 발동) */}
-        <InquiryDetailPanel inquiryId={selectedId} onNotify={notify} />
+        {/* onNotify: 상단 토글과 공유되는 알림 함수 (고객이 보낸 메시지에만 발동)
+            onInquiryChanged: load는 useCallback(deps []) — 참조가 안정적이라
+            패널 쪽 effect 재실행이나 재렌더 루프를 유발하지 않는다 */}
+        <InquiryDetailPanel inquiryId={selectedId} onNotify={notify} onInquiryChanged={load} />
       </div>
       </div>
     </div>

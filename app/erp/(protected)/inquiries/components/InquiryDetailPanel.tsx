@@ -648,9 +648,13 @@ interface Props {
   inquiryId: string | null
   /** 알림 함수 (상단 토글과 공유). 고객이 보낸 메시지에만 호출 — 중복 방지는 내부 처리 */
   onNotify?: (id: string, title: string, body?: string) => void
+  /** 담당자·상태 등 목록에 보이는 값이 바뀌었을 때 호출 (2026-09-17).
+   *  왼쪽 목록의 realtime 구독은 "다른 사람 화면"을 위한 것이라, 내 화면에서
+   *  낸 변경은 그 구독과 무관하게 여기서 직접 재조회를 트리거해 확실히 반영한다. */
+  onInquiryChanged?: () => void
 }
 
-export default function InquiryDetailPanel({ inquiryId, onNotify }: Props) {
+export default function InquiryDetailPanel({ inquiryId, onNotify, onInquiryChanged }: Props) {
   const id = inquiryId
   // realtime 콜백에서 최신 지점명을 읽기 위한 ref (state는 클로저에 갇힘)
   const branchNameRef = useRef<string>('')
@@ -688,6 +692,11 @@ export default function InquiryDetailPanel({ inquiryId, onNotify }: Props) {
   const [showPhoneLog, setShowPhoneLog] = useState(false)
   const [phoneMemo, setPhoneMemo] = useState('')
   const [phoneDuration, setPhoneDuration] = useState('')
+
+  // ── 이어받기(2026-09-17) ──────────────────────────────────────
+  const [showTakeoverConfirm, setShowTakeoverConfirm] = useState(false)
+  const [takeoverError, setTakeoverError] = useState('')
+  const [takingOver, setTakingOver] = useState(false)
 
   // ── 수정/삭제 상태 ────────────────────────────────────────────
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -872,6 +881,8 @@ export default function InquiryDetailPanel({ inquiryId, onNotify }: Props) {
     setFiles([])
     setShowAttach(false)
     setShowPhoneLog(false)
+    setShowTakeoverConfirm(false)
+    setTakeoverError('')
     setEditingId(null)
     setEditContent('')
     setDeletingId(null)
@@ -1143,34 +1154,11 @@ export default function InquiryDetailPanel({ inquiryId, onNotify }: Props) {
         }
         await supabase.from('inquiries').update(updates).eq('id', id)
 
-        // 답변 시 담당자 자동 지정(2026-09-17). ★화면의 inquiry.assigned_admin_id로
-        //   판단하지 않는다★ — 두 사람이 같은 문의를 동시에 열어두면 둘 다
-        //   "비어있음"으로 보여 나중 사람이 덮어쓴다. DB에 조건부 UPDATE로
-        //   맡겨(is('assigned_admin_id', null)) 먼저 답변한 사람만 잡히게 한다.
-        const { data: assignResult, error: assignErr } = await supabase
-          .from('inquiries')
-          .update({ assigned_admin_id: currentAdmin.id })
-          .eq('id', id)
-          .is('assigned_admin_id', null)
-          .select('assigned_admin_id')
-
-        // 메시지는 이미 전송됐으므로 이 실패를 sendError로 띄우지 않는다 — 기록만.
-        if (assignErr) {
-          console.error('담당자 자동 지정 실패:', assignErr.message)
-        } else if (assignResult && assignResult.length > 0) {
-          // 1행 — 내가 이번에 처음으로 잡았다. assignAdmin()과 같은 모양으로 즉시 반영.
-          const assigned = admins.find(a => a.id === currentAdmin.id)
-          if (assigned) {
-            setInquiry(prev => prev ? { ...prev, assigned_admin_id: currentAdmin.id, admins: assigned } : null)
-          } else {
-            // 로컬 admins 목록에 없으면(드묾) DB에서 다시 맞춘다.
-            await refreshAssignedAdmin()
-          }
-        } else {
-          // 0행 — 이미 다른 사람이 먼저 잡았다. DB 값으로 화면을 맞춘다
-          // (드롭다운·"담당자" 표시가 실제 배정과 어긋나면 안 된다).
-          await refreshAssignedAdmin()
-        }
+        // 답변 시 담당자 자동 지정(2026-09-17, 전화 처리도 동일 — savePhoneLog() 참고)
+        await autoAssignIfEmpty()
+        // 목록의 상태·담당자 배지는 realtime 구독(다른 사람 화면용)과 무관하게
+        // 내 화면에서 직접 재조회를 트리거해 확실히 반영한다.
+        onInquiryChanged?.()
       }
 
       const { data: fullMsg } = await supabase
@@ -1248,6 +1236,7 @@ export default function InquiryDetailPanel({ inquiryId, onNotify }: Props) {
     // "바뀐 것처럼 보이는데 실제로는 안 바뀐" 상태로 남는다.
     if (error) { setActionError(toKoreanErrorMessage(error)); return }
     setInquiry(prev => prev ? { ...prev, status } : null)
+    onInquiryChanged?.()
 
     await supabase.from('messages').insert({
       inquiry_id: id,
@@ -1267,6 +1256,7 @@ export default function InquiryDetailPanel({ inquiryId, onNotify }: Props) {
     if (error) { setActionError(toKoreanErrorMessage(error)); return }
     const assigned = admins.find(a => a.id === adminId) || null
     setInquiry(prev => prev ? { ...prev, assigned_admin_id: adminId, admins: assigned || undefined } : null)
+    onInquiryChanged?.()
   }
 
   /** 다른 사람이 먼저 잡았거나 로컬 admins 목록에 없을 때, DB에 반영된
@@ -1286,6 +1276,78 @@ export default function InquiryDetailPanel({ inquiryId, onNotify }: Props) {
       assigned_admin_id: data.assigned_admin_id || undefined,
       admins: (assignedAdmin as unknown as Admin) || undefined,
     } : null)
+  }
+
+  /** 답변(전화 처리 포함) 시 담당자가 비어 있으면 나를 자동으로 지정한다
+   *  (2026-09-17). sendMessage()·savePhoneLog() 양쪽에서 쓴다.
+   *  ★화면의 inquiry.assigned_admin_id로 판단하지 않는다★ — 두 사람이 같은
+   *  문의를 동시에 열어두면 둘 다 "비어있음"으로 보여 나중 사람이 덮어쓴다.
+   *  DB에 조건부 UPDATE로 맡겨(is('assigned_admin_id', null)) 먼저 답변한
+   *  사람만 잡히게 한다. */
+  async function autoAssignIfEmpty() {
+    if (!id || !currentAdmin) return
+    const supabase = createClient()
+    const { data: assignResult, error: assignErr } = await supabase
+      .from('inquiries')
+      .update({ assigned_admin_id: currentAdmin.id })
+      .eq('id', id)
+      .is('assigned_admin_id', null)
+      .select('assigned_admin_id')
+
+    // 답변/전화기록은 이미 처리됐으므로 이 실패를 actionError·sendError로 띄우지
+    // 않는다 — 기록만.
+    if (assignErr) {
+      console.error('담당자 자동 지정 실패:', assignErr.message)
+      return
+    }
+    if (assignResult && assignResult.length > 0) {
+      // 1행 — 내가 이번에 처음으로 잡았다. assignAdmin()과 같은 모양으로 즉시 반영.
+      const assigned = admins.find(a => a.id === currentAdmin.id)
+      if (assigned) {
+        setInquiry(prev => prev ? { ...prev, assigned_admin_id: currentAdmin.id, admins: assigned } : null)
+        return
+      }
+    }
+    // 0행(이미 배정됨) 또는 로컬 admins 목록에 없으면(드묾) DB 값으로 화면을
+    // 맞춘다(드롭다운·"담당자" 표시가 실제 배정과 어긋나면 안 된다).
+    await refreshAssignedAdmin()
+  }
+
+  /** 이어받기 확인 — 서버가 담당자 변경·내부 기록·원 담당자 알림을 한번에 처리한다. */
+  async function confirmTakeover() {
+    if (!id || !inquiry?.assigned_admin_id) return
+    setTakingOver(true)
+    setTakeoverError('')
+    try {
+      const res = await fetch(`/api/cs/inquiries/${id}/takeover`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ expectedAssigneeId: inquiry.assigned_admin_id }),
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        if (res.status === 409) {
+          setTakeoverError('그 사이 담당자가 바뀌었습니다. 최신 상태로 맞췄습니다.')
+          await refreshAssignedAdmin()
+          onInquiryChanged?.()
+        } else {
+          setTakeoverError(json.error || '이어받기에 실패했습니다')
+        }
+        return
+      }
+      const assignee = json.assignee as { id: string; name: string }
+      setInquiry(prev => prev ? {
+        ...prev,
+        assigned_admin_id: assignee.id,
+        admins: { id: assignee.id, name: assignee.name } as unknown as Admin,
+      } : null)
+      setShowTakeoverConfirm(false)
+      onInquiryChanged?.()
+    } catch {
+      setTakeoverError('이어받기에 실패했습니다')
+    } finally {
+      setTakingOver(false)
+    }
   }
 
   async function addNote(noteContent: string) {
@@ -1338,6 +1400,18 @@ export default function InquiryDetailPanel({ inquiryId, onNotify }: Props) {
       content: chatContent,
       is_internal: false,
     })
+
+    // 전화 처리도 고객사에 보이는 실제 대응(is_internal: false)이다 — 답변과
+    // 동일하게 상태 전환·담당자 자동 지정 대상으로 취급한다(2026-09-17).
+    if (inquiry?.status === 'pending') {
+      await supabase.from('inquiries').update({
+        status: 'in_progress',
+        first_response_at: new Date().toISOString(),
+      }).eq('id', id)
+      setInquiry(prev => prev ? { ...prev, status: 'in_progress' } : null)
+    }
+    await autoAssignIfEmpty()
+    onInquiryChanged?.()
 
     setPhoneMemo('')
     setPhoneDuration('')
@@ -1775,6 +1849,49 @@ export default function InquiryDetailPanel({ inquiryId, onNotify }: Props) {
                 </select>
               ) : (
                 <p className="text-sm text-gray-700 px-1">{inquiry?.admins?.name || '미배정'}</p>
+              )}
+
+              {/* 이어받기 — 미배정·본인 담당·쓰기 권한 없음(director 등)에는 안 보인다 */}
+              {canWriteCs && inquiry?.assigned_admin_id && inquiry.assigned_admin_id !== currentAdmin?.id && (
+                showTakeoverConfirm ? (
+                  <div className="mt-2 border border-amber-200 rounded-lg p-3 bg-amber-50">
+                    <p className="text-sm text-amber-900 mb-3">
+                      {inquiry.admins?.is_active === false
+                        ? '비활성 계정이 담당한 문의입니다. 이어받으시겠습니까?'
+                        : `${inquiry.admins?.name || '담당자'}님이 담당 중입니다. 이어받으면 ${inquiry.admins?.name || '담당자'}님께 알림이 갑니다.`}
+                    </p>
+                    {takeoverError && (
+                      <div className="mb-3 flex items-center gap-1.5 text-xs text-red-700 bg-red-100 rounded-lg px-3 py-2">
+                        <span>⚠️</span>
+                        <span>{takeoverError}</span>
+                      </div>
+                    )}
+                    <div className="flex gap-2">
+                      <button
+                        onClick={confirmTakeover}
+                        disabled={takingOver}
+                        className="text-xs px-4 py-1.5 rounded-lg bg-[#2D6A4F] text-white font-semibold hover:bg-[#1B4332] disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                      >
+                        {takingOver ? '처리 중...' : '이어받기'}
+                      </button>
+                      <button
+                        onClick={() => { setShowTakeoverConfirm(false); setTakeoverError('') }}
+                        disabled={takingOver}
+                        className="text-xs px-4 py-1.5 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-50 transition-colors"
+                      >
+                        취소
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setShowTakeoverConfirm(true)}
+                    className="mt-2 text-xs text-[#2D6A4F] font-medium hover:underline"
+                  >
+                    🔄 이어받기
+                  </button>
+                )
               )}
             </div>
 
