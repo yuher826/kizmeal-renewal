@@ -8,7 +8,7 @@ import type {
 } from '@/lib/types'
 import {
   CATEGORY_COLORS, CATEGORY_ICONS, CATEGORY_LABELS,
-  STATUS_COLORS, STATUS_LABELS, formatCategory,
+  STATUS_COLORS, STATUS_LABELS, CUSTOMER_STATUS_LABELS, formatCategory,
 } from '@/lib/types'
 import { getSlaStatus, getSlaRemaining, getSlaBadgeColor, getSlaIcon } from '@/lib/sla'
 import StatusBadge from '@/components/board/StatusBadge'
@@ -1214,7 +1214,6 @@ export default function InquiryDetailPanel({ inquiryId, onNotify }: Props) {
     const supabase = createClient()
     const updates: Record<string, unknown> = { status }
     if (status === 'resolved') updates.resolved_at = new Date().toISOString()
-    if (status === 'closed') updates.closed_at = new Date().toISOString()
     const { error } = await supabase.from('inquiries').update(updates).eq('id', id)
     // 실패 시 낙관적 업데이트를 하지 않는다 — 화면 상태와 DB가 어긋나면
     // "바뀐 것처럼 보이는데 실제로는 안 바뀐" 상태로 남는다.
@@ -1224,7 +1223,9 @@ export default function InquiryDetailPanel({ inquiryId, onNotify }: Props) {
     await supabase.from('messages').insert({
       inquiry_id: id,
       sender_type: 'system',
-      content: `상태가 '${STATUS_LABELS[status]}'(으)로 변경되었습니다.`,
+      // ★is_internal: false — 고객사에게 그대로 보인다. STATUS_LABELS(ERP용, '확인중' 등)를
+      //   쓰면 내부 사정이 새어나가므로 반드시 CUSTOMER_STATUS_LABELS를 쓴다.
+      content: `상태가 '${CUSTOMER_STATUS_LABELS[status]}'(으)로 변경되었습니다.`,
       is_internal: false,
     })
   }

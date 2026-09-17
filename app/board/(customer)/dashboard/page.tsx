@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase'
 import { KIZMEAL_LOGO_PATH } from '@/lib/brand'
 import { ROUTES } from '@/lib/routes'
 import type { Inquiry, Branch, Notification } from '@/lib/types'
+import { CUSTOMER_STATUS_LABELS } from '@/lib/types'
 import InquiryCard from '@/components/board/InquiryCard'
 import AccountMismatchNotice from '@/components/board/AccountMismatchNotice'
 
@@ -118,7 +119,7 @@ export default function CustomerDashboardPage() {
   const stats = {
     total: inquiries.length,
     inProgress: inquiries.filter(i => i.status === 'in_progress').length,
-    resolved: inquiries.filter(i => i.status === 'resolved' || i.status === 'closed').length,
+    resolved: inquiries.filter(i => i.status === 'resolved').length,
     unread: notifications.length,
   }
 
@@ -249,6 +250,7 @@ export default function CustomerDashboardPage() {
                   inquiry={inq}
                   href={`/board/inquiries/${inq.id}`}
                   unreadCount={inq.unread_count_branch}
+                  statusLabels={CUSTOMER_STATUS_LABELS}
                 />
               ))
             )}

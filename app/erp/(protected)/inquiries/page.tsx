@@ -44,7 +44,7 @@ interface ListInquiry {
   unread_count_admin: number | null
   branch_id: string
   resolved_at: string | null
-  closed_at: string | null
+  assigned_admin_id: string | null
   branches: ListBranch | ListBranch[] | null
 }
 
@@ -99,12 +99,13 @@ function formatYearMonth(ym: string): string {
   return `${year}년 ${parseInt(month)}월`
 }
 
+// STATUS_LABELS(확인중/처리중/완료)와 표현을 맞춘다 — 필터 탭만 옛 용어를
+// 쓰면 같은 화면 안에서 "대기 탭인데 뱃지는 확인중" 식의 불일치가 생긴다.
 const STATUS_FILTER_TABS: { key: InquiryStatus | ''; label: string }[] = [
   { key: '',            label: '전체' },
-  { key: 'pending',     label: '대기' },
+  { key: 'pending',     label: '확인중' },
   { key: 'in_progress', label: '처리중' },
-  { key: 'resolved',    label: '해결' },
-  { key: 'closed',      label: '종료' },
+  { key: 'resolved',    label: '완료' },
 ]
 
 
@@ -167,7 +168,7 @@ function CsManagementInner() {
         .from('inquiries')
         .select(`
           id, title, status, category, created_at, unread_count_admin,
-          branch_id, resolved_at, closed_at,
+          branch_id, resolved_at, assigned_admin_id,
           branches!inner ( id, name, is_active, logo_url )
         `)
         // 비활성 지점 제외 (branches.is_active = true)
@@ -293,7 +294,7 @@ function CsManagementInner() {
       const branch = one(inq.branches)
       const profile = profiles[inq.branch_id]
       const isComplaint = inq.category === 'COMPLAINT'
-      const isUrgentComplaint = isComplaint && inq.status !== 'resolved' && inq.status !== 'closed'
+      const isUrgentComplaint = isComplaint && inq.status !== 'resolved'
       return {
         inq,
         groupTag: profile?.group_tag || UNGROUPED,
@@ -361,15 +362,16 @@ function CsManagementInner() {
       return d.getFullYear() * 100 + d.getMonth() === thisMonth
     }
     return {
-      pending: inquiries.filter(i => i.status === 'pending').length,
+      // '미배정' — status=pending 개수가 아니라 "확인중인데 담당자가 없는 것"만 센다.
+      // 권팀장이 매일 아침 보는 숫자라, 아무도 안 잡은 문의 건수가 핵심이다.
+      pending: inquiries.filter(i => i.status === 'pending' && !i.assigned_admin_id).length,
       today: inquiries.filter(i => new Date(i.created_at).toDateString() === today).length,
       slaExceeded: inquiries.filter(i =>
         getSlaStatus(i as unknown as Inquiry, slaRules[i.category]) === 'exceeded'
       ).length,
-      doneThisMonth: inquiries.filter(i =>
-        (i.status === 'resolved' || i.status === 'closed') &&
-        (inMonth(i.resolved_at) || inMonth(i.closed_at))
-      ).length,
+      // closed 상태는 더 이상 없다(3단계 전환, 2026-09-17) — resolved_at 하나로 충분하다.
+      // 과거 closed였던 행도 마이그레이션 때 resolved_at으로 백필됐다.
+      doneThisMonth: inquiries.filter(i => i.status === 'resolved' && inMonth(i.resolved_at)).length,
     }
   }, [inquiries, slaRules])
 
@@ -387,13 +389,10 @@ function CsManagementInner() {
     return rows
       .filter(r => {
         // 통계 카드 필터
-        if (statFilter === 'pending' && r.inq.status !== 'pending') return false
+        if (statFilter === 'pending' && !(r.inq.status === 'pending' && !r.inq.assigned_admin_id)) return false
         if (statFilter === 'today' && new Date(r.inq.created_at).toDateString() !== todayStr) return false
         if (statFilter === 'slaExceeded' && getSlaStatus(r.inq as unknown as Inquiry, slaRules[r.inq.category]) !== 'exceeded') return false
-        if (statFilter === 'doneThisMonth' && !(
-          (r.inq.status === 'resolved' || r.inq.status === 'closed') &&
-          (inMonth(r.inq.resolved_at) || inMonth(r.inq.closed_at))
-        )) return false
+        if (statFilter === 'doneThisMonth' && !(r.inq.status === 'resolved' && inMonth(r.inq.resolved_at))) return false
         // 월별 필터
         if (filterMonth) {
           const d = new Date(r.inq.created_at)
@@ -540,7 +539,7 @@ function CsManagementInner() {
           {/* 통계 바 */}
           <div className="grid grid-cols-4 gap-2 p-3">
             {[
-              { key: 'pending'       as const, label: '대기중',      value: stats.pending,       color: 'text-red-600',    bg: 'bg-red-50',    activeBg: 'bg-red-100',    ring: 'ring-red-400' },
+              { key: 'pending'       as const, label: '미배정',      value: stats.pending,       color: 'text-red-600',    bg: 'bg-red-50',    activeBg: 'bg-red-100',    ring: 'ring-red-400' },
               { key: 'today'         as const, label: '오늘 신규',   value: stats.today,         color: 'text-blue-600',   bg: 'bg-blue-50',   activeBg: 'bg-blue-100',   ring: 'ring-blue-400' },
               { key: 'slaExceeded'   as const, label: 'SLA 초과',    value: stats.slaExceeded,   color: 'text-orange-600', bg: 'bg-orange-50', activeBg: 'bg-orange-100', ring: 'ring-orange-400' },
               { key: 'doneThisMonth' as const, label: '이번달 처리', value: stats.doneThisMonth, color: 'text-green-600',  bg: 'bg-green-50',  activeBg: 'bg-green-100',  ring: 'ring-green-400' },

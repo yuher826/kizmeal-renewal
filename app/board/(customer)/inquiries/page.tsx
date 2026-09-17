@@ -6,16 +6,15 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { ROUTES } from '@/lib/routes'
 import type { Inquiry, InquiryStatus } from '@/lib/types'
-import { STATUS_LABELS } from '@/lib/types'
+import { CUSTOMER_STATUS_LABELS } from '@/lib/types'
 import InquiryCard from '@/components/board/InquiryCard'
 import AccountMismatchNotice from '@/components/board/AccountMismatchNotice'
 
 const TABS: { label: string; value: InquiryStatus | 'all' }[] = [
   { label: '전체', value: 'all' },
-  { label: '대기중', value: 'pending' },
+  { label: '접수', value: 'pending' },
   { label: '처리중', value: 'in_progress' },
-  { label: '해결됨', value: 'resolved' },
-  { label: '종료', value: 'closed' },
+  { label: '완료', value: 'resolved' },
 ]
 
 export default function CustomerInquiriesPage() {
@@ -34,7 +33,7 @@ export default function CustomerInquiriesPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const status = params.get('status')
-    if (status === 'in_progress' || status === 'pending' || status === 'resolved' || status === 'closed') {
+    if (status === 'in_progress' || status === 'pending' || status === 'resolved') {
       setActiveTab(status)
     }
   }, [])
@@ -199,7 +198,7 @@ export default function CustomerInquiriesPage() {
               <p className="text-gray-400 text-sm">
                 {searchKw.length >= 2
                   ? '검색 결과가 없습니다.'
-                  : activeTab === 'all' ? '문의 내역이 없습니다.' : `${STATUS_LABELS[activeTab as InquiryStatus]} 문의가 없습니다.`}
+                  : activeTab === 'all' ? '문의 내역이 없습니다.' : `${CUSTOMER_STATUS_LABELS[activeTab as InquiryStatus]} 문의가 없습니다.`}
               </p>
             </div>
           ) : (
@@ -210,6 +209,7 @@ export default function CustomerInquiriesPage() {
                 href={`/board/inquiries/${inq.id}`}
                 unreadCount={inq.unread_count_branch}
                 matchPreview={matchPreviewFor(inq)}
+                statusLabels={CUSTOMER_STATUS_LABELS}
               />
             ))
           )}

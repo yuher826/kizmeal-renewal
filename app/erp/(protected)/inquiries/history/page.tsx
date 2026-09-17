@@ -11,12 +11,13 @@ import { getGroupStyle } from '@/lib/cs-group-styles'
 
 const PAGE_SIZE = 30
 
+// '해결'·'종료' 2개 탭이 있었으나 3단계 전환(2026-09-17)으로 closed가 resolved에
+// 합쳐졌다 — STATUS_LABELS('완료')와 표현을 맞춘다.
 const STATUS_OPTS: { key: InquiryStatus | ''; label: string }[] = [
   { key: '',            label: '전체 상태' },
-  { key: 'pending',     label: '대기' },
+  { key: 'pending',     label: '확인중' },
   { key: 'in_progress', label: '처리중' },
-  { key: 'resolved',    label: '해결' },
-  { key: 'closed',      label: '종료' },
+  { key: 'resolved',    label: '완료' },
 ]
 
 type SortField = 'branch' | 'status' | 'created_at'

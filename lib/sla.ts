@@ -4,7 +4,7 @@ export function getSlaStatus(inquiry: Inquiry, rule?: SlaRule): SlaStatus {
   // 규칙이 없으면 "괜찮다"가 아니라 "모른다" — ok로 합치면 규칙 없는
   // 카테고리가 항상 초록불로 보인다(2026-08-18 SCHEDULE_OPS가 이렇게 샜음).
   if (!rule || !inquiry.created_at) return 'unknown'
-  if (inquiry.status === 'resolved' || inquiry.status === 'closed') return 'ok'
+  if (inquiry.status === 'resolved') return 'ok'
 
   const created = new Date(inquiry.created_at).getTime()
   const now = Date.now()
@@ -17,7 +17,7 @@ export function getSlaStatus(inquiry: Inquiry, rule?: SlaRule): SlaStatus {
 
 export function getSlaRemaining(inquiry: Inquiry, rule?: SlaRule): string {
   if (!rule || !inquiry.created_at) return '미설정'
-  if (inquiry.status === 'resolved' || inquiry.status === 'closed') return '완료'
+  if (inquiry.status === 'resolved') return '완료'
 
   const created = new Date(inquiry.created_at).getTime()
   const now = Date.now()

@@ -1,4 +1,4 @@
-export type InquiryStatus = 'pending' | 'in_progress' | 'resolved' | 'closed'
+export type InquiryStatus = 'pending' | 'in_progress' | 'resolved'
 
 // 고객사(가맹점) 1:1 문의 카테고리
 // 2026-08-18 권팀장 요청으로 전면 재정의. 기존 코드(MEAL_COUNT/PHOTO/CONTRACT/
@@ -84,18 +84,27 @@ export const CATEGORY_COLORS: Record<InquiryCategory, string> = {
   OTHER:        'bg-gray-100 text-gray-700',
 }
 
+// ERP(내부)용 라벨 — "확인중"은 담당자 유무와 무관하게 접수된 상태를 뜻한다.
+// 담당자 없는 확인중은 목록에서 별도로 집계한다(erp/inquiries 상단 '미배정' 카드).
 export const STATUS_LABELS: Record<InquiryStatus, string> = {
-  pending: '대기중',
+  pending: '확인중',
   in_progress: '처리중',
-  resolved: '해결됨',
-  closed: '종료',
+  resolved: '완료',
+}
+
+// 고객사(원)용 라벨 — ★내부 사정(미배정 등)을 노출하지 않는다★. pending을
+// ERP처럼 '확인중'으로 보여주면 "누가 보고는 있나?"처럼 읽혀 불안을 준다.
+// 그냥 "접수됐다"는 사실만 전달한다.
+export const CUSTOMER_STATUS_LABELS: Record<InquiryStatus, string> = {
+  pending: '접수',
+  in_progress: '처리중',
+  resolved: '완료',
 }
 
 export const STATUS_COLORS: Record<InquiryStatus, string> = {
   pending: 'bg-yellow-100 text-yellow-800',
   in_progress: 'bg-blue-100 text-blue-800',
   resolved: 'bg-green-100 text-green-800',
-  closed: 'bg-gray-100 text-gray-600',
 }
 
 export const PRIORITY_LABELS: Record<Priority, string> = {

@@ -4,7 +4,7 @@ import { useEffect, useState, useRef, useCallback, Fragment } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 import type { Inquiry, Message } from '@/lib/types'
-import { CATEGORY_ICONS } from '@/lib/types'
+import { CATEGORY_ICONS, CUSTOMER_STATUS_LABELS } from '@/lib/types'
 import MessageBubble from '@/components/board/MessageBubble'
 import StatusBadge from '@/components/board/StatusBadge'
 import FileUpload from '@/components/board/FileUpload'
@@ -224,10 +224,16 @@ export default function CustomerInquiryDetailPage({ params }: { params: { id: st
       }
 
       // 4. 문의 업데이트
-      await supabase.from('inquiries').update({
+      // ★완료된 문의에 고객사가 메시지를 보내면 처리중으로 되돌린다 — 이미
+      //   in_progress면 불필요하게 덮어쓰지 않는다(realtime UPDATE 스팸 방지).
+      const inquiryUpdates: Record<string, unknown> = {
         last_message_at: new Date().toISOString(),
         unread_count_admin: (inquiry?.unread_count_admin ?? 0) + 1,
-      }).eq('id', id)
+      }
+      if (inquiry && inquiry.status !== 'in_progress') {
+        inquiryUpdates.status = 'in_progress'
+      }
+      await supabase.from('inquiries').update(inquiryUpdates).eq('id', id)
 
       // 관리자에게 새 메시지 이메일 알림 (실패해도 전송에 영향 없음)
       try {
@@ -296,7 +302,7 @@ export default function CustomerInquiryDetailPage({ params }: { params: { id: st
   }
 
   const stepIndex = !inquiry ? 0
-    : (inquiry.status === 'resolved' || inquiry.status === 'closed') ? 2
+    : inquiry.status === 'resolved' ? 2
     : inquiry.status === 'in_progress' ? 1
     : 0
 
@@ -328,7 +334,7 @@ export default function CustomerInquiryDetailPage({ params }: { params: { id: st
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
             <NotifyToggleButton enabled={notifyOn} onToggle={toggleNotify} />
-            {inquiry && <StatusBadge status={inquiry.status} />}
+            {inquiry && <StatusBadge status={inquiry.status} labels={CUSTOMER_STATUS_LABELS} />}
           </div>
         </div>
 
@@ -409,43 +415,41 @@ export default function CustomerInquiryDetailPage({ params }: { params: { id: st
         </div>
       )}
 
-      {/* 입력창 */}
+      {/* 입력창 — ★완료된 문의도 계속 메시지를 보낼 수 있다(3단계 전환, 2026-09-17).
+          추가 질문이 있으면 전화가 오던 것을 막기 위해 차단을 없앴다.
+          보내면 sendMessage()가 status를 'in_progress'로 되돌린다. */}
       <div className="bg-white border-t border-gray-100 px-4 py-3 flex-shrink-0">
-        {inquiry?.status === 'closed' ? (
-          <p className="text-center text-sm text-gray-400 py-2">종료된 문의입니다.</p>
-        ) : (
-          <div className="flex gap-2 items-end">
-            <button
-              type="button"
-              onClick={() => setShowAttach(v => !v)}
-              className={`flex-shrink-0 pb-2 transition-colors ${showAttach ? 'text-[#2D6A4F]' : 'text-gray-400 hover:text-[#2D6A4F]'}`}
-              aria-label="파일 첨부"
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
-              </svg>
-            </button>
-            <textarea
-              ref={textareaRef}
-              rows={1}
-              value={content}
-              onChange={e => setContent(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="메시지를 입력하세요... (Enter 전송, Shift+Enter 줄바꿈)"
-              className="flex-1 px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#2D6A4F] focus:border-transparent resize-none"
-              style={{ minHeight: '42px', maxHeight: '120px' }}
-            />
-            <button
-              onClick={sendMessage}
-              disabled={(!content.trim() && files.length === 0) || sending}
-              className="bg-[#2D6A4F] hover:bg-[#1B4332] disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors flex-shrink-0 flex items-center gap-1"
-            >
-              {sending ? (
-                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              ) : '전송'}
-            </button>
-          </div>
-        )}
+        <div className="flex gap-2 items-end">
+          <button
+            type="button"
+            onClick={() => setShowAttach(v => !v)}
+            className={`flex-shrink-0 pb-2 transition-colors ${showAttach ? 'text-[#2D6A4F]' : 'text-gray-400 hover:text-[#2D6A4F]'}`}
+            aria-label="파일 첨부"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+            </svg>
+          </button>
+          <textarea
+            ref={textareaRef}
+            rows={1}
+            value={content}
+            onChange={e => setContent(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="메시지를 입력하세요... (Enter 전송, Shift+Enter 줄바꿈)"
+            className="flex-1 px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#2D6A4F] focus:border-transparent resize-none"
+            style={{ minHeight: '42px', maxHeight: '120px' }}
+          />
+          <button
+            onClick={sendMessage}
+            disabled={(!content.trim() && files.length === 0) || sending}
+            className="bg-[#2D6A4F] hover:bg-[#1B4332] disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors flex-shrink-0 flex items-center gap-1"
+          >
+            {sending ? (
+              <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            ) : '전송'}
+          </button>
+        </div>
       </div>
     </div>
   )

@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { CATEGORY_COLORS, CATEGORY_ICONS, CATEGORY_LABELS, type Inquiry } from '@/lib/types'
+import { CATEGORY_COLORS, CATEGORY_ICONS, CATEGORY_LABELS, type Inquiry, type InquiryStatus } from '@/lib/types'
 import StatusBadge from './StatusBadge'
 
 // SLA 배지는 고객사 화면에 노출하지 않는다.
@@ -15,6 +15,8 @@ interface Props {
   // 대화 내용 검색(권팀장 요청 8-2)에서 제목이 아니라 대화 내용으로 매칭된
   // 경우, 그 매칭된 부분을 보여주기 위한 미리보기(있으면 기본 preview 대신 표시)
   matchPreview?: string
+  // StatusBadge로 그대로 전달 — 고객사 화면에서 CUSTOMER_STATUS_LABELS를 넘기기 위함
+  statusLabels?: Record<InquiryStatus, string>
 }
 
 function timeAgo(isoString: string) {
@@ -37,7 +39,7 @@ function fullDateTime(isoString: string) {
   })
 }
 
-export default function InquiryCard({ inquiry, href, showBranch = false, unreadCount, matchPreview }: Props) {
+export default function InquiryCard({ inquiry, href, showBranch = false, unreadCount, matchPreview, statusLabels }: Props) {
   const lastMessage = inquiry.messages?.[0]
   const preview = lastMessage?.content?.slice(0, 80) || '내용 없음'
 
@@ -49,7 +51,7 @@ export default function InquiryCard({ inquiry, href, showBranch = false, unreadC
             <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${CATEGORY_COLORS[inquiry.category]}`}>
               {CATEGORY_ICONS[inquiry.category]} {CATEGORY_LABELS[inquiry.category]}
             </span>
-            <StatusBadge status={inquiry.status} />
+            <StatusBadge status={inquiry.status} labels={statusLabels} />
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
             {(unreadCount ?? 0) > 0 && (
