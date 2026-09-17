@@ -16,18 +16,21 @@ const NOTIFY_VOLUME = 0.55
 // 독립된 별개 설정이라 키를 따로 쓴다(하나를 꺼도 다른 하나는 그대로 살아 있어야 함).
 const NOTIFY_SOUND_ENABLED_KEY = 'cs_notify_sound_enabled'
 
-let notifyAudio: HTMLAudioElement | null = null
+// src별로 따로 캐시한다(기본 알림음 + 이어받기 전용음 등, 여러 소리를 동시에 쓸 수 있게).
+const notifyAudioCache = new Map<string, HTMLAudioElement>()
 let audioUnlockBound = false
 let audioUnlocked = false
 
-/** 알림음 오디오 엘리먼트 (지연 생성, 단일 인스턴스 재사용) */
-function getNotifyAudio(): HTMLAudioElement | null {
+/** 알림음 오디오 엘리먼트 (지연 생성, src별 단일 인스턴스 재사용) */
+function getNotifyAudio(src: string = NOTIFY_SOUND_SRC): HTMLAudioElement | null {
   if (typeof window === 'undefined') return null
-  if (!notifyAudio) {
-    notifyAudio = new Audio(NOTIFY_SOUND_SRC)
-    notifyAudio.volume = NOTIFY_VOLUME
+  let audio = notifyAudioCache.get(src)
+  if (!audio) {
+    audio = new Audio(src)
+    audio.volume = NOTIFY_VOLUME
+    notifyAudioCache.set(src, audio)
   }
-  return notifyAudio
+  return audio
 }
 
 /**
@@ -66,12 +69,13 @@ export function setupAudioUnlock(): void {
 
 /**
  * 알림음 재생.
- * public/sounds/notify.mp3 (happy bells 종소리)를 재생한다.
+ * src를 생략하면 기본 public/sounds/notify.mp3 (happy bells 종소리)를 재생한다.
+ * 다른 소리를 쓰려면 경로를 넘긴다(예: 이어받기 전용음 '/sounds/takeover.mp3').
  * unlock 여부와 무관하게 항상 muted=false, volume=0.55 로 세팅한 뒤 play() 를 시도한다.
  * (unlock 은 도우미일 뿐 — 없거나 실패해도 여기서 그냥 재생을 시도한다. 실패해도 페이지엔 영향 없음)
  */
-export function playNotify(): void {
-  const audio = getNotifyAudio()
+export function playNotify(src?: string): void {
+  const audio = getNotifyAudio(src)
   if (!audio) return
   try {
     audio.muted = false          // unlock 등으로 바뀌었을 수 있어 매번 확실히 해제
@@ -82,6 +86,21 @@ export function playNotify(): void {
     })
   } catch {
     /* 오디오 미지원/차단 시 조용히 무시 */
+  }
+}
+
+/**
+ * 팝업·소리 ON/OFF를 호출 시점에 직접 읽는다(localStorage, 저장 안 돼 있으면
+ * 기본 ON). ★useNotifier 훅의 enabled state는 마운트 시 한 번만 읽으므로,
+ * 다른 컴포넌트(예: ErpHeader)에서 그 훅을 새로 쓰면 CS 화면에서 바꾼 설정을
+ * 모른다 — 그래서 상태 없이 값만 매번 직접 읽는 함수가 따로 필요하다.
+ */
+export function isNotifySoundEnabled(): boolean {
+  try {
+    const saved = localStorage.getItem(NOTIFY_SOUND_ENABLED_KEY)
+    return saved === null ? true : saved === 'true'
+  } catch {
+    return true
   }
 }
 
@@ -98,13 +117,22 @@ export async function requestNotificationPermission(): Promise<boolean> {
   }
 }
 
-/** 팝업 표시 — 권한 없거나 미지원이면 조용히 스킵 (소리는 별도 처리) */
-export function showBrowserNotification(title: string, body?: string): void {
+/** 팝업 표시 — 권한 없거나 미지원이면 조용히 스킵 (소리는 별도 처리).
+ *  onClick을 주면 팝업 클릭 시 포커스를 가져오고 그 콜백을 실행한다(생략 시
+ *  기존과 동일하게 동작). */
+export function showBrowserNotification(title: string, body?: string, onClick?: () => void): void {
   if (typeof window === 'undefined' || !('Notification' in window)) return
   try {
     if (Notification.permission !== 'granted') return
     // silent: true → 팝업은 뜨되 OS 기본 알림음은 안 남 (우리 mp3만 재생)
-    new Notification(title, { body, silent: true })
+    const notification = new Notification(title, { body, silent: true })
+    if (onClick) {
+      notification.onclick = () => {
+        window.focus()
+        onClick()
+        notification.close()
+      }
+    }
   } catch {
     /* 팝업 실패는 무시 */
   }

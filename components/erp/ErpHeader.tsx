@@ -7,6 +7,10 @@ import { ChevronRight, Menu, Bell } from 'lucide-react'
 import type { ErpUser } from '@/types/erp'
 import { canAccessErpPage } from '@/lib/erp-access'
 import NotifyToggleButton from '@/components/NotifyToggleButton'
+import {
+  playNotify, showBrowserNotification, setupAudioUnlock,
+  requestNotificationPermission, isNotifySoundEnabled,
+} from '@/lib/useNotifier'
 
 // 헤더 배지·폴링 ON/OFF 저장 키 — CS 관리 페이지의 팝업·소리 ON/OFF
 // (lib/useNotifier.ts의 cs_notify_sound_enabled)와는 완전히 독립된 별개 설정이다.
@@ -93,6 +97,10 @@ export default function ErpHeader({ user, onMenuClick }: Props) {
   // 배지·폴링 ON/OFF. 서버(SSR)엔 localStorage가 없으므로 초기값은 항상 true로
   // 시작해 hydration mismatch를 피하고, 저장된 값은 마운트 후 아래 effect에서 반영한다.
   const [badgeEnabled, setBadgeEnabled] = useState(true)
+  // 이어받기(takeover) 소리·팝업용 — 이미 본 적 있는 알림 id(중복 재생 방지)와
+  // "첫 조회를 끝냈는지" 플래그(첫 조회는 기준선만 잡고 울리지 않는다).
+  const seenTakeoverIdsRef = useRef<Set<string>>(new Set())
+  const firstFetchDoneRef = useRef(false)
 
   useEffect(() => {
     try {
@@ -102,6 +110,14 @@ export default function ErpHeader({ user, onMenuClick }: Props) {
       /* localStorage 접근 불가 환경은 기본값(ON) 유지 */
     }
   }, [])
+
+  // CS 화면에 안 들어간 사람도 이어받기 소리가 나도록, 헤더가 마운트되는
+  // 시점에 미리 준비해 둔다(오디오 unlock 바인딩·팝업 권한 요청).
+  useEffect(() => {
+    if (!canSeeCs) return
+    setupAudioUnlock()
+    if (isNotifySoundEnabled()) void requestNotificationPermission()
+  }, [canSeeCs])
 
   function toggleBadge() {
     setBadgeEnabled(prev => {
@@ -120,11 +136,36 @@ export default function ErpHeader({ user, onMenuClick }: Props) {
       const res = await fetch('/api/cs/notifications')
       if (!res.ok) return
       const json = await res.json()
-      setNotifications(json.notifications || [])
+      const list: CsNotification[] = json.notifications || []
+      setNotifications(list)
+
+      // 이어받기(takeover)만 소리+팝업 — 원래 담당자가 모르고 계속 처리하면
+      // 중복 대응이 생긴다. new_inquiry/new_message는 CS 화면(inquiries/page.tsx)의
+      // 실시간 구독에서만 울려서, 여기서까지 울리면 이중 재생이 된다.
+      const takeovers = list.filter(n => n.kind === 'takeover')
+      if (!firstFetchDoneRef.current) {
+        // 첫 조회는 기준선만 잡는다 — 새로고침·로그인 직후 지난 알림이
+        // 한꺼번에 울리는 것을 막기 위해.
+        takeovers.forEach(n => seenTakeoverIdsRef.current.add(n.id))
+        firstFetchDoneRef.current = true
+        return
+      }
+      const newTakeovers = takeovers.filter(n => !seenTakeoverIdsRef.current.has(n.id))
+      takeovers.forEach(n => seenTakeoverIdsRef.current.add(n.id))
+      if (newTakeovers.length > 0 && isNotifySoundEnabled()) {
+        playNotify('/sounds/takeover.mp3') // 여러 건이 동시에 와도 소리는 1회
+        newTakeovers.slice(0, 3).forEach(n => {
+          showBrowserNotification(
+            '🔄 담당 문의를 이어받았습니다',
+            `${n.branch_name || '고객사'} · ${n.preview || ''}`,
+            () => router.push(`/erp/inquiries?id=${n.inquiry_id}`)
+          )
+        })
+      }
     } catch {
       /* 폴링 실패는 조용히 무시 — 다음 주기에 다시 시도 */
     }
-  }, [])
+  }, [router])
 
   // ★OFF일 땐 요청 자체를 안 만든다 — 배지만 숨기고 30초마다 계속 폴링하면 의미가
   //   없다. DB 쪽 생성(cs_notifications INSERT)은 계속 일어나므로, 다시 켜면

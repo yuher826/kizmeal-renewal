@@ -273,6 +273,21 @@ CS 관리 잔여가 크게 줄었다. 정정 1·2(아래 "✅ 정정" 항목)로
        `assignedIdRef`(별도 `useEffect`로 `inquiry?.assigned_admin_id`를 동기화)를
        두고 업데이터 밖에서 비교하도록 뒤 커밋에서 고쳤다
      · 결정: 담당자 드롭다운 수동 변경은 알림을 보내지 않는다
+     · 소리·팝업: 헤더 30초 폴링에서 새 takeover만 울린다. 첫 조회는 기준선만
+       잡고 울리지 않는다(새로고침·로그인 시 지난 알림이 한꺼번에 몰리는 것
+       방지). CS 화면 알림 ON/OFF(`cs_notify_sound_enabled`)를 울리는 시점에
+       `lib/useNotifier.ts`의 `isNotifySoundEnabled()`로 직접 읽어 따른다 — 헤더가
+       마운트 시 한 번만 읽는 훅을 쓰면 CS 화면에서 바꾼 설정을 못 따라간다.
+       헤더 배지 OFF면 폴링 자체가 멈춰 소리도 없음(의도). `new_inquiry`·
+       `new_message`는 절대 안 울림(CS 화면 실시간 구독과 이중 재생 방지)
+     · 전용 소리 적용 완료(이 커밋, 2026-09-17) — `public/sounds/takeover.mp3`
+       (Mixkit "Cool guitar riff" #2321, 1.6초, 기존 `notify.mp3`와 최대 음량
+       -2dB로 맞춤). `playNotify(src?)`로 소스를 선택할 수 있게 확장하고,
+       오디오 엘리먼트는 src별로 Map 캐시. `showBrowserNotification`에
+       `onClick` 인자를 추가해 팝업 클릭 시 해당 문의로 이동
+       ⚠️ HANDOFF에 "교체 예정" 단계 기록은 없었다 — 소리·팝업 기능 자체가
+       이 커밋 이전엔 코드만 있고 HANDOFF·커밋 어느 쪽에도 안 남아 있었다.
+       그래서 이번에 소리·팝업 전체를 한 번에 기록했다
      · 실물 검증: ⏳ 대기 (계정 2개 필요 — 11번 항목 순서로 CS 전화 직원 계정
        발급 후 진행)
        시나리오: ①A 담당 문의를 B가 이어받기 → 담당자 B·대화창에 🔄 기록·A
