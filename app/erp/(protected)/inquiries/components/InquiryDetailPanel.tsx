@@ -953,6 +953,13 @@ export default function InquiryDetailPanel({ inquiryId, onNotify }: Props) {
       }
 
       await supabase.from('inquiries').update({ unread_count_admin: 0 }).eq('id', id)
+      // CS 알림 목록(cs_notifications)도 같은 시점에 읽음 처리 — 문의를 열어봤다는
+      // 사실 자체가 확인의 증거이므로 위 unread_count_admin 리셋과 짝을 맞춘다.
+      fetch('/api/cs/notifications', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ inquiryId: id }),
+      }).catch(() => { /* 읽음 처리 실패해도 화면 진입엔 영향 없음 */ })
       setLoading(false)
     }
 

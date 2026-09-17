@@ -127,6 +127,13 @@ function CsManagementInner() {
   // 현재 열어둔 문의 id (realtime 콜백에서 최신값 읽기용 — 상세 패널과 중복 알림 방지)
   const selectedIdRef = useRef<string | null>(urlId)
   useEffect(() => { selectedIdRef.current = selectedId }, [selectedId])
+  // ★selectedId는 useState 초기값으로만 urlId를 받아 이후 URL 변경엔 반응하지 않는다.
+  // ERP 헤더 CS 알림에서 이 페이지가 이미 열려 있는 상태로 ?id=를 바꿔 들어오면
+  // (같은 라우트라 리마운트되지 않음) 이 effect가 없으면 선택이 안 바뀐다.
+  useEffect(() => {
+    if (urlId && urlId !== selectedId) setSelectedId(urlId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlId])
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set())
 
   const [search, setSearch] = useState('')

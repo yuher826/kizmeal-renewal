@@ -245,6 +245,26 @@ export default function CustomerInquiryDetailPage({ params }: { params: { id: st
         console.error('[CS] 지점 메시지 이메일 알림 실패:', e)
       }
 
+      // CS 담당자별 알림 목록(cs_notifications) 생성.
+      // ★ERP 목록의 realtime 구독에 붙이지 않는 이유는 위 새 문의 등록 화면과 동일 —
+      //   그 화면을 아무도 열어두지 않으면 알림이 안 쌓인다. 고객이 실제로 보낸
+      //   이 시점엔 항상 실행되므로 여기서 만든다.
+      try {
+        await fetch('/api/cs/notifications', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            kind: 'new_message',
+            inquiryId: id,
+            messageId: msg.id,
+            branchName: inquiry?.branches?.name ?? '(지점명 없음)',
+            preview: msgContent.slice(0, 60),
+          }),
+        })
+      } catch (e) {
+        console.error('[CS] 알림 목록 생성 실패:', e)
+      }
+
       setContent('')
       setFiles([])
       setShowAttach(false)

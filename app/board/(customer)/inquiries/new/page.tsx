@@ -229,6 +229,25 @@ export default function NewInquiryPage() {
         console.error('[CS] 새 문의 이메일 알림 실패:', e)
       }
 
+      // CS 담당자별 알림 목록(cs_notifications) 생성.
+      // ★여기서 호출하는 이유 — ERP 목록의 realtime 구독(app/erp/(protected)/inquiries/page.tsx)에
+      //   붙이면 그 화면을 열어둔 사람에게만 실행돼, 아무도 CS 화면을 안 보고 있으면
+      //   알림 자체가 안 쌓인다. 고객이 실제로 "보낸" 이 시점엔 항상 실행되므로 여기서 만든다.
+      try {
+        await fetch('/api/cs/notifications', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            kind: 'new_inquiry',
+            inquiryId: inquiry.id,
+            branchName: branchName || '(지점명 없음)',
+            preview: content.trim().slice(0, 60),
+          }),
+        })
+      } catch (e) {
+        console.error('[CS] 알림 목록 생성 실패:', e)
+      }
+
       // 첨부 실패가 있으면 접수 완료는 그대로 두되 토스트를 더 오래 띄워서
       // 페이지 이동으로 안내가 씹히지 않게 한다.
       if (attachFailCount > 0) {
