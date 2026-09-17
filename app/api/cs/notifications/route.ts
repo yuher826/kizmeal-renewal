@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase-server'
-import { canHandleCs } from '@/lib/roles'
+import { canAccessErpPage } from '@/lib/erp-access'
 
 // cs_notifications — CS 담당자별 알림 데이터(배지·목록용). 기존 팝업·소리
 // (lib/useNotifier.ts)와 병행 동작하며, 그쪽은 건드리지 않는다.
@@ -50,14 +50,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'SUPABASE_SERVICE_ROLE_KEY 필요' }, { status: 400 })
     }
 
-    // 배정자(assignee) 개념 없음(A안) — CS 담당자 "전원"에게 보낸다.
-    // ★판정은 lib/roles.ts의 canHandleCs를 그대로 재사용한다(새 함수 금지).
+    // 배정자(assignee) 개념 없음(A안) — CS 담당자 "전원" + /erp/inquiries 접근
+    // 가능한 사람(director 등 흐름만 보는 사람 포함) 전원에게 보낸다.
+    // ★판정은 lib/erp-access.ts의 canAccessErpPage를 그대로 재사용한다
+    //   (새 판정 함수 금지 — 권한 판정이 여러 곳으로 흩어지면 안 된다).
+    //   canAccessErpPage('/erp/inquiries')는 이미 canHandleCs를 OR로 포함한다.
     const { data: activeAdmins } = await adminClient
       .from('admins')
       .select('id, role, can_handle_cs')
       .eq('is_active', true)
 
-    const recipients = (activeAdmins || []).filter(a => canHandleCs(a))
+    const recipients = (activeAdmins || []).filter(a => canAccessErpPage(a, '/erp/inquiries'))
 
     for (const admin of recipients) {
       const { error } = await adminClient.from('cs_notifications').insert({

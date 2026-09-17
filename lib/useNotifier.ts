@@ -12,6 +12,9 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 const NOTIFY_SOUND_SRC = '/sounds/notify.mp3'
 const NOTIFY_VOLUME = 0.55
+// 팝업·소리 ON/OFF 저장 키 — 헤더 배지 ON/OFF(cs_notify_badge_enabled)와는 완전히
+// 독립된 별개 설정이라 키를 따로 쓴다(하나를 꺼도 다른 하나는 그대로 살아 있어야 함).
+const NOTIFY_SOUND_ENABLED_KEY = 'cs_notify_sound_enabled'
 
 let notifyAudio: HTMLAudioElement | null = null
 let audioUnlockBound = false
@@ -109,7 +112,7 @@ export function showBrowserNotification(title: string, body?: string): void {
 
 /**
  * 알림 훅.
- * - enabled: 현재 ON/OFF (기본 ON, 새로고침 시 초기화 = 세션 내 컴포넌트 state)
+ * - enabled: 현재 ON/OFF (기본 ON. localStorage에 저장돼 새로고침해도 유지된다)
  * - toggle: ON/OFF 전환 (ON 전환 시 팝업 권한 요청)
  * - notify(id, title, body): id 기준 중복 방지 후 소리+팝업
  *
@@ -117,6 +120,9 @@ export function showBrowserNotification(title: string, body?: string): void {
  *    각 탭이 독립적으로 소리를 내 중복 재생될 수 있음. 여기서는 다루지 않음.
  */
 export function useNotifier(defaultEnabled = true) {
+  // ★SSR엔 localStorage가 없다 — 초기 state는 서버·클라이언트가 항상 같은 값
+  //   (defaultEnabled)으로 시작해 hydration mismatch를 피하고, 저장된 값은
+  //   마운트 후 아래 effect에서 반영한다.
   const [enabled, setEnabled] = useState(defaultEnabled)
   // realtime 콜백은 구독 시점 클로저에 갇히므로, 최신 enabled 값을 ref로 읽는다
   const enabledRef = useRef(defaultEnabled)
@@ -124,9 +130,20 @@ export function useNotifier(defaultEnabled = true) {
   const lastNotifiedIdRef = useRef<string | null>(null)
 
   useEffect(() => {
+    // 저장된 ON/OFF 값으로 마운트 후 보정 (없으면 기본값 그대로 ON 유지)
+    try {
+      const saved = localStorage.getItem(NOTIFY_SOUND_ENABLED_KEY)
+      if (saved !== null) {
+        const next = saved === 'true'
+        enabledRef.current = next
+        setEnabled(next)
+      }
+    } catch {
+      /* localStorage 접근 불가 환경(프라이빗 모드 등)은 기본값 유지 */
+    }
     // 첫 사용자 상호작용에 오디오 unlock 바인딩 (한 번만)
     setupAudioUnlock()
-    // 기본 ON이므로 마운트 시 한 번 권한 요청
+    // ON 상태로 시작하면 마운트 시 한 번 권한 요청
     if (enabledRef.current) void requestNotificationPermission()
   }, [])
 
@@ -134,6 +151,11 @@ export function useNotifier(defaultEnabled = true) {
     setEnabled(prev => {
       const next = !prev
       enabledRef.current = next
+      try {
+        localStorage.setItem(NOTIFY_SOUND_ENABLED_KEY, String(next))
+      } catch {
+        /* 저장 실패해도 이번 세션 동작엔 영향 없음 */
+      }
       if (next) void requestNotificationPermission()
       return next
     })

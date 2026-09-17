@@ -5,7 +5,12 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { ChevronRight, Menu, Bell } from 'lucide-react'
 import type { ErpUser } from '@/types/erp'
-import { canHandleCs } from '@/lib/roles'
+import { canAccessErpPage } from '@/lib/erp-access'
+import NotifyToggleButton from '@/components/NotifyToggleButton'
+
+// 헤더 배지·폴링 ON/OFF 저장 키 — CS 관리 페이지의 팝업·소리 ON/OFF
+// (lib/useNotifier.ts의 cs_notify_sound_enabled)와는 완전히 독립된 별개 설정이다.
+const BADGE_ENABLED_KEY = 'cs_notify_badge_enabled'
 
 interface CsNotification {
   id: string
@@ -71,12 +76,37 @@ export default function ErpHeader({ user, onMenuClick }: Props) {
   const crumb = matchedKey ? BREADCRUMB_MAP[matchedKey] : null
   const badge = ROLE_BADGE[user.role] ?? ROLE_BADGE.admin
 
-  // CS 알림 — CS 담당자(canHandleCs)에게만 폴링한다. 나머지(영양사·director 등)는
-  // 어차피 빈 응답만 30초마다 받게 되므로 아예 요청 자체를 만들지 않는다.
-  const canSeeCs = canHandleCs(user)
+  // CS 알림 — /erp/inquiries에 접근 가능한 사람에게만 폴링한다(생성 API와 동일
+  // 기준으로 맞춘다 — 기준이 어긋나면 "알림은 쌓이는데 종이 안 보이는" 상태가 된다).
+  // 나머지(영양사 등)는 어차피 빈 응답만 30초마다 받게 되므로 요청 자체를 안 만든다.
+  const canSeeCs = canAccessErpPage(user, '/erp/inquiries')
   const [notifications, setNotifications] = useState<CsNotification[]>([])
   const [open, setOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
+  // 배지·폴링 ON/OFF. 서버(SSR)엔 localStorage가 없으므로 초기값은 항상 true로
+  // 시작해 hydration mismatch를 피하고, 저장된 값은 마운트 후 아래 effect에서 반영한다.
+  const [badgeEnabled, setBadgeEnabled] = useState(true)
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(BADGE_ENABLED_KEY)
+      if (saved !== null) setBadgeEnabled(saved === 'true')
+    } catch {
+      /* localStorage 접근 불가 환경은 기본값(ON) 유지 */
+    }
+  }, [])
+
+  function toggleBadge() {
+    setBadgeEnabled(prev => {
+      const next = !prev
+      try {
+        localStorage.setItem(BADGE_ENABLED_KEY, String(next))
+      } catch {
+        /* 저장 실패해도 이번 세션 동작엔 영향 없음 */
+      }
+      return next
+    })
+  }
 
   const fetchNotifications = useCallback(async () => {
     try {
@@ -89,12 +119,15 @@ export default function ErpHeader({ user, onMenuClick }: Props) {
     }
   }, [])
 
+  // ★OFF일 땐 요청 자체를 안 만든다 — 배지만 숨기고 30초마다 계속 폴링하면 의미가
+  //   없다. DB 쪽 생성(cs_notifications INSERT)은 계속 일어나므로, 다시 켜면
+  //   effect가 재실행되며 그동안 쌓인 알림을 즉시 가져온다.
   useEffect(() => {
-    if (!canSeeCs) return
+    if (!canSeeCs || !badgeEnabled) return
     fetchNotifications()
     const timer = setInterval(fetchNotifications, 30000)
     return () => clearInterval(timer)
-  }, [canSeeCs, fetchNotifications])
+  }, [canSeeCs, badgeEnabled, fetchNotifications])
 
   // 드롭다운 바깥 클릭 시 닫기
   useEffect(() => {
@@ -173,7 +206,7 @@ export default function ErpHeader({ user, onMenuClick }: Props) {
               className="relative w-9 h-9 flex items-center justify-center text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
             >
               <Bell size={20} />
-              {notifications.length > 0 && (
+              {badgeEnabled && notifications.length > 0 && (
                 <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
                   {notifications.length > 9 ? '9+' : notifications.length}
                 </span>
@@ -182,20 +215,25 @@ export default function ErpHeader({ user, onMenuClick }: Props) {
 
             {open && (
               <div className="absolute right-0 mt-2 w-80 max-w-[90vw] bg-white border border-slate-200 rounded-xl shadow-lg z-50 overflow-hidden">
-                <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
-                  <span className="text-sm font-semibold text-slate-800">CS 알림</span>
-                  {notifications.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={handleMarkAllRead}
-                      className="text-xs text-[#2D6A4F] font-medium hover:underline"
-                    >
-                      모두 읽음
-                    </button>
-                  )}
+                <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 gap-2">
+                  <span className="text-sm font-semibold text-slate-800 flex-shrink-0">CS 알림</span>
+                  <div className="flex items-center gap-2">
+                    <NotifyToggleButton enabled={badgeEnabled} onToggle={toggleBadge} />
+                    {badgeEnabled && notifications.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={handleMarkAllRead}
+                        className="text-xs text-[#2D6A4F] font-medium hover:underline flex-shrink-0"
+                      >
+                        모두 읽음
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <div className="max-h-96 overflow-y-auto">
-                  {notifications.length === 0 ? (
+                  {!badgeEnabled ? (
+                    <p className="px-4 py-8 text-center text-sm text-slate-400">알림이 꺼져 있습니다. 켜면 다시 받습니다.</p>
+                  ) : notifications.length === 0 ? (
                     <p className="px-4 py-8 text-center text-sm text-slate-400">새 알림이 없습니다</p>
                   ) : (
                     notifications.map(n => (
