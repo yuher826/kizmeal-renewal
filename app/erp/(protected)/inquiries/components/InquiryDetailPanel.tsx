@@ -658,6 +658,13 @@ export default function InquiryDetailPanel({ inquiryId, onNotify, onInquiryChang
   const id = inquiryId
   // realtime 콜백에서 최신 지점명을 읽기 위한 ref (state는 클로저에 갇힘)
   const branchNameRef = useRef<string>('')
+  // realtime UPDATE 핸들러에서 "담당자가 실제로 바뀌었는지" 판정할 때 쓰는 ref.
+  // setInquiry의 업데이터 함수 안에서 판정하면 안 된다 — React 18은 업데이터를
+  // 나중에(때로는 두 번) 실행할 수 있어, 그 결과를 바로 다음 줄에서 읽으면
+  // 그 시점엔 아직 false일 수 있다(2026-09-17 발견, 1f3cdce에서 이 버그로
+  // refreshAssignedAdmin()이 안 불리는 문제가 있었다). ref는 즉시 갱신되므로
+  // 업데이터 밖에서 비교해야 타이밍 문제가 없다.
+  const assignedIdRef = useRef<string | null>(null)
 
   const [inquiry, setInquiry] = useState<Inquiry | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
@@ -863,6 +870,10 @@ export default function InquiryDetailPanel({ inquiryId, onNotify, onInquiryChang
     setDeletingId(null)
   }
 
+  useEffect(() => {
+    assignedIdRef.current = inquiry?.assigned_admin_id ?? null
+  }, [inquiry?.assigned_admin_id])
+
   // ── 문의 로드 + Realtime 구독 ──────────────────────────────────
   useEffect(() => {
     if (!id) {
@@ -1024,15 +1035,14 @@ export default function InquiryDetailPanel({ inquiryId, onNotify, onInquiryChang
         // payload.new는 컬럼 값만 담고 있고 admins(join) 정보가 없어, 담당자가
         // 바뀌어도 이름은 옛 값으로 남는다(예: A가 열어둔 화면에서 B가 이어받으면
         // assigned_admin_id는 B인데 admins.name은 여전히 A로 보임).
-        // ★prev와 비교해 실제로 바뀐 경우에만 이름까지 다시 조회한다.
-        let assigneeChanged = false
-        setInquiry(prev => {
-          if (!prev) return null
-          const newAssignee = (payload.new as { assigned_admin_id?: string | null }).assigned_admin_id
-          if (newAssignee !== prev.assigned_admin_id) assigneeChanged = true
-          return { ...prev, ...payload.new }
-        })
-        if (assigneeChanged) refreshAssignedAdmin()
+        // ★assignedIdRef와 비교해 실제로 바뀐 경우에만 이름까지 다시 조회한다.
+        //   setInquiry의 업데이터 함수 안에서 판정하지 않는다 — React 18은
+        //   업데이터를 나중에 실행할 수 있어 바로 다음 줄에서 읽으면 아직
+        //   반영 전(false)일 수 있다. ref는 즉시 갱신되므로 이 문제가 없다.
+        const newAssignee = (payload.new as { assigned_admin_id?: string | null }).assigned_admin_id ?? null
+        const changed = newAssignee !== assignedIdRef.current
+        setInquiry(prev => prev ? { ...prev, ...payload.new } : null)
+        if (changed) refreshAssignedAdmin()
       })
       .subscribe()
 

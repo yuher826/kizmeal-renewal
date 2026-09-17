@@ -266,7 +266,12 @@ CS 관리 잔여가 크게 줄었다. 정정 1·2(아래 "✅ 정정" 항목)로
        `useCallback(deps: [])`라 참조가 안정적임을 확인하고 연결
      · 실시간(`postgres_changes` UPDATE) 보완 — `payload.new`에는 join 정보가
        없어 담당자가 바뀌어도 이름은 옛 값으로 남는 문제가 있었다. 담당자가
-       실제로 바뀐 경우에만 `refreshAssignedAdmin()`으로 이름까지 다시 맞춤
+       실제로 바뀐 경우에만 `refreshAssignedAdmin()`으로 이름까지 다시 맞춤.
+       ⚠️ `1f3cdce`의 첫 구현은 이 판정을 `setInquiry`의 업데이터 함수 안에서 하고
+       바로 다음 줄에서 읽었다 — React 18은 업데이터를 나중에(때로는 두 번)
+       실행할 수 있어 그 시점엔 아직 반영 전(false)일 수 있는 버그였다.
+       `assignedIdRef`(별도 `useEffect`로 `inquiry?.assigned_admin_id`를 동기화)를
+       두고 업데이터 밖에서 비교하도록 뒤 커밋에서 고쳤다
      · 결정: 담당자 드롭다운 수동 변경은 알림을 보내지 않는다
      · 실물 검증: ⏳ 대기 (계정 2개 필요 — 11번 항목 순서로 CS 전화 직원 계정
        발급 후 진행)
