@@ -35,6 +35,10 @@ interface ListBranch {
   is_active: boolean
   logo_url: string | null // 원 로고 (NULL이면 텍스트만 표시)
 }
+interface ListAdmin {
+  id: string
+  name: string
+}
 interface ListInquiry {
   id: string
   title: string | null
@@ -46,6 +50,7 @@ interface ListInquiry {
   resolved_at: string | null
   assigned_admin_id: string | null
   branches: ListBranch | ListBranch[] | null
+  admins: ListAdmin | ListAdmin[] | null
 }
 
 // 가공된 목록 아이템
@@ -57,6 +62,7 @@ interface RowItem {
   logoUrl: string | null // 원 로고 URL (없으면 텍스트만)
   isComplaint: boolean
   isUrgentComplaint: boolean
+  assignedAdminName: string | null
 }
 
 // 그룹 묶음
@@ -169,7 +175,8 @@ function CsManagementInner() {
         .select(`
           id, title, status, category, created_at, unread_count_admin,
           branch_id, resolved_at, assigned_admin_id,
-          branches!inner ( id, name, is_active, logo_url )
+          branches!inner ( id, name, is_active, logo_url ),
+          admins ( id, name )
         `)
         // 비활성 지점 제외 (branches.is_active = true)
         .eq('branches.is_active', true)
@@ -303,6 +310,7 @@ function CsManagementInner() {
         logoUrl: branch?.logo_url ?? null,
         isComplaint,
         isUrgentComplaint,
+        assignedAdminName: one(inq.admins)?.name ?? null,
       }
     })
   }, [inquiries, profiles])
@@ -652,7 +660,7 @@ function CsManagementInner() {
                     </button>
 
                     {/* 그룹 내 문의 아이템 — 그룹 연한 색상 hover */}
-                    {isOpen && group.items.map(({ inq, displayName, logoUrl, isUrgentComplaint }) => {
+                    {isOpen && group.items.map(({ inq, displayName, logoUrl, isUrgentComplaint, assignedAdminName }) => {
                       const unread = (inq.unread_count_admin ?? 0) > 0
                       const isSelected = selectedId === inq.id
                       const hasDraft = draftIds.has(inq.id)
@@ -692,8 +700,14 @@ function CsManagementInner() {
                               {CATEGORY_ICONS[inq.category]}{' '}
                               {inq.title || CATEGORY_LABELS[inq.category] || '문의'}
                             </span>
-                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold flex-shrink-0 ${STATUS_COLORS[inq.status]}`}>
+                            <span
+                              className={`inline-block px-1.5 py-0.5 rounded-full text-[10px] font-semibold flex-shrink-0 max-w-[45%] truncate ${STATUS_COLORS[inq.status]}`}
+                              title={assignedAdminName ? `${STATUS_LABELS[inq.status]} · ${assignedAdminName}` : STATUS_LABELS[inq.status]}
+                            >
                               {STATUS_LABELS[inq.status]}
+                              {/* 완료는 담당자 이름을 안 붙인다 — 끝난 일에 누가 했는지는
+                                  이 배지의 관심사가 아니다(필요하면 상세에서 확인) */}
+                              {inq.status !== 'resolved' && assignedAdminName && ` · ${assignedAdminName}`}
                             </span>
                           </div>
                           <span className="text-[10px] text-gray-400">

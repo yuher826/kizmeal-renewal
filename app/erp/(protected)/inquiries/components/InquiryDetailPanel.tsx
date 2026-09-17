@@ -1142,6 +1142,35 @@ export default function InquiryDetailPanel({ inquiryId, onNotify }: Props) {
           ;(updates as Record<string, unknown>).first_response_at = new Date().toISOString()
         }
         await supabase.from('inquiries').update(updates).eq('id', id)
+
+        // 답변 시 담당자 자동 지정(2026-09-17). ★화면의 inquiry.assigned_admin_id로
+        //   판단하지 않는다★ — 두 사람이 같은 문의를 동시에 열어두면 둘 다
+        //   "비어있음"으로 보여 나중 사람이 덮어쓴다. DB에 조건부 UPDATE로
+        //   맡겨(is('assigned_admin_id', null)) 먼저 답변한 사람만 잡히게 한다.
+        const { data: assignResult, error: assignErr } = await supabase
+          .from('inquiries')
+          .update({ assigned_admin_id: currentAdmin.id })
+          .eq('id', id)
+          .is('assigned_admin_id', null)
+          .select('assigned_admin_id')
+
+        // 메시지는 이미 전송됐으므로 이 실패를 sendError로 띄우지 않는다 — 기록만.
+        if (assignErr) {
+          console.error('담당자 자동 지정 실패:', assignErr.message)
+        } else if (assignResult && assignResult.length > 0) {
+          // 1행 — 내가 이번에 처음으로 잡았다. assignAdmin()과 같은 모양으로 즉시 반영.
+          const assigned = admins.find(a => a.id === currentAdmin.id)
+          if (assigned) {
+            setInquiry(prev => prev ? { ...prev, assigned_admin_id: currentAdmin.id, admins: assigned } : null)
+          } else {
+            // 로컬 admins 목록에 없으면(드묾) DB에서 다시 맞춘다.
+            await refreshAssignedAdmin()
+          }
+        } else {
+          // 0행 — 이미 다른 사람이 먼저 잡았다. DB 값으로 화면을 맞춘다
+          // (드롭다운·"담당자" 표시가 실제 배정과 어긋나면 안 된다).
+          await refreshAssignedAdmin()
+        }
       }
 
       const { data: fullMsg } = await supabase
@@ -1238,6 +1267,25 @@ export default function InquiryDetailPanel({ inquiryId, onNotify }: Props) {
     if (error) { setActionError(toKoreanErrorMessage(error)); return }
     const assigned = admins.find(a => a.id === adminId) || null
     setInquiry(prev => prev ? { ...prev, assigned_admin_id: adminId, admins: assigned || undefined } : null)
+  }
+
+  /** 다른 사람이 먼저 잡았거나 로컬 admins 목록에 없을 때, DB에 반영된
+   *  담당자로 화면을 다시 맞춘다(sendMessage()의 담당자 자동 지정에서 사용). */
+  async function refreshAssignedAdmin() {
+    if (!id) return
+    const supabase = createClient()
+    const { data } = await supabase
+      .from('inquiries')
+      .select('assigned_admin_id, admins(id, name)')
+      .eq('id', id)
+      .maybeSingle()
+    if (!data) return
+    const assignedAdmin = Array.isArray(data.admins) ? data.admins[0] : data.admins
+    setInquiry(prev => prev ? {
+      ...prev,
+      assigned_admin_id: data.assigned_admin_id || undefined,
+      admins: (assignedAdmin as unknown as Admin) || undefined,
+    } : null)
   }
 
   async function addNote(noteContent: string) {
