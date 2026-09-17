@@ -25,6 +25,7 @@ export default function CustomerDashboardPage() {
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [loading, setLoading] = useState(true)
   const [noBranch, setNoBranch] = useState(false)
+  const [branchInactive, setBranchInactive] = useState(false)
   const [userEmail, setUserEmail] = useState<string | null>(null)
   const [notices, setNotices] = useState<NoticePreview[]>([])
   const [logoError, setLogoError] = useState(false) // 로고 로드 실패 시 원 이름 텍스트로 폴백
@@ -58,6 +59,9 @@ export default function CustomerDashboardPage() {
           }
         } else {
           setBranch(branchRow as Branch)
+          // 조회 자체는 막지 않는다(RLS가 이미 비활성 원의 문의를 막음) — is_active는
+          // 화면에 "왜 0건인지" 안내하기 위한 값으로만 쓴다.
+          if (branchRow.is_active === false) setBranchInactive(true)
         }
 
         // ★branchId(실제 연결 여부)로만 판정 — memberRow.branches 조인이 null이어도
@@ -202,6 +206,12 @@ export default function CustomerDashboardPage() {
             </Link>
           ))}
         </div>
+
+        {branchInactive && (
+          <div className="bg-amber-50 border border-amber-200 rounded-2xl px-5 py-4 text-sm text-amber-800">
+            이 계정은 현재 서비스 이용이 중단된 상태입니다. 그동안의 문의 내역은 표시되지 않습니다. 확인이 필요하시면 담당 매니저에게 문의해 주세요.
+          </div>
+        )}
 
         {/* 새 문의 CTA 버튼 */}
         <Link

@@ -28,6 +28,7 @@ export default function CustomerInquiriesPage() {
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
   const [noBranch, setNoBranch] = useState(false)
+  const [branchInactive, setBranchInactive] = useState(false)
   const [userEmail, setUserEmail] = useState<string | null>(null)
 
   useEffect(() => {
@@ -51,12 +52,15 @@ export default function CustomerInquiriesPage() {
 
         const { data: branchRow } = await supabase
           .from('branches')
-          .select('id')
+          .select('id, is_active')
           .eq('auth_id', user.id)
           .maybeSingle()
 
         if (branchRow) {
           branchId = branchRow.id
+          // 조회 자체는 막지 않는다(RLS가 이미 비활성 원의 문의를 막음) — is_active는
+          // 화면에 "왜 비었는지" 안내하기 위한 값으로만 쓴다.
+          if (branchRow.is_active === false) setBranchInactive(true)
         } else {
           const { data: memberRow } = await supabase
             .from('branch_members')
@@ -186,6 +190,10 @@ export default function CustomerInquiriesPage() {
             ))
           ) : noBranch ? (
             <AccountMismatchNotice email={userEmail} />
+          ) : branchInactive ? (
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl px-6 py-5 text-center text-sm text-amber-800">
+              이 계정은 현재 서비스 이용이 중단된 상태입니다. 그동안의 문의 내역은 표시되지 않습니다. 확인이 필요하시면 담당 매니저에게 문의해 주세요.
+            </div>
           ) : searched.length === 0 ? (
             <div className="bg-white rounded-2xl border border-gray-100 px-6 py-10 text-center">
               <p className="text-gray-400 text-sm">

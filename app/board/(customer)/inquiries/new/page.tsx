@@ -268,7 +268,11 @@ export default function NewInquiryPage() {
 
       <div className="px-4 sm:px-6 py-6">
         {checking ? null : noBranch ? (
-          <AccountMismatchNotice email={userEmail} />
+          <AccountMismatchNotice
+            email={userEmail}
+            title="지점 정보를 찾을 수 없습니다"
+            message="이 계정은 현재 서비스 이용이 중단된 상태입니다. 다른 계정으로 로그인하신 것이 아니라면 담당 매니저에게 확인해 주세요."
+          />
         ) : (
         <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-gray-100 p-6 space-y-5">
           {/* 지점명 (read-only) */}
