@@ -20,6 +20,8 @@ export default function CustomerMembersPage() {
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviting, setInviting] = useState(false)
   const [inviteMsg, setInviteMsg] = useState('')
+  const [inviteError, setInviteError] = useState(false)
+  const [memberError, setMemberError] = useState('')
   const [loading, setLoading] = useState(true)
   const [userEmail, setUserEmail] = useState<string | null>(null)
   const [sessionMismatch, setSessionMismatch] = useState<{ show: boolean; email: string | null }>({ show: false, email: null })
@@ -64,6 +66,7 @@ export default function CustomerMembersPage() {
     if (!inviteEmail.trim() || !branchId) return
     setInviting(true)
     setInviteMsg('')
+    setInviteError(false)
 
     const supabase = createClient()
     // ★초대 전에 세션이 이 원의 계정인지 확인한다(B-3). 같은 브라우저에서 ERP에 로그인해
@@ -88,7 +91,10 @@ export default function CustomerMembersPage() {
     })
 
     if (error) {
-      setInviteMsg(`오류: ${error.message}`)
+      // 에러 원문은 노출하지 않는다(테이블·정책명 유출 방지 — 첨부 유실 수정과 같은 원칙)
+      console.error('[members] 직원 초대 실패:', error.message)
+      setInviteError(true)
+      setInviteMsg('초대에 실패했습니다. 잠시 후 다시 시도해 주세요.')
     } else {
       setInviteMsg('초대 이메일이 발송되었습니다. (7일 후 만료)')
       setInviteEmail('')
@@ -106,10 +112,19 @@ export default function CustomerMembersPage() {
       return
     }
     setSessionMismatch({ show: false, email: null })
-    await supabase
+    setMemberError('')
+    // ★기존엔 결과를 확인하지 않아 실패해도 해제된 것처럼 넘어갔다(원 정보 저장 결함과 같은 유형).
+    //   RLS로 막히면 error 없이 0행이 되므로 .select()로 실제 반영 행까지 확인한다.
+    const { data: updated, error } = await supabase
       .from('branch_members')
       .update({ is_active: false })
       .eq('id', memberId)
+      .select('id')
+    if (error || !updated || updated.length === 0) {
+      if (error) console.error('[members] 직원 해제 실패:', error.message)
+      setMemberError('직원 해제에 실패했습니다. 잠시 후 다시 시도해 주세요.')
+      return
+    }
     await load()
   }
 
@@ -161,7 +176,7 @@ export default function CustomerMembersPage() {
             </button>
           </div>
           {inviteMsg && (
-            <p className={`text-sm mt-2 ${inviteMsg.startsWith('오류') ? 'text-red-600' : 'text-[#2D6A4F]'}`}>
+            <p className={`text-sm mt-2 ${inviteError ? 'text-red-600' : 'text-[#2D6A4F]'}`}>
               {inviteMsg}
             </p>
           )}
@@ -172,6 +187,7 @@ export default function CustomerMembersPage() {
         <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-100">
             <h2 className="font-bold text-[#1C2B1E]">소속 직원 ({members.length}명)</h2>
+            {memberError && <p className="text-sm text-red-600 mt-1">{memberError}</p>}
           </div>
           {loading ? (
             <div className="px-6 py-8 text-center text-gray-400 text-sm">로딩 중...</div>
