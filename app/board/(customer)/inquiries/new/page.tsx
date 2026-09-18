@@ -14,6 +14,11 @@ import {
 } from '@/lib/types'
 import FileUpload from '@/components/board/FileUpload'
 import AccountMismatchNotice from '@/components/board/AccountMismatchNotice'
+import {
+  verifyBranchSession,
+  BRANCH_SESSION_MISMATCH_TITLE,
+  BRANCH_SESSION_MISMATCH_MESSAGE,
+} from '@/lib/branch-session'
 
 // 2026-08-18 권팀장 요청으로 재정의된 문의 유형(6종).
 // 컴플레인만 하위분류를 한 번 더 고르는 2단계 구조(A안).
@@ -40,6 +45,8 @@ export default function NewInquiryPage() {
   const [checking, setChecking] = useState(true)
   const [noBranch, setNoBranch] = useState(false)
   const [submitNoBranch, setSubmitNoBranch] = useState(false)
+  const [submitMismatch, setSubmitMismatch] = useState(false)
+  const [expectedBranchId, setExpectedBranchId] = useState<string | null>(null)
   const [userEmail, setUserEmail] = useState<string | null>(null)
 
   useEffect(() => {
@@ -50,21 +57,30 @@ export default function NewInquiryPage() {
       setUserEmail(user.email ?? null)
 
       try {
+        // ★화면에 보이는 원의 id를 보관한다 — 제출 때 "지금 세션이 이 원의 계정인가"를
+        //   이 값으로 검증한다(B-3). 제출 시점 세션으로 원을 다시 찾으면, 다른 원 계정으로
+        //   바뀐 경우 그 원 이름으로 조용히 등록된다.
         const { data: branchRow } = await supabase
           .from('branches')
-          .select('name')
+          .select('id, name')
           .eq('auth_id', user.id)
           .eq('is_active', true)
           .maybeSingle()
-        if (branchRow?.name) { setBranchName(branchRow.name); return }
+        if (branchRow?.name) {
+          setBranchName(branchRow.name)
+          setExpectedBranchId(branchRow.id)
+          return
+        }
         const { data: memberRow } = await supabase
           .from('branch_members')
-          .select('branches(name)')
+          .select('branch_id, branches(name)')
           .eq('auth_id', user.id)
+          .eq('is_active', true)
           .maybeSingle()
         if (memberRow?.branches) {
           const b = memberRow.branches as unknown as { name: string }
           setBranchName(b.name)
+          setExpectedBranchId(memberRow.branch_id)
         } else {
           setNoBranch(true)
         }
@@ -93,39 +109,12 @@ export default function NewInquiryPage() {
     setSubmitting(true)
     setError('')
     setSubmitNoBranch(false)
+    setSubmitMismatch(false)
 
     const supabase = createClient()
 
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { router.replace(ROUTES.BOARD_LOGIN); return }
-
-      let branchId: string | null = null
-      let brandId: string | null = null
-
-      const { data: branchRow } = await supabase
-        .from('branches')
-        .select('id, brand_id')
-        .eq('auth_id', user.id)
-        .eq('is_active', true)
-        .maybeSingle()
-
-      if (branchRow) {
-        branchId = branchRow.id
-        brandId = branchRow.brand_id
-      } else {
-        const { data: memberRow } = await supabase
-          .from('branch_members')
-          .select('branch_id, branches(brand_id)')
-          .eq('auth_id', user.id)
-          .maybeSingle()
-        if (memberRow) {
-          branchId = memberRow.branch_id
-          brandId = (memberRow.branches as unknown as { brand_id: string })?.brand_id || null
-        }
-      }
-
-      if (!branchId) {
+      if (!expectedBranchId) {
         // ★폼 내용을 지우지 않는다 — throw로 catch에 보내는 대신
         // 여기서 바로 상태만 세팅하고 폼(입력값·첨부파일)은 그대로 유지한다.
         setSubmitNoBranch(true)
@@ -133,14 +122,24 @@ export default function NewInquiryPage() {
         return
       }
 
-      if (!brandId) {
-        const { data: b } = await supabase
-          .from('branches')
-          .select('brand_id')
-          .eq('id', branchId)
-          .maybeSingle()
-        brandId = b?.brand_id || null
+      // ★문의·메시지 INSERT와 첨부 업로드 전에 세션이 화면의 원 계정인지 확인한다(B-3).
+      //   불일치면 폼은 그대로 두고 안내만 띄운다.
+      const check = await verifyBranchSession(supabase, expectedBranchId)
+      if (!check.ok) {
+        setUserEmail(check.email)
+        setSubmitMismatch(true)
+        setSubmitting(false)
+        return
       }
+      const { user } = check
+      const branchId = expectedBranchId
+
+      const { data: b } = await supabase
+        .from('branches')
+        .select('brand_id')
+        .eq('id', branchId)
+        .maybeSingle()
+      const brandId: string | null = b?.brand_id || null
 
       const { data: inquiry, error: inqError } = await supabase
         .from('inquiries')
@@ -413,6 +412,14 @@ export default function NewInquiryPage() {
               email={userEmail}
               title="지점 정보를 찾을 수 없습니다"
               message="이 계정은 현재 서비스 이용이 중단된 상태입니다. 다른 계정으로 로그인하신 것이 아니라면 담당 매니저에게 확인해 주세요."
+            />
+          )}
+
+          {submitMismatch && (
+            <AccountMismatchNotice
+              email={userEmail}
+              title={BRANCH_SESSION_MISMATCH_TITLE}
+              message={BRANCH_SESSION_MISMATCH_MESSAGE}
             />
           )}
 

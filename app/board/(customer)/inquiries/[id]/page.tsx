@@ -12,6 +12,12 @@ import { useNotifier } from '@/lib/useNotifier'
 import NotifyToggleButton from '@/components/NotifyToggleButton'
 import { logChannelStatus } from '@/lib/realtime-debug'
 import { subscribeAfterAuth } from '@/lib/realtime-auth'
+import AccountMismatchNotice from '@/components/board/AccountMismatchNotice'
+import {
+  verifyBranchSession,
+  BRANCH_SESSION_MISMATCH_TITLE,
+  BRANCH_SESSION_MISMATCH_MESSAGE,
+} from '@/lib/branch-session'
 
 const STATUS_STEPS = [
   { key: 'pending', label: '접수' },
@@ -29,6 +35,7 @@ export default function CustomerInquiryDetailPage({ params }: { params: { id: st
   const [showAttach, setShowAttach] = useState(false)
   const [loading, setLoading] = useState(true)
   const [toast, setToast] = useState('')
+  const [sessionMismatch, setSessionMismatch] = useState<{ show: boolean; email: string | null }>({ show: false, email: null })
   // auth_id → 발신자 이름(+직책). admins는 RLS로 못 읽으므로 서버 API
   // (/api/board/inquiries/[id]/senders)를 거쳐서만 채운다.
   const [senderMap, setSenderMap] = useState<Record<string, { name: string; role?: string }>>({})
@@ -171,11 +178,20 @@ export default function CustomerInquiryDetailPage({ params }: { params: { id: st
   async function sendMessage() {
     if (!content.trim() && files.length === 0) return
     if (sending) return
+    if (!inquiry) return
     setSending(true)
 
     const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { setSending(false); return }
+    // ★업로드·INSERT 전에 세션이 이 문의 원의 계정인지 확인한다(B-3). 불일치면 중단하고
+    //   입력 내용·첨부는 그대로 둔다.
+    const check = await verifyBranchSession(supabase, inquiry.branch_id)
+    if (!check.ok) {
+      setSessionMismatch({ show: true, email: check.email })
+      setSending(false)
+      return
+    }
+    setSessionMismatch({ show: false, email: null })
+    const { user } = check
 
     try {
       // 1. 파일 먼저 업로드
@@ -420,7 +436,17 @@ export default function CustomerInquiryDetailPage({ params }: { params: { id: st
 
       {/* 입력창 — ★완료된 문의도 계속 메시지를 보낼 수 있다(3단계 전환, 2026-09-17).
           추가 질문이 있으면 전화가 오던 것을 막기 위해 차단을 없앴다.
-          보내면 sendMessage()가 status를 'in_progress'로 되돌린다. */}
+          보내면 sendMessage()가 완료(resolved)였을 때만 'in_progress'로 되돌린다. */}
+      {/* 세션 불일치 안내 — 3초 토스트가 아니라 고정 표시(놓치면 계속 헛전송한다) */}
+      {sessionMismatch.show && (
+        <div className="px-4 pt-3 flex-shrink-0">
+          <AccountMismatchNotice
+            email={sessionMismatch.email}
+            title={BRANCH_SESSION_MISMATCH_TITLE}
+            message={BRANCH_SESSION_MISMATCH_MESSAGE}
+          />
+        </div>
+      )}
       <div className="bg-white border-t border-gray-100 px-4 py-3 flex-shrink-0">
         <div className="flex gap-2 items-end">
           <button
