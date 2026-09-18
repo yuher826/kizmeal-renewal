@@ -225,16 +225,16 @@ export default function CustomerInquiryDetailPage({ params }: { params: { id: st
       }
 
       // 4. 문의 업데이트
-      // ★완료된 문의에 고객사가 메시지를 보내면 처리중으로 되돌린다 — 이미
-      //   in_progress면 불필요하게 덮어쓰지 않는다(realtime UPDATE 스팸 방지).
-      const inquiryUpdates: Record<string, unknown> = {
+      // 마지막 메시지 시각·관리자 안읽음 수 갱신
+      await supabase.from('inquiries').update({
         last_message_at: new Date().toISOString(),
         unread_count_admin: (inquiry?.unread_count_admin ?? 0) + 1,
-      }
-      if (inquiry && inquiry.status !== 'in_progress') {
-        inquiryUpdates.status = 'in_progress'
-      }
-      await supabase.from('inquiries').update(inquiryUpdates).eq('id', id)
+      }).eq('id', id)
+      // ★완료(resolved)된 문의에 추가 질문이 오면 처리중으로 다시 연다. 확인중(pending)은
+      //   그대로 둔다 — 담당자 없는 문의가 "처리중"으로 보이면 다른 직원이 방치한다.
+      //   화면 값은 낡았을 수 있어 DB가 판정하게 조건부 UPDATE(.eq status)로 한다.
+      await supabase.from('inquiries').update({ status: 'in_progress' })
+        .eq('id', id).eq('status', 'resolved')
 
       // 관리자에게 새 메시지 이메일 알림 (실패해도 전송에 영향 없음)
       try {
