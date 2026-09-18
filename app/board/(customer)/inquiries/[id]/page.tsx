@@ -251,7 +251,8 @@ export default function CustomerInquiryDetailPage({ params }: { params: { id: st
       // ★완료(resolved)된 문의에 추가 질문이 오면 처리중으로 다시 연다. 확인중(pending)은
       //   그대로 둔다 — 담당자 없는 문의가 "처리중"으로 보이면 다른 직원이 방치한다.
       //   화면 값은 낡았을 수 있어 DB가 판정하게 조건부 UPDATE(.eq status)로 한다.
-      await supabase.from('inquiries').update({ status: 'in_progress' })
+      //   다시 열면 완료 시각을 비운다(ERP 상태 변경 InquiryDetailPanel updateStatus와 같은 기준).
+      await supabase.from('inquiries').update({ status: 'in_progress', resolved_at: null })
         .eq('id', id).eq('status', 'resolved')
 
       // 관리자에게 새 메시지 이메일 알림 (실패해도 전송에 영향 없음)

@@ -1242,7 +1242,9 @@ export default function InquiryDetailPanel({ inquiryId, onInquiryChanged }: Prop
     setActionError('')
     const supabase = createClient()
     const updates: Record<string, unknown> = { status }
-    if (status === 'resolved') updates.resolved_at = new Date().toISOString()
+    // 완료가 아닌 상태로 바꾸면 완료 시각을 비운다(고객사 재개 경로와 같은 기준) —
+    // 남겨 두면 '처리중인데 resolved_at이 있는' 행이 생겨 이후 통계의 함정이 된다
+    updates.resolved_at = status === 'resolved' ? new Date().toISOString() : null
     const { error } = await supabase.from('inquiries').update(updates).eq('id', id)
     // 실패 시 낙관적 업데이트를 하지 않는다 — 화면 상태와 DB가 어긋나면
     // "바뀐 것처럼 보이는데 실제로는 안 바뀐" 상태로 남는다.
