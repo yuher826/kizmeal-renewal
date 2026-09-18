@@ -4,6 +4,8 @@ import AdminMobileNav from '@/components/board/AdminMobileNav'
 import AdminTabBar from '@/components/board/AdminTabBar'
 import { landingPathFor } from '@/lib/erp-access'
 import { BoardAdminUserProvider } from '@/components/board/BoardAdminUserProvider'
+import SessionChangeGuard from '@/components/SessionChangeGuard'
+import { ROUTES } from '@/lib/routes'
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const supabase = createClient()
@@ -27,9 +29,12 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   return (
     <BoardAdminUserProvider user={adminData}>
-      <AdminMobileNav />
-      <AdminTabBar />
-      {children}
+      {/* 로그인 계정이 바뀌면 전 화면을 덮는다(B-5) */}
+      <SessionChangeGuard expectedAuthId={user.id} loginPath={ROUTES.BOARD_LOGIN} tone="board">
+        <AdminMobileNav />
+        <AdminTabBar />
+        {children}
+      </SessionChangeGuard>
     </BoardAdminUserProvider>
   )
 }

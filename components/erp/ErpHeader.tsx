@@ -7,6 +7,7 @@ import { ChevronRight, Menu, Bell } from 'lucide-react'
 import type { ErpUser } from '@/types/erp'
 import { canAccessErpPage } from '@/lib/erp-access'
 import NotifyToggleButton from '@/components/NotifyToggleButton'
+import { useSessionChanged } from '@/components/SessionChangeGuard'
 import {
   playNotify, showBrowserNotification, setupAudioUnlock,
   requestNotificationPermission, isNotifySoundEnabled,
@@ -116,6 +117,11 @@ export default function ErpHeader({ user, onMenuClick }: Props) {
   // "첫 조회를 끝냈는지" 플래그(첫 조회는 기준선만 잡고 울리지 않는다).
   const seenNotifIdsRef = useRef<Set<string>>(new Set())
   const firstFetchDoneRef = useRef(false)
+  // 로그인 계정이 바뀐 동안(B-5 덮개)은 폴링·소리·팝업을 멈춘다 — 세션이 다른 관리자로
+  // 바뀐 탭에서 그 사람 알림이 울리면 안 된다. 진행 중이던 요청의 응답도 ref로 버린다.
+  const sessionChanged = useSessionChanged()
+  const sessionChangedRef = useRef(sessionChanged)
+  useEffect(() => { sessionChangedRef.current = sessionChanged }, [sessionChanged])
 
   useEffect(() => {
     try {
@@ -196,6 +202,7 @@ export default function ErpHeader({ user, onMenuClick }: Props) {
       const res = await fetch('/api/cs/notifications')
       if (!res.ok) return
       const json = await res.json()
+      if (sessionChangedRef.current) return
       const list: CsNotification[] = json.notifications || []
       setNotifications(list)
 
@@ -233,11 +240,11 @@ export default function ErpHeader({ user, onMenuClick }: Props) {
   //   없다. DB 쪽 생성(cs_notifications INSERT)은 계속 일어나므로, 다시 켜면
   //   effect가 재실행되며 그동안 쌓인 알림을 즉시 가져온다.
   useEffect(() => {
-    if (!canSeeCs || !badgeEnabled) return
+    if (!canSeeCs || !badgeEnabled || sessionChanged) return
     fetchNotifications()
     const timer = setInterval(fetchNotifications, 30000)
     return () => clearInterval(timer)
-  }, [canSeeCs, badgeEnabled, fetchNotifications])
+  }, [canSeeCs, badgeEnabled, sessionChanged, fetchNotifications])
 
   // 드롭다운 바깥 클릭 시 닫기
   useEffect(() => {
