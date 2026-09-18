@@ -1,5 +1,6 @@
 import type { RealtimeChannel, Session } from '@supabase/supabase-js'
 import type { createClient } from '@/lib/supabase'
+import { markChannelClosing } from '@/lib/realtime-debug'
 
 type BrowserClient = ReturnType<typeof createClient>
 
@@ -12,10 +13,7 @@ type BrowserClient = ReturnType<typeof createClient>
 export async function ensureRealtimeAuth(supabase: BrowserClient): Promise<Session | null> {
   try {
     const { data: { session } } = await supabase.auth.getSession()
-    if (!session) {
-      console.info('[realtime]', '세션 없음 — 구독하지 않음')
-      return null
-    }
+    if (!session) return null
     await supabase.realtime.setAuth(session.access_token)
     return session
   } catch (e) {
@@ -39,6 +37,10 @@ export function subscribeAfterAuth(
   })
   return () => {
     cancelled = true
-    if (channel) void supabase.removeChannel(channel)
+    if (channel) {
+      // 우리가 닫는 CLOSED는 정상 — 진단 로그가 경고로 남기지 않게 표시해 둔다
+      markChannelClosing(channel.topic)
+      void supabase.removeChannel(channel)
+    }
   }
 }
