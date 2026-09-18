@@ -20,6 +20,7 @@ import { canHandleCs } from '@/lib/roles'
 import { toKoreanErrorMessage } from '@/lib/supabase-error'
 import { logChannelStatus } from '@/lib/realtime-debug'
 import { subscribeAfterAuth } from '@/lib/realtime-auth'
+import { isHandledByOther } from '@/lib/cs-handling'
 
 // ── 이메일 스레드 유틸 ──────────────────────────────────────────
 const STORAGE_BASE = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/kizmeal-files`
@@ -461,6 +462,18 @@ function ThreadMessage({
   const attachments = message_attachments || []
   const edited = isEdited(message)
 
+  // [4-a] 내부 시스템 기록(🔄 이어받기 등, is_internal) — 옅은 파란 띠(pill)로 눈에 띄게.
+  //   고객에게 보이는 system 기록(상태 변경·전화 처리)은 아래 [4]의 회색 글씨 그대로 둔다.
+  if (sender_type === 'system' && is_internal) {
+    return (
+      <div className="flex justify-center my-4">
+        <span className="inline-flex items-center rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-xs px-3 py-1 text-center whitespace-pre-wrap">
+          {content}
+        </span>
+      </div>
+    )
+  }
+
   // [4] 시스템 메시지 — 카드 없이 중앙 텍스트
   if (sender_type === 'system') {
     return (
@@ -645,6 +658,9 @@ function ThreadMessage({
   )
 }
 
+// 이어받기 확인창을 펼칠 자리 — 안내 띠 / 입력창 경고 / 전화 처리 경고 / 오른쪽 칸
+type TakeoverSpot = 'band' | 'composer' | 'phone' | 'panel'
+
 interface Props {
   /** 현재 선택된 문의 ID (없으면 빈 안내 화면) */
   inquiryId: string | null
@@ -699,7 +715,14 @@ export default function InquiryDetailPanel({ inquiryId, onInquiryChanged }: Prop
   const [phoneDuration, setPhoneDuration] = useState('')
 
   // ── 이어받기(2026-09-17) ──────────────────────────────────────
-  const [showTakeoverConfirm, setShowTakeoverConfirm] = useState(false)
+  // 확인창을 어느 자리에 펼칠지 — 누른 자리(안내 띠·입력창 경고·전화 경고·오른쪽 칸)에
+  // 같은 확인창을 펼친다. 처리는 전부 confirmTakeover() 하나(2026-09-18, C).
+  const [takeoverConfirmAt, setTakeoverConfirmAt] = useState<TakeoverSpot | null>(null)
+  // 입력창 경고를 [그냥 답변]/[그냥 기록]으로 접은 기준 — "문의id:담당자id".
+  // 담당자가 다시 바뀌면 키가 달라져 경고가 다시 나온다.
+  const [handledWarnDismissedKey, setHandledWarnDismissedKey] = useState<string | null>(null)
+  // 📞 전화 처리를 눌렀는데 남이 담당 중이라 경고를 먼저 띄운 상태
+  const [phoneWarnPending, setPhoneWarnPending] = useState(false)
   const [takeoverError, setTakeoverError] = useState('')
   const [takingOver, setTakingOver] = useState(false)
 
@@ -890,8 +913,9 @@ export default function InquiryDetailPanel({ inquiryId, onInquiryChanged }: Prop
     setFiles([])
     setShowAttach(false)
     setShowPhoneLog(false)
-    setShowTakeoverConfirm(false)
+    setTakeoverConfirmAt(null)
     setTakeoverError('')
+    setPhoneWarnPending(false)
     setEditingId(null)
     setEditContent('')
     setDeletingId(null)
@@ -1330,6 +1354,7 @@ export default function InquiryDetailPanel({ inquiryId, onInquiryChanged }: Prop
   /** 이어받기 확인 — 서버가 담당자 변경·내부 기록·원 담당자 알림을 한번에 처리한다. */
   async function confirmTakeover() {
     if (!id || !inquiry?.assigned_admin_id) return
+    const spot = takeoverConfirmAt
     setTakingOver(true)
     setTakeoverError('')
     try {
@@ -1355,8 +1380,11 @@ export default function InquiryDetailPanel({ inquiryId, onInquiryChanged }: Prop
         assigned_admin_id: assignee.id,
         admins: { id: assignee.id, name: assignee.name } as unknown as Admin,
       } : null)
-      setShowTakeoverConfirm(false)
+      setTakeoverConfirmAt(null)
       onInquiryChanged?.()
+      // 입력 중이던 답변·첨부는 건드리지 않는다(실패·409 때도 마찬가지). 누른 자리로 돌아간다.
+      if (spot === 'composer') textareaRef.current?.focus()
+      if (spot === 'phone') { setPhoneWarnPending(false); setShowPhoneLog(true) }
     } catch {
       setTakeoverError('이어받기에 실패했습니다')
     } finally {
@@ -1483,6 +1511,59 @@ export default function InquiryDetailPanel({ inquiryId, onInquiryChanged }: Prop
     )
   }
 
+  // ── 이어받기·중복 대응 경고(2026-09-18, C) ──────────────────────
+  // 판정은 isHandledByOther 한 곳. 권한 없는 사람(director 등)에겐 띠·경고·버튼 모두 안 보인다.
+  const handledByOther = canWriteCs && isHandledByOther(inquiry, currentAdmin?.id)
+  const handlerInactive = inquiry?.admins?.is_active === false
+  const handlerName = inquiry?.admins?.name || '담당자'
+  const handledWarnKey = `${id}:${inquiry?.assigned_admin_id ?? ''}`
+  const handledWarnDismissed = handledWarnDismissedKey === handledWarnKey
+  // 입력창 경고 — 고객 대상 답변을 쓰기 시작했을 때만(내부 메모 제외), 또는 📞를 눌렀을 때
+  const showPhoneWarn = handledByOther && !handledWarnDismissed && phoneWarnPending
+  const showReplyWarn = handledByOther && !handledWarnDismissed && !showPhoneWarn
+    && !isInternal && (content.trim().length > 0 || files.length > 0)
+
+  function dismissHandledWarn() {
+    setHandledWarnDismissedKey(handledWarnKey)
+    if (takeoverConfirmAt === 'composer' || takeoverConfirmAt === 'phone') setTakeoverConfirmAt(null)
+  }
+
+  // 기존 오른쪽 칸 확인창과 같은 내용 — 자리만 다르다. boxClass로 바깥 여백만 바꾼다.
+  function renderTakeoverConfirm(boxClass: string) {
+    if (!inquiry) return null
+    return (
+      <div className={`border border-amber-200 rounded-lg p-3 bg-amber-50 ${boxClass}`}>
+        <p className="text-sm text-amber-900 mb-3 break-keep">
+          {handlerInactive
+            ? '비활성 계정이 담당한 문의입니다. 이어받으시겠습니까?'
+            : `${handlerName}님이 담당 중입니다. 이어받으면 ${handlerName}님께 알림이 갑니다.`}
+        </p>
+        {takeoverError && (
+          <div className="mb-3 flex items-center gap-1.5 text-xs text-red-700 bg-red-100 rounded-lg px-3 py-2">
+            <span>⚠️</span>
+            <span>{takeoverError}</span>
+          </div>
+        )}
+        <div className="flex gap-2">
+          <button
+            onClick={confirmTakeover}
+            disabled={takingOver}
+            className="text-xs px-4 py-1.5 rounded-lg bg-[#2D6A4F] text-white font-semibold hover:bg-[#1B4332] disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
+          >
+            {takingOver ? '처리 중...' : '이어받기'}
+          </button>
+          <button
+            onClick={() => { setTakeoverConfirmAt(null); setTakeoverError('') }}
+            disabled={takingOver}
+            className="text-xs px-4 py-1.5 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-50 transition-colors whitespace-nowrap"
+          >
+            취소
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <>
       {/* ── 이미지 라이트박스 오버레이 ─────────────────────────── */}
@@ -1525,6 +1606,29 @@ export default function InquiryDetailPanel({ inquiryId, onInquiryChanged }: Prop
               )}
             </div>
           </header>
+
+          {/* 이어받기 안내 띠 — 남이 처리 중일 때만. 오른쪽 칸이 숨는 좁은 화면(lg 미만)에선
+              이 띠가 이어받기의 유일한 입구다 */}
+          {handledByOther && (
+            takeoverConfirmAt === 'band' ? (
+              <div className="bg-white border-b border-gray-100 px-4 py-2 flex-shrink-0">
+                {renderTakeoverConfirm('')}
+              </div>
+            ) : (
+              <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 flex-shrink-0 flex flex-wrap items-center gap-2">
+                <span className="min-w-0 flex-1 text-xs text-amber-900 font-medium break-keep">
+                  {handlerInactive ? '비활성 계정이 담당한 문의입니다' : `${handlerName}님이 처리 중인 문의입니다`}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => { setTakeoverError(''); setTakeoverConfirmAt('band') }}
+                  className="text-xs px-4 py-1.5 rounded-lg bg-[#2D6A4F] text-white font-semibold hover:bg-[#1B4332] transition-colors whitespace-nowrap flex-shrink-0"
+                >
+                  🔄 이어받기
+                </button>
+              </div>
+            )
+          )}
 
           {/* 메시지 영역 (독립 스크롤) — 이메일 스레드 */}
           <div className="flex-1 overflow-y-auto px-4 py-4 bg-[#F6FAF6]">
@@ -1680,6 +1784,41 @@ export default function InquiryDetailPanel({ inquiryId, onInquiryChanged }: Prop
             </div>
           ) : (
           <div className={`bg-white border-t border-gray-100 px-4 py-3 flex-shrink-0 ${isAnyEditing ? 'opacity-50 pointer-events-none' : ''}`}>
+            {/* 중복 대응 경고 — 막지는 않는다. [그냥 답변]/[그냥 기록]은 이 문의·이 담당자인 동안만 접힌다 */}
+            {(showReplyWarn || showPhoneWarn) && (
+              (takeoverConfirmAt === 'composer' || takeoverConfirmAt === 'phone') ? (
+                renderTakeoverConfirm('mb-2')
+              ) : (
+                <div className="mb-2 border border-amber-200 rounded-lg px-3 py-2 bg-amber-50 flex flex-wrap items-center gap-2">
+                  <span className="min-w-0 flex-1 text-xs text-amber-900 break-keep">
+                    {handlerInactive ? '비활성 계정이 담당한 문의입니다.' : `${handlerName}님이 담당 중입니다.`}
+                    {showPhoneWarn
+                      ? ' 그대로 기록하면 중복 대응이 될 수 있어요.'
+                      : ' 그대로 답변하면 중복 대응이 될 수 있어요.'}
+                  </span>
+                  <div className="flex gap-1.5 flex-shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => { setTakeoverError(''); setTakeoverConfirmAt(showPhoneWarn ? 'phone' : 'composer') }}
+                      className="text-xs px-4 py-1.5 rounded-lg bg-[#2D6A4F] text-white font-semibold hover:bg-[#1B4332] transition-colors whitespace-nowrap"
+                    >
+                      이어받기
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const wasPhone = showPhoneWarn
+                        dismissHandledWarn()
+                        if (wasPhone) { setPhoneWarnPending(false); setShowPhoneLog(true) }
+                      }}
+                      className="text-xs px-4 py-1.5 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors whitespace-nowrap"
+                    >
+                      {showPhoneWarn ? '그냥 기록' : '그냥 답변'}
+                    </button>
+                  </div>
+                </div>
+              )
+            )}
             {sendError && (
               <div className="mb-2 flex items-center gap-2 text-xs bg-red-50 text-red-700 px-3 py-2 rounded-lg border border-red-200">
                 <span>⚠️</span>
@@ -1710,7 +1849,14 @@ export default function InquiryDetailPanel({ inquiryId, onInquiryChanged }: Prop
               </button>
               <button
                 type="button"
-                onClick={() => setShowPhoneLog(v => !v)}
+                onClick={() => {
+                  // 남이 담당 중이고 경고를 아직 안 접었으면 기록 패널 대신 경고를 먼저 띄운다
+                  if (!showPhoneLog && handledByOther && !handledWarnDismissed) {
+                    setPhoneWarnPending(true)
+                    return
+                  }
+                  setShowPhoneLog(v => !v)
+                }}
                 disabled={sending}
                 className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-blue-100 text-blue-700 font-medium hover:bg-blue-200 disabled:bg-gray-100 disabled:text-gray-400 transition-colors"
               >
@@ -1871,43 +2017,13 @@ export default function InquiryDetailPanel({ inquiryId, onInquiryChanged }: Prop
                 <p className="text-sm text-gray-700 px-1">{inquiry?.admins?.name || '미배정'}</p>
               )}
 
-              {/* 이어받기 — 미배정·본인 담당·쓰기 권한 없음(director 등)에는 안 보인다 */}
-              {canWriteCs && inquiry?.assigned_admin_id && inquiry.assigned_admin_id !== currentAdmin?.id && (
-                showTakeoverConfirm ? (
-                  <div className="mt-2 border border-amber-200 rounded-lg p-3 bg-amber-50">
-                    <p className="text-sm text-amber-900 mb-3">
-                      {inquiry.admins?.is_active === false
-                        ? '비활성 계정이 담당한 문의입니다. 이어받으시겠습니까?'
-                        : `${inquiry.admins?.name || '담당자'}님이 담당 중입니다. 이어받으면 ${inquiry.admins?.name || '담당자'}님께 알림이 갑니다.`}
-                    </p>
-                    {takeoverError && (
-                      <div className="mb-3 flex items-center gap-1.5 text-xs text-red-700 bg-red-100 rounded-lg px-3 py-2">
-                        <span>⚠️</span>
-                        <span>{takeoverError}</span>
-                      </div>
-                    )}
-                    <div className="flex gap-2">
-                      <button
-                        onClick={confirmTakeover}
-                        disabled={takingOver}
-                        className="text-xs px-4 py-1.5 rounded-lg bg-[#2D6A4F] text-white font-semibold hover:bg-[#1B4332] disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
-                      >
-                        {takingOver ? '처리 중...' : '이어받기'}
-                      </button>
-                      <button
-                        onClick={() => { setShowTakeoverConfirm(false); setTakeoverError('') }}
-                        disabled={takingOver}
-                        className="text-xs px-4 py-1.5 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-50 transition-colors"
-                      >
-                        취소
-                      </button>
-                    </div>
-                  </div>
-                ) : (
+              {/* 이어받기 — 판정은 isHandledByOther(미배정·본인 담당·완료 제외) + 쓰기 권한 */}
+              {handledByOther && (
+                takeoverConfirmAt === 'panel' ? renderTakeoverConfirm('mt-2') : (
                   <button
                     type="button"
-                    onClick={() => setShowTakeoverConfirm(true)}
-                    className="mt-2 text-xs text-[#2D6A4F] font-medium hover:underline"
+                    onClick={() => { setTakeoverError(''); setTakeoverConfirmAt('panel') }}
+                    className="mt-2 w-full text-xs px-4 py-1.5 rounded-lg bg-[#2D6A4F] text-white font-semibold hover:bg-[#1B4332] transition-colors"
                   >
                     🔄 이어받기
                   </button>
