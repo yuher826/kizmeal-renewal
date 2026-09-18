@@ -19,6 +19,7 @@ import { useErpUser } from '@/components/erp/ErpUserProvider'
 import { canHandleCs } from '@/lib/roles'
 import { toKoreanErrorMessage } from '@/lib/supabase-error'
 import { logChannelStatus } from '@/lib/realtime-debug'
+import { subscribeAfterAuth } from '@/lib/realtime-auth'
 
 // ── 이메일 스레드 유틸 ──────────────────────────────────────────
 const STORAGE_BASE = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/kizmeal-files`
@@ -982,60 +983,61 @@ export default function InquiryDetailPanel({ inquiryId, onInquiryChanged }: Prop
 
     load()
 
-    const channel = supabase
-      .channel(`erp-chat-${id}`)
-      .on('postgres_changes', {
-        event: 'INSERT', schema: 'public', table: 'messages',
-        filter: `inquiry_id=eq.${id}`,
-      }, async (payload) => {
-        const newMsg = payload.new as Message
-        const { data: full } = await supabase
-          .from('messages')
-          .select('*, message_attachments(*)')
-          .eq('id', newMsg.id)
-          .single()
-        if (full) {
-          setMessages(prev => prev.find(m => m.id === full.id) ? prev : [...prev, full as unknown as Message])
-        }
-        // 소리·팝업은 ErpHeader 폴링 한 곳에서만 낸다(2026-09-18) — 여기서는 더 이상 알리지 않는다
-      })
-      .on('postgres_changes', {
-        event: 'UPDATE', schema: 'public', table: 'messages',
-        filter: `inquiry_id=eq.${id}`,
-      }, (payload) => {
-        const updated = payload.new as Message
-        setMessages(prev => prev.map(m =>
-          m.id === updated.id
-            ? { ...m, content: updated.content, updated_at: updated.updated_at }
-            : m
-        ))
-      })
-      .on('postgres_changes', {
-        event: 'DELETE', schema: 'public', table: 'messages',
-        filter: `inquiry_id=eq.${id}`,
-      }, (payload) => {
-        const deletedId = (payload.old as { id: string }).id
-        setMessages(prev => prev.filter(m => m.id !== deletedId))
-      })
-      .on('postgres_changes', {
-        event: 'UPDATE', schema: 'public', table: 'inquiries',
-        filter: `id=eq.${id}`,
-      }, (payload) => {
-        // payload.new는 컬럼 값만 담고 있고 admins(join) 정보가 없어, 담당자가
-        // 바뀌어도 이름은 옛 값으로 남는다(예: A가 열어둔 화면에서 B가 이어받으면
-        // assigned_admin_id는 B인데 admins.name은 여전히 A로 보임).
-        // ★assignedIdRef와 비교해 실제로 바뀐 경우에만 이름까지 다시 조회한다.
-        //   setInquiry의 업데이터 함수 안에서 판정하지 않는다 — React 18은
-        //   업데이터를 나중에 실행할 수 있어 바로 다음 줄에서 읽으면 아직
-        //   반영 전(false)일 수 있다. ref는 즉시 갱신되므로 이 문제가 없다.
-        const newAssignee = (payload.new as { assigned_admin_id?: string | null }).assigned_admin_id ?? null
-        const changed = newAssignee !== assignedIdRef.current
-        setInquiry(prev => prev ? { ...prev, ...payload.new } : null)
-        if (changed) refreshAssignedAdmin()
-      })
-      .subscribe(logChannelStatus(`erp-chat-${id}`))
+    const unsubscribe = subscribeAfterAuth(supabase, () => supabase
+        .channel(`erp-chat-${id}`)
+        .on('postgres_changes', {
+          event: 'INSERT', schema: 'public', table: 'messages',
+          filter: `inquiry_id=eq.${id}`,
+        }, async (payload) => {
+          const newMsg = payload.new as Message
+          const { data: full } = await supabase
+            .from('messages')
+            .select('*, message_attachments(*)')
+            .eq('id', newMsg.id)
+            .single()
+          if (full) {
+            setMessages(prev => prev.find(m => m.id === full.id) ? prev : [...prev, full as unknown as Message])
+          }
+          // 소리·팝업은 ErpHeader 폴링 한 곳에서만 낸다(2026-09-18) — 여기서는 더 이상 알리지 않는다
+        })
+        .on('postgres_changes', {
+          event: 'UPDATE', schema: 'public', table: 'messages',
+          filter: `inquiry_id=eq.${id}`,
+        }, (payload) => {
+          const updated = payload.new as Message
+          setMessages(prev => prev.map(m =>
+            m.id === updated.id
+              ? { ...m, content: updated.content, updated_at: updated.updated_at }
+              : m
+          ))
+        })
+        .on('postgres_changes', {
+          event: 'DELETE', schema: 'public', table: 'messages',
+          filter: `inquiry_id=eq.${id}`,
+        }, (payload) => {
+          const deletedId = (payload.old as { id: string }).id
+          setMessages(prev => prev.filter(m => m.id !== deletedId))
+        })
+        .on('postgres_changes', {
+          event: 'UPDATE', schema: 'public', table: 'inquiries',
+          filter: `id=eq.${id}`,
+        }, (payload) => {
+          // payload.new는 컬럼 값만 담고 있고 admins(join) 정보가 없어, 담당자가
+          // 바뀌어도 이름은 옛 값으로 남는다(예: A가 열어둔 화면에서 B가 이어받으면
+          // assigned_admin_id는 B인데 admins.name은 여전히 A로 보임).
+          // ★assignedIdRef와 비교해 실제로 바뀐 경우에만 이름까지 다시 조회한다.
+          //   setInquiry의 업데이터 함수 안에서 판정하지 않는다 — React 18은
+          //   업데이터를 나중에 실행할 수 있어 바로 다음 줄에서 읽으면 아직
+          //   반영 전(false)일 수 있다. ref는 즉시 갱신되므로 이 문제가 없다.
+          const newAssignee = (payload.new as { assigned_admin_id?: string | null }).assigned_admin_id ?? null
+          const changed = newAssignee !== assignedIdRef.current
+          setInquiry(prev => prev ? { ...prev, ...payload.new } : null)
+          if (changed) refreshAssignedAdmin()
+        })
+        .subscribe(logChannelStatus(`erp-chat-${id}`))
+    )
 
-    return () => { supabase.removeChannel(channel) }
+    return unsubscribe
   }, [id])
 
   // ── 초안 자동저장 (debounce 1초) ─────────────────────────────

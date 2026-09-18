@@ -11,6 +11,7 @@ import FileUpload from '@/components/board/FileUpload'
 import { useNotifier } from '@/lib/useNotifier'
 import NotifyToggleButton from '@/components/NotifyToggleButton'
 import { logChannelStatus } from '@/lib/realtime-debug'
+import { subscribeAfterAuth } from '@/lib/realtime-auth'
 
 const STATUS_STEPS = [
   { key: 'pending', label: '접수' },
@@ -98,63 +99,64 @@ export default function CustomerInquiryDetailPage({ params }: { params: { id: st
 
     load()
 
-    const channel = supabase
-      .channel(`chat-${id}`)
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'messages',
-        filter: `inquiry_id=eq.${id}`,
-      }, async (payload) => {
-        const newMsg = payload.new as Message
-        if (newMsg.is_internal) return
-        const { data: full } = await supabase
-          .from('messages')
-          .select('*, message_attachments(*)')
-          .eq('id', newMsg.id)
-          .single()
-        if (full) {
-          setMessages(prev => prev.find(m => m.id === full.id) ? prev : [...prev, full as unknown as Message])
-        }
-        // ★ "관리자가 보낸 답변"일 때만 알림 (고객 본인 발신 제외)
-        if (newMsg.sender_type === 'admin') {
-          const preview = newMsg.content.length > 40
-            ? `${newMsg.content.slice(0, 40)}…` : newMsg.content
-          notify(newMsg.id, '키즈밀 답변 도착', preview)
-        }
-      })
-      .on('postgres_changes', {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'inquiries',
-        filter: `id=eq.${id}`,
-      }, (payload) => {
-        setInquiry(prev => prev ? { ...prev, ...payload.new } : null)
-      })
-      // 권팀장 요청 7번: 관리자가 아직 이쪽이 안 읽은 메시지를 수정·삭제할 수 있게
-      // 되면서, 화면을 이미 열어둔 상태에서 실시간으로 그 변경이 반영돼야 한다
-      // (안 그러면 새로고침 전까지 수정 전 내용이 그대로 보이는 모순이 생김).
-      .on('postgres_changes', {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'messages',
-        filter: `inquiry_id=eq.${id}`,
-      }, (payload) => {
-        const updated = payload.new as Message
-        setMessages(prev => prev.map(m => (m.id === updated.id ? { ...m, ...updated } : m)))
-      })
-      .on('postgres_changes', {
-        event: 'DELETE',
-        schema: 'public',
-        table: 'messages',
-        filter: `inquiry_id=eq.${id}`,
-      }, (payload) => {
-        const deletedId = (payload.old as { id: string }).id
-        setMessages(prev => prev.filter(m => m.id !== deletedId))
-      })
-      .subscribe(logChannelStatus(`chat-${id}`))
+    const unsubscribe = subscribeAfterAuth(supabase, () => supabase
+        .channel(`chat-${id}`)
+        .on('postgres_changes', {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+          filter: `inquiry_id=eq.${id}`,
+        }, async (payload) => {
+          const newMsg = payload.new as Message
+          if (newMsg.is_internal) return
+          const { data: full } = await supabase
+            .from('messages')
+            .select('*, message_attachments(*)')
+            .eq('id', newMsg.id)
+            .single()
+          if (full) {
+            setMessages(prev => prev.find(m => m.id === full.id) ? prev : [...prev, full as unknown as Message])
+          }
+          // ★ "관리자가 보낸 답변"일 때만 알림 (고객 본인 발신 제외)
+          if (newMsg.sender_type === 'admin') {
+            const preview = newMsg.content.length > 40
+              ? `${newMsg.content.slice(0, 40)}…` : newMsg.content
+            notify(newMsg.id, '키즈밀 답변 도착', preview)
+          }
+        })
+        .on('postgres_changes', {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'inquiries',
+          filter: `id=eq.${id}`,
+        }, (payload) => {
+          setInquiry(prev => prev ? { ...prev, ...payload.new } : null)
+        })
+        // 권팀장 요청 7번: 관리자가 아직 이쪽이 안 읽은 메시지를 수정·삭제할 수 있게
+        // 되면서, 화면을 이미 열어둔 상태에서 실시간으로 그 변경이 반영돼야 한다
+        // (안 그러면 새로고침 전까지 수정 전 내용이 그대로 보이는 모순이 생김).
+        .on('postgres_changes', {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'messages',
+          filter: `inquiry_id=eq.${id}`,
+        }, (payload) => {
+          const updated = payload.new as Message
+          setMessages(prev => prev.map(m => (m.id === updated.id ? { ...m, ...updated } : m)))
+        })
+        .on('postgres_changes', {
+          event: 'DELETE',
+          schema: 'public',
+          table: 'messages',
+          filter: `inquiry_id=eq.${id}`,
+        }, (payload) => {
+          const deletedId = (payload.old as { id: string }).id
+          setMessages(prev => prev.filter(m => m.id !== deletedId))
+        })
+        .subscribe(logChannelStatus(`chat-${id}`))
+    )
 
-    return () => { supabase.removeChannel(channel) }
+    return unsubscribe
   }, [id, notify])
 
   useEffect(() => { scrollToBottom() }, [messages, scrollToBottom])

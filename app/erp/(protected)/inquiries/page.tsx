@@ -15,6 +15,7 @@ import { useNotifier } from '@/lib/useNotifier'
 import NotifyToggleButton from '@/components/NotifyToggleButton'
 import { useErpUser } from '@/components/erp/ErpUserProvider'
 import { logChannelStatus } from '@/lib/realtime-debug'
+import { subscribeAfterAuth } from '@/lib/realtime-auth'
 
 const PAGE_SIZE = 20
 const UNGROUPED = '미분류'
@@ -216,17 +217,18 @@ function CsManagementInner() {
     // 소리·팝업은 ErpHeader 폴링 한 곳에서만 낸다(2026-09-18) — 이 구독은
     // 목록 재조회 전용이다. 고객이 기존 문의에 답장해도 inquiries.unread_count_admin이
     // 함께 갱신되므로(board/(customer)/inquiries/[id]/page.tsx) 이 채널 하나로 충분하고,
-    // 별도 messages 채널은 제거했다(realtime 진단은 다음 작업에서 구독 status로 한다).
-    const channel = supabase
-      .channel('erp-cs-list')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'inquiries' }, () => {
-        load()
-      })
-      .subscribe(logChannelStatus('erp-cs-list'))
+    // 별도 messages 채널은 제거했다.
+    // ★subscribeAfterAuth — 토큰을 realtime에 먼저 실은 뒤 구독한다. 마운트 즉시
+    //   구독하면 anon으로 join해 이벤트가 0건이 되던 문제(2026-09-18 B-1)의 수리.
+    const unsubscribe = subscribeAfterAuth(supabase, () => supabase
+        .channel('erp-cs-list')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'inquiries' }, () => {
+          load()
+        })
+        .subscribe(logChannelStatus('erp-cs-list'))
+    )
 
-    return () => {
-      supabase.removeChannel(channel)
-    }
+    return unsubscribe
   }, [load])
 
   // 마운트 시 localStorage 스캔하여 초안이 있는 문의 ID 수집

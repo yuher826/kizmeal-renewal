@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase'
 import { toKoreanErrorMessage } from '@/lib/supabase-error'
 import { canHandleCs } from '@/lib/roles'
 import { logChannelStatus } from '@/lib/realtime-debug'
+import { subscribeAfterAuth } from '@/lib/realtime-auth'
 
 const CAT_MAP: Record<string, { icon: string; label: string }> = {
   ALLERGY:   { icon: '🚨', label: '알레르기 관련' },
@@ -82,16 +83,17 @@ export default function AdminParentInquiryDetailPage() {
     }
     load()
 
-    const channel = supabase
-      .channel(`admin-parent-inq-${id}`)
-      .on('postgres_changes', {
-        event: 'INSERT', schema: 'public', table: 'parent_inquiry_messages', filter: `inquiry_id=eq.${id}`,
-      }, (payload) => {
-        const m = payload.new as Msg
-        setMessages(prev => prev.find(x => x.id === m.id) ? prev : [...prev, m])
-      })
-      .subscribe(logChannelStatus(`admin-parent-inq-${id}`))
-    return () => { supabase.removeChannel(channel) }
+    const unsubscribe = subscribeAfterAuth(supabase, () => supabase
+        .channel(`admin-parent-inq-${id}`)
+        .on('postgres_changes', {
+          event: 'INSERT', schema: 'public', table: 'parent_inquiry_messages', filter: `inquiry_id=eq.${id}`,
+        }, (payload) => {
+          const m = payload.new as Msg
+          setMessages(prev => prev.find(x => x.id === m.id) ? prev : [...prev, m])
+        })
+        .subscribe(logChannelStatus(`admin-parent-inq-${id}`))
+    )
+    return unsubscribe
   }, [id])
 
   useEffect(() => { scrollToBottom() }, [messages, scrollToBottom])

@@ -10,6 +10,7 @@ import { CUSTOMER_STATUS_LABELS } from '@/lib/types'
 import InquiryCard from '@/components/board/InquiryCard'
 import AccountMismatchNotice from '@/components/board/AccountMismatchNotice'
 import { logChannelStatus } from '@/lib/realtime-debug'
+import { subscribeAfterAuth } from '@/lib/realtime-auth'
 
 const TABS: { label: string; value: InquiryStatus | 'all' }[] = [
   { label: '전체', value: 'all' },
@@ -89,12 +90,13 @@ export default function CustomerInquiriesPage() {
 
     // Realtime — unread count updates
     const supabase2 = createClient()
-    const channel = supabase2
-      .channel('inquiries-list')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'inquiries' }, () => load())
-      .subscribe(logChannelStatus('inquiries-list'))
+    const unsubscribe = subscribeAfterAuth(supabase2, () => supabase2
+        .channel('inquiries-list')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'inquiries' }, () => load())
+        .subscribe(logChannelStatus('inquiries-list'))
+    )
 
-    return () => { supabase2.removeChannel(channel) }
+    return unsubscribe
   }, [])
 
   const filtered = activeTab === 'all'

@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { ROUTES } from '@/lib/routes'
 import { logChannelStatus } from '@/lib/realtime-debug'
+import { subscribeAfterAuth } from '@/lib/realtime-auth'
 
 interface Notif {
   id: string
@@ -66,21 +67,22 @@ export default function NotificationsPage() {
 
     load()
 
-    // Realtime new notifications
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) return
-      supabase
+    // Realtime new notifications — 받는 사람 필터는 realtime에 실은 세션의 user.id를 쓴다
+    // (기존엔 cleanup이 없어 화면을 떠나도 채널이 남았다)
+    const unsubscribe = subscribeAfterAuth(supabase, (session) => supabase
         .channel('notifications-page')
         .on('postgres_changes', {
           event: 'INSERT',
           schema: 'public',
           table: 'notifications',
-          filter: `recipient_auth_id=eq.${user.id}`,
+          filter: `recipient_auth_id=eq.${session.user.id}`,
         }, (payload) => {
           setNotifs(prev => [payload.new as Notif, ...prev])
         })
         .subscribe(logChannelStatus('notifications-page'))
-    })
+    )
+
+    return unsubscribe
   }, [])
 
   async function markRead(notif: Notif) {

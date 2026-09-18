@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 import { logChannelStatus } from '@/lib/realtime-debug'
+import { subscribeAfterAuth } from '@/lib/realtime-auth'
 
 const CAT_MAP: Record<string, { icon: string; label: string }> = {
   ALLERGY:   { icon: '🚨', label: '알레르기' },
@@ -69,11 +70,12 @@ export default function AdminParentInquiriesPage() {
   useEffect(() => {
     load()
     const supabase = createClient()
-    const channel = supabase
-      .channel('admin-parent-inquiries')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'parent_inquiries' }, () => load())
-      .subscribe(logChannelStatus('admin-parent-inquiries'))
-    return () => { supabase.removeChannel(channel) }
+    const unsubscribe = subscribeAfterAuth(supabase, () => supabase
+        .channel('admin-parent-inquiries')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'parent_inquiries' }, () => load())
+        .subscribe(logChannelStatus('admin-parent-inquiries'))
+    )
+    return unsubscribe
   }, [load])
 
   const branchNames = Array.from(
