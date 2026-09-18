@@ -646,18 +646,14 @@ function ThreadMessage({
 interface Props {
   /** 현재 선택된 문의 ID (없으면 빈 안내 화면) */
   inquiryId: string | null
-  /** 알림 함수 (상단 토글과 공유). 고객이 보낸 메시지에만 호출 — 중복 방지는 내부 처리 */
-  onNotify?: (id: string, title: string, body?: string) => void
   /** 담당자·상태 등 목록에 보이는 값이 바뀌었을 때 호출 (2026-09-17).
    *  왼쪽 목록의 realtime 구독은 "다른 사람 화면"을 위한 것이라, 내 화면에서
    *  낸 변경은 그 구독과 무관하게 여기서 직접 재조회를 트리거해 확실히 반영한다. */
   onInquiryChanged?: () => void
 }
 
-export default function InquiryDetailPanel({ inquiryId, onNotify, onInquiryChanged }: Props) {
+export default function InquiryDetailPanel({ inquiryId, onInquiryChanged }: Props) {
   const id = inquiryId
-  // realtime 콜백에서 최신 지점명을 읽기 위한 ref (state는 클로저에 갇힘)
-  const branchNameRef = useRef<string>('')
   // realtime UPDATE 핸들러에서 "담당자가 실제로 바뀌었는지" 판정할 때 쓰는 ref.
   // setInquiry의 업데이터 함수 안에서 판정하면 안 된다 — React 18은 업데이터를
   // 나중에(때로는 두 번) 실행할 수 있어, 그 결과를 바로 다음 줄에서 읽으면
@@ -939,8 +935,6 @@ export default function InquiryDetailPanel({ inquiryId, onNotify, onInquiryChang
 
       if (inqRes.data) {
         setInquiry(inqRes.data as unknown as Inquiry)
-        branchNameRef.current =
-          (inqRes.data as unknown as Inquiry)?.branches?.name ?? ''
       }
       if (msgsRes.data) setMessages(msgsRes.data as unknown as Message[])
 
@@ -1002,13 +996,7 @@ export default function InquiryDetailPanel({ inquiryId, onNotify, onInquiryChang
         if (full) {
           setMessages(prev => prev.find(m => m.id === full.id) ? prev : [...prev, full as unknown as Message])
         }
-        // ★ "고객이 보낸 메시지"일 때만 알림 (관리자 본인 발신·내부메모 제외)
-        if (newMsg.sender_type === 'branch' && !newMsg.is_internal) {
-          const name = branchNameRef.current || '고객사'
-          const preview = newMsg.content.length > 40
-            ? `${newMsg.content.slice(0, 40)}…` : newMsg.content
-          onNotify?.(newMsg.id, `새 메시지: ${name}`, preview)
-        }
+        // 소리·팝업은 ErpHeader 폴링 한 곳에서만 낸다(2026-09-18) — 여기서는 더 이상 알리지 않는다
       })
       .on('postgres_changes', {
         event: 'UPDATE', schema: 'public', table: 'messages',
@@ -1047,7 +1035,7 @@ export default function InquiryDetailPanel({ inquiryId, onNotify, onInquiryChang
       .subscribe()
 
     return () => { supabase.removeChannel(channel) }
-  }, [id, onNotify])
+  }, [id])
 
   // ── 초안 자동저장 (debounce 1초) ─────────────────────────────
   useEffect(() => {

@@ -14,7 +14,11 @@ const NOTIFY_SOUND_SRC = '/sounds/notify.mp3'
 const NOTIFY_VOLUME = 0.55
 // 팝업·소리 ON/OFF 저장 키 — 헤더 배지 ON/OFF(cs_notify_badge_enabled)와는 완전히
 // 독립된 별개 설정이라 키를 따로 쓴다(하나를 꺼도 다른 하나는 그대로 살아 있어야 함).
-const NOTIFY_SOUND_ENABLED_KEY = 'cs_notify_sound_enabled'
+// ErpHeader가 같은 키로 상태를 맞춰야 해서 export한다.
+export const NOTIFY_SOUND_ENABLED_KEY = 'cs_notify_sound_enabled'
+// 같은 탭 안에서 이 설정을 바꾼 컴포넌트가 다른 컴포넌트(헤더 ↔ CS 화면)에게
+// 알리는 커스텀 이벤트. 다른 탭은 브라우저 기본 'storage' 이벤트로 맞춘다.
+export const NOTIFY_SOUND_EVENT = 'cs-notify-sound-changed'
 
 // src별로 따로 캐시한다(기본 알림음 + 이어받기 전용음 등, 여러 소리를 동시에 쓸 수 있게).
 const notifyAudioCache = new Map<string, HTMLAudioElement>()
@@ -104,6 +108,24 @@ export function isNotifySoundEnabled(): boolean {
   }
 }
 
+/**
+ * 팝업·소리 ON/OFF 저장 + 같은 탭의 다른 컴포넌트에 즉시 알림(NOTIFY_SOUND_EVENT).
+ * ErpHeader와 useNotifier 양쪽이 이 함수 하나로만 값을 쓰게 해서 저장과 알림이
+ * 어긋나는(하나만 하고 다른 하나를 빼먹는) 실수를 막는다.
+ */
+export function setNotifySoundEnabled(next: boolean): void {
+  try {
+    localStorage.setItem(NOTIFY_SOUND_ENABLED_KEY, String(next))
+  } catch {
+    /* 저장 실패해도 이번 세션 동작엔 영향 없음 */
+  }
+  try {
+    window.dispatchEvent(new CustomEvent(NOTIFY_SOUND_EVENT, { detail: { enabled: next } }))
+  } catch {
+    /* CustomEvent 미지원 환경 — 같은 탭 동기화만 안 될 뿐, 저장은 이미 끝났다 */
+  }
+}
+
 /** 브라우저 팝업 권한 요청 — 미지원/거부여도 throw 없이 boolean 반환 */
 export async function requestNotificationPermission(): Promise<boolean> {
   if (typeof window === 'undefined' || !('Notification' in window)) return false
@@ -175,18 +197,40 @@ export function useNotifier(defaultEnabled = true) {
     if (enabledRef.current) void requestNotificationPermission()
   }, [])
 
-  const toggle = useCallback(() => {
-    setEnabled(prev => {
-      const next = !prev
+  // 다른 컴포넌트(ErpHeader 등)가 같은 키를 바꾸면 이 훅도 즉시 맞춘다 —
+  // enabled state뿐 아니라 realtime 콜백이 읽는 enabledRef도 함께 갱신해야
+  // notify()가 옛 값을 들고 있지 않는다.
+  useEffect(() => {
+    function syncFromEvent(e: Event) {
+      const detail = (e as CustomEvent<{ enabled: boolean }>).detail
+      if (!detail || typeof detail.enabled !== 'boolean') return
+      enabledRef.current = detail.enabled
+      setEnabled(detail.enabled)
+    }
+    function syncFromStorage(e: StorageEvent) {
+      if (e.key !== NOTIFY_SOUND_ENABLED_KEY) return
+      const next = e.newValue === null ? true : e.newValue === 'true'
       enabledRef.current = next
-      try {
-        localStorage.setItem(NOTIFY_SOUND_ENABLED_KEY, String(next))
-      } catch {
-        /* 저장 실패해도 이번 세션 동작엔 영향 없음 */
-      }
-      if (next) void requestNotificationPermission()
-      return next
-    })
+      setEnabled(next)
+    }
+    window.addEventListener(NOTIFY_SOUND_EVENT, syncFromEvent)
+    window.addEventListener('storage', syncFromStorage)
+    return () => {
+      window.removeEventListener(NOTIFY_SOUND_EVENT, syncFromEvent)
+      window.removeEventListener('storage', syncFromStorage)
+    }
+  }, [])
+
+  // ★setEnabled의 업데이터 함수 안에서 저장·이벤트 발행을 하지 않는다 — React 18은
+  //   업데이터를 나중에(때로는 두 번) 실행할 수 있어 부수효과가 중복되거나 늦게
+  //   나갈 수 있다(2026-09-17 assignedIdRef 버그와 같은 유형). enabledRef를 먼저
+  //   읽고 확정한 값을 그대로 저장·전파한다.
+  const toggle = useCallback(() => {
+    const next = !enabledRef.current
+    enabledRef.current = next
+    setEnabled(next)
+    setNotifySoundEnabled(next)
+    if (next) void requestNotificationPermission()
   }, [])
 
   // 안정적인 identity(deps []) — realtime 콜백에 넘겨도 재구독을 유발하지 않는다

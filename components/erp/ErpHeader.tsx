@@ -10,6 +10,7 @@ import NotifyToggleButton from '@/components/NotifyToggleButton'
 import {
   playNotify, showBrowserNotification, setupAudioUnlock,
   requestNotificationPermission, isNotifySoundEnabled,
+  setNotifySoundEnabled, NOTIFY_SOUND_ENABLED_KEY, NOTIFY_SOUND_EVENT,
 } from '@/lib/useNotifier'
 
 // 헤더 배지·폴링 ON/OFF 저장 키 — CS 관리 페이지의 팝업·소리 ON/OFF
@@ -31,6 +32,13 @@ interface CsNotification {
 // branch_name만 보면 평범한 새 메시지처럼 보인다.
 const KIND_TAG: Partial<Record<CsNotification['kind'], string>> = {
   takeover: '🔄 이어받음',
+}
+
+// 팝업 제목 — 3종 공용(2026-09-18, 헤더 폴링 일원화)
+const KIND_TITLE: Record<CsNotification['kind'], string> = {
+  new_inquiry: '새 문의',
+  new_message: '새 메시지',
+  takeover: '🔄 담당 문의를 이어받았습니다',
 }
 
 function timeAgo(iso: string) {
@@ -97,9 +105,16 @@ export default function ErpHeader({ user, onMenuClick }: Props) {
   // 배지·폴링 ON/OFF. 서버(SSR)엔 localStorage가 없으므로 초기값은 항상 true로
   // 시작해 hydration mismatch를 피하고, 저장된 값은 마운트 후 아래 effect에서 반영한다.
   const [badgeEnabled, setBadgeEnabled] = useState(true)
-  // 이어받기(takeover) 소리·팝업용 — 이미 본 적 있는 알림 id(중복 재생 방지)와
+  // 소리·팝업 ON/OFF — CS 관리 화면(NotifyToggleButton, cs_notify_sound_enabled)과
+  // 같은 값을 공유한다. 드롭다운 UI 표시 전용이고, 실제로 울릴지는 폴링 시점에
+  // isNotifySoundEnabled()로 직접 읽어 판단한다(마운트 시 값 고정 아님).
+  // ★badgeEnabled와 같은 이유로 초기값은 true, 보정은 마운트 후 effect에서.
+  const [soundEnabled, setSoundEnabledState] = useState(true)
+  // 브라우저 알림 권한 안내용. 서버엔 Notification 자체가 없으므로 초기값 null.
+  const [notifPermission, setNotifPermission] = useState<NotificationPermission | null>(null)
+  // 새 문의·새 메시지·이어받기(3종) 공용 — 이미 본 적 있는 알림 id(중복 재생 방지)와
   // "첫 조회를 끝냈는지" 플래그(첫 조회는 기준선만 잡고 울리지 않는다).
-  const seenTakeoverIdsRef = useRef<Set<string>>(new Set())
+  const seenNotifIdsRef = useRef<Set<string>>(new Set())
   const firstFetchDoneRef = useRef(false)
 
   useEffect(() => {
@@ -109,7 +124,52 @@ export default function ErpHeader({ user, onMenuClick }: Props) {
     } catch {
       /* localStorage 접근 불가 환경은 기본값(ON) 유지 */
     }
+    setSoundEnabledState(isNotifySoundEnabled())
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      setNotifPermission(Notification.permission)
+    }
   }, [])
+
+  // CS 화면 등 다른 컴포넌트가 소리·팝업 설정을 바꾸면 이 헤더도 즉시 맞춘다.
+  useEffect(() => {
+    function syncFromEvent(e: Event) {
+      const detail = (e as CustomEvent<{ enabled: boolean }>).detail
+      if (detail && typeof detail.enabled === 'boolean') setSoundEnabledState(detail.enabled)
+    }
+    function syncFromStorage(e: StorageEvent) {
+      if (e.key !== NOTIFY_SOUND_ENABLED_KEY) return
+      setSoundEnabledState(e.newValue === null ? true : e.newValue === 'true')
+    }
+    window.addEventListener(NOTIFY_SOUND_EVENT, syncFromEvent)
+    window.addEventListener('storage', syncFromStorage)
+    return () => {
+      window.removeEventListener(NOTIFY_SOUND_EVENT, syncFromEvent)
+      window.removeEventListener('storage', syncFromStorage)
+    }
+  }, [])
+
+  function toggleSound() {
+    setNotifySoundEnabled(!soundEnabled)
+  }
+
+  // 드롭다운을 열 때마다 권한 상태를 다시 읽는다 — 브라우저 설정에서 직접
+  // 허용/차단을 바꾸고 돌아온 경우를 놓치지 않기 위해.
+  function handleOpen() {
+    setOpen(prev => {
+      const next = !prev
+      if (next && typeof window !== 'undefined' && 'Notification' in window) {
+        setNotifPermission(Notification.permission)
+      }
+      return next
+    })
+  }
+
+  async function handleRequestPermission() {
+    await requestNotificationPermission()
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      setNotifPermission(Notification.permission)
+    }
+  }
 
   // CS 화면에 안 들어간 사람도 이어받기 소리가 나도록, 헤더가 마운트되는
   // 시점에 미리 준비해 둔다(오디오 unlock 바인딩·팝업 권한 요청).
@@ -139,24 +199,26 @@ export default function ErpHeader({ user, onMenuClick }: Props) {
       const list: CsNotification[] = json.notifications || []
       setNotifications(list)
 
-      // 이어받기(takeover)만 소리+팝업 — 원래 담당자가 모르고 계속 처리하면
-      // 중복 대응이 생긴다. new_inquiry/new_message는 CS 화면(inquiries/page.tsx)의
-      // 실시간 구독에서만 울려서, 여기서까지 울리면 이중 재생이 된다.
-      const takeovers = list.filter(n => n.kind === 'takeover')
+      // 2026-09-18: 소리·팝업을 헤더 폴링 한 곳으로 일원화 — 3종(new_inquiry/
+      // new_message/takeover) 전부 여기서 울린다. CS 화면(inquiries/page.tsx)·
+      // 상세 패널의 realtime 콜백에서는 더 이상 소리·팝업을 내지 않는다.
       if (!firstFetchDoneRef.current) {
         // 첫 조회는 기준선만 잡는다 — 새로고침·로그인 직후 지난 알림이
         // 한꺼번에 울리는 것을 막기 위해.
-        takeovers.forEach(n => seenTakeoverIdsRef.current.add(n.id))
+        list.forEach(n => seenNotifIdsRef.current.add(n.id))
         firstFetchDoneRef.current = true
         return
       }
-      const newTakeovers = takeovers.filter(n => !seenTakeoverIdsRef.current.has(n.id))
-      takeovers.forEach(n => seenTakeoverIdsRef.current.add(n.id))
-      if (newTakeovers.length > 0 && isNotifySoundEnabled()) {
-        playNotify('/sounds/takeover.mp3') // 여러 건이 동시에 와도 소리는 1회
-        newTakeovers.slice(0, 3).forEach(n => {
+      const newOnes = list.filter(n => !seenNotifIdsRef.current.has(n.id))
+      list.forEach(n => seenNotifIdsRef.current.add(n.id))
+      if (newOnes.length > 0 && isNotifySoundEnabled()) {
+        // 여러 건이 동시에 와도 소리는 1회. takeover가 하나라도 섞여 있으면
+        // 전용음을 우선한다 — 담당자 변경을 놓치면 중복 대응으로 이어진다.
+        const hasTakeover = newOnes.some(n => n.kind === 'takeover')
+        playNotify(hasTakeover ? '/sounds/takeover.mp3' : undefined)
+        newOnes.slice(0, 3).forEach(n => {
           showBrowserNotification(
-            '🔄 담당 문의를 이어받았습니다',
+            KIND_TITLE[n.kind],
             `${n.branch_name || '고객사'} · ${n.preview || ''}`,
             () => router.push(`/erp/inquiries?id=${n.inquiry_id}`)
           )
@@ -250,7 +312,7 @@ export default function ErpHeader({ user, onMenuClick }: Props) {
             <button
               type="button"
               aria-label="CS 알림"
-              onClick={() => setOpen(prev => !prev)}
+              onClick={handleOpen}
               className="relative w-9 h-9 flex items-center justify-center text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
             >
               <Bell size={20} />
@@ -263,10 +325,9 @@ export default function ErpHeader({ user, onMenuClick }: Props) {
 
             {open && (
               <div className="absolute right-0 mt-2 w-80 max-w-[90vw] bg-white border border-slate-200 rounded-xl shadow-lg z-50 overflow-hidden">
-                <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 gap-2">
-                  <span className="text-sm font-semibold text-slate-800 flex-shrink-0">CS 알림</span>
-                  <div className="flex items-center gap-2">
-                    <NotifyToggleButton enabled={badgeEnabled} onToggle={toggleBadge} />
+                <div className="px-4 py-3 border-b border-slate-100">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-semibold text-slate-800 flex-shrink-0">CS 알림</span>
                     {badgeEnabled && notifications.length > 0 && (
                       <button
                         type="button"
@@ -277,6 +338,28 @@ export default function ErpHeader({ user, onMenuClick }: Props) {
                       </button>
                     )}
                   </div>
+                  <div className="flex items-center gap-2 mt-2">
+                    <NotifyToggleButton enabled={badgeEnabled} onToggle={toggleBadge} label="배지·목록" />
+                    <NotifyToggleButton enabled={soundEnabled} onToggle={toggleSound} label="소리·팝업" />
+                  </div>
+                  <p className="mt-1.5 text-[11px] text-slate-400">
+                    배지·목록을 끄면 조회가 멈춰 소리·팝업도 오지 않습니다
+                  </p>
+                  {notifPermission === 'denied' && (
+                    <p className="mt-1.5 text-[11px] text-amber-700 bg-amber-50 rounded px-2 py-1.5 leading-snug">
+                      브라우저 알림이 차단되어 있어 팝업이 뜨지 않습니다(소리는 정상).
+                      주소창 왼쪽 자물쇠 → 알림 → 허용
+                    </p>
+                  )}
+                  {notifPermission === 'default' && (
+                    <button
+                      type="button"
+                      onClick={handleRequestPermission}
+                      className="mt-1.5 text-xs font-medium text-[#2D6A4F] hover:underline"
+                    >
+                      팝업 허용
+                    </button>
+                  )}
                 </div>
                 <div className="max-h-96 overflow-y-auto">
                   {!badgeEnabled ? (

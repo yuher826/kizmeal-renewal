@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback, useMemo, useRef, Suspense } from 'react'
+import { useEffect, useState, useCallback, useMemo, Suspense } from 'react'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import type { InquiryStatus, InquiryCategory, SlaRule, Inquiry } from '@/lib/types'
@@ -131,9 +131,6 @@ function CsManagementInner() {
   const [didInit, setDidInit] = useState(false)
 
   const [selectedId, setSelectedId] = useState<string | null>(urlId)
-  // 현재 열어둔 문의 id (realtime 콜백에서 최신값 읽기용 — 상세 패널과 중복 알림 방지)
-  const selectedIdRef = useRef<string | null>(urlId)
-  useEffect(() => { selectedIdRef.current = selectedId }, [selectedId])
   // ★selectedId는 useState 초기값으로만 urlId를 받아 이후 URL 변경엔 반응하지 않는다.
   // ERP 헤더 CS 알림에서 이 페이지가 이미 열려 있는 상태로 ?id=를 바꿔 들어오면
   // (같은 라우트라 리마운트되지 않음) 이 effect가 없으면 선택이 안 바뀐다.
@@ -161,8 +158,9 @@ function CsManagementInner() {
   // 로드 실패한 로고 URL 모음 (같은 URL은 한 번만 실패 처리 → 해당 로고 숨김)
   const [failedLogos, setFailedLogos] = useState<Set<string>>(new Set())
 
-  // 새 문의/새 메시지 알림 (소리+팝업, 기본 ON) — 하위 상세 패널과 토글 공유
-  const { enabled: notifyOn, toggle: toggleNotify, notify } = useNotifier()
+  // 소리·팝업 ON/OFF 토글 상태 — 실제로 소리·팝업을 내는 곳은 ErpHeader 폴링
+  // 한 곳뿐이다(2026-09-18). 이 화면은 같은 저장 키를 보는 토글 표시만 갖는다.
+  const { enabled: notifyOn, toggle: toggleNotify } = useNotifier()
 
   // ── 데이터 로드 ──────────────────────────────────────────────
   const load = useCallback(async () => {
@@ -214,59 +212,21 @@ function CsManagementInner() {
   useEffect(() => {
     load()
     const supabase = createClient()
+    // 소리·팝업은 ErpHeader 폴링 한 곳에서만 낸다(2026-09-18) — 이 구독은
+    // 목록 재조회 전용이다. 고객이 기존 문의에 답장해도 inquiries.unread_count_admin이
+    // 함께 갱신되므로(board/(customer)/inquiries/[id]/page.tsx) 이 채널 하나로 충분하고,
+    // 별도 messages 채널은 제거했다(realtime 진단은 다음 작업에서 구독 status로 한다).
     const channel = supabase
       .channel('erp-cs-list')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'inquiries' }, async (payload) => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'inquiries' }, () => {
         load()
-        // ★ "고객이 생성한 새 문의"일 때만 알림 (관리자 본인이 만든 건 제외)
-        if (payload.eventType !== 'INSERT') return
-        const row = payload.new as {
-          id: string; branch_id: string; category: InquiryCategory; created_by_type?: string
-        }
-        if (row.created_by_type !== 'branch') return
-        let branchName = '고객사'
-        const { data: b } = await supabase
-          .from('branches').select('name').eq('id', row.branch_id).maybeSingle()
-        if (b?.name) branchName = b.name
-        const catLabel = CATEGORY_LABELS[row.category] ?? row.category
-        notify(row.id, '새 문의', `${branchName} - ${catLabel}`)
-      })
-      .subscribe()
-
-    // ★ 목록만 보고 있어도 고객이 기존 문의에 답장하면 알림 (messages INSERT).
-    //   한 채널에 postgres_changes 를 여러 개 붙이면 일부 바인딩이 누락되는
-    //   Supabase Realtime 이슈가 있어 messages 구독은 별도 채널로 분리한다.
-    const msgChannel = supabase
-      .channel('erp-cs-messages')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, async (payload) => {
-        const msg = payload.new as {
-          id: string; inquiry_id: string; sender_type: string; is_internal?: boolean; content?: string
-        }
-        // 고객이 보낸 메시지만 (관리자 발신·내부메모 제외)
-        if (msg.sender_type !== 'branch' || msg.is_internal) return
-        // 현재 열어둔 문의는 상세 패널(feature B)이 알림 → 목록에선 스킵 (중복 방지)
-        if (selectedIdRef.current === msg.inquiry_id) return
-        // 지점명 조회 (messages payload엔 없어서 inquiry→branch 조회)
-        let branchName = '고객사'
-        const { data: inqRow } = await supabase
-          .from('inquiries').select('branch_id').eq('id', msg.inquiry_id).maybeSingle()
-        if (inqRow?.branch_id) {
-          const { data: b } = await supabase
-            .from('branches').select('name').eq('id', inqRow.branch_id).maybeSingle()
-          if (b?.name) branchName = b.name
-        }
-        const preview = (msg.content ?? '').length > 40
-          ? `${(msg.content ?? '').slice(0, 40)}…` : (msg.content ?? '')
-        // notify 는 message id 로 중복방지되므로 상세 패널과 겹쳐도 안전
-        notify(msg.id, `새 메시지: ${branchName}`, preview)
       })
       .subscribe()
 
     return () => {
       supabase.removeChannel(channel)
-      supabase.removeChannel(msgChannel)
     }
-  }, [load, notify])
+  }, [load])
 
   // 마운트 시 localStorage 스캔하여 초안이 있는 문의 ID 수집
   useEffect(() => {
@@ -518,7 +478,7 @@ function CsManagementInner() {
         </Link>
         {/* 새 문의/새 메시지 알림 ON/OFF */}
         <div className="ml-auto flex items-center gap-1 pr-3">
-          <NotifyToggleButton enabled={notifyOn} onToggle={toggleNotify} />
+          <NotifyToggleButton enabled={notifyOn} onToggle={toggleNotify} label="소리·팝업" />
           {/* SLA 기준 시간 설정 — super_admin·manager만 노출. 없는 사람에게
               보이면 눌렀다가 막히는 경험이 된다(lib/erp-access.ts와 규칙 동일) */}
           {canManageSlaSettings && (
@@ -773,10 +733,10 @@ function CsManagementInner() {
 
       {/* ── 오른쪽 패널 (62%) ────────────────────────────────── */}
       <div className="flex-1 min-w-0 overflow-hidden">
-        {/* onNotify: 상단 토글과 공유되는 알림 함수 (고객이 보낸 메시지에만 발동)
-            onInquiryChanged: load는 useCallback(deps []) — 참조가 안정적이라
-            패널 쪽 effect 재실행이나 재렌더 루프를 유발하지 않는다 */}
-        <InquiryDetailPanel inquiryId={selectedId} onNotify={notify} onInquiryChanged={load} />
+        {/* onInquiryChanged: load는 useCallback(deps []) — 참조가 안정적이라
+            패널 쪽 effect 재실행이나 재렌더 루프를 유발하지 않는다.
+            소리·팝업은 넘기지 않는다 — ErpHeader 폴링 한 곳에서만 낸다(2026-09-18) */}
+        <InquiryDetailPanel inquiryId={selectedId} onInquiryChanged={load} />
       </div>
       </div>
     </div>
