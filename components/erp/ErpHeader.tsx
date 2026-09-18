@@ -155,13 +155,13 @@ export default function ErpHeader({ user, onMenuClick }: Props) {
   // 드롭다운을 열 때마다 권한 상태를 다시 읽는다 — 브라우저 설정에서 직접
   // 허용/차단을 바꾸고 돌아온 경우를 놓치지 않기 위해.
   function handleOpen() {
-    setOpen(prev => {
-      const next = !prev
-      if (next && typeof window !== 'undefined' && 'Notification' in window) {
-        setNotifPermission(Notification.permission)
-      }
-      return next
-    })
+    // 업데이터 밖에서 next를 확정한다 — 업데이터 안에서 다른 setState를 부르면
+    // React 18이 업데이터를 두 번 실행할 때 부수효과가 중복된다(assignedIdRef 건과 같은 유형)
+    const next = !open
+    setOpen(next)
+    if (next && typeof window !== 'undefined' && 'Notification' in window) {
+      setNotifPermission(Notification.permission)
+    }
   }
 
   async function handleRequestPermission() {
