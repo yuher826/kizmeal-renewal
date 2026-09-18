@@ -7,6 +7,11 @@ import { createClient } from '@/lib/supabase'
 import { ROUTES } from '@/lib/routes'
 import type { Branch } from '@/lib/types'
 import AccountMismatchNotice from '@/components/board/AccountMismatchNotice'
+import {
+  verifyBranchSession,
+  BRANCH_SESSION_MISMATCH_TITLE,
+  BRANCH_SESSION_MISMATCH_MESSAGE,
+} from '@/lib/branch-session'
 
 export default function CustomerSettingsPage() {
   const router = useRouter()
@@ -17,6 +22,8 @@ export default function CustomerSettingsPage() {
   const [saved, setSaved] = useState(false)
   const [loading, setLoading] = useState(true)
   const [userEmail, setUserEmail] = useState<string | null>(null)
+  const [saveError, setSaveError] = useState('')
+  const [sessionMismatch, setSessionMismatch] = useState<{ show: boolean; email: string | null }>({ show: false, email: null })
 
   useEffect(() => {
     const supabase = createClient()
@@ -49,12 +56,28 @@ export default function CustomerSettingsPage() {
     e.preventDefault()
     if (!branch) return
     setSaving(true)
+    setSaveError('')
     const supabase = createClient()
-    await supabase
+    // ★저장 전에 세션이 이 원의 계정인지 확인한다(B-3). 입력값은 유지.
+    const check = await verifyBranchSession(supabase, branch.id)
+    if (!check.ok) {
+      setSessionMismatch({ show: true, email: check.email })
+      setSaving(false)
+      return
+    }
+    setSessionMismatch({ show: false, email: null })
+    // ★기존엔 error를 받지 않아 실패해도 "저장 완료"가 떴다(2026-09-18 발견).
+    //   실패 시 안내만 하고 에러 원문은 노출하지 않는다(정책·테이블명 유출 방지 — 첨부 유실 수정과 같은 원칙).
+    const { error } = await supabase
       .from('branches')
       .update({ phone, address })
       .eq('id', branch.id)
     setSaving(false)
+    if (error) {
+      console.error('[settings] 원 정보 저장 실패:', error.message)
+      setSaveError('저장에 실패했습니다. 잠시 후 다시 시도해 주세요.')
+      return
+    }
     setSaved(true)
     setTimeout(() => setSaved(false), 2500)
   }
@@ -85,6 +108,14 @@ export default function CustomerSettingsPage() {
           />
         ) : (
         <>
+        {/* 세션 불일치 안내(B-3) — 고정 표시, 입력값은 유지 */}
+        {sessionMismatch.show && (
+          <AccountMismatchNotice
+            email={sessionMismatch.email}
+            title={BRANCH_SESSION_MISMATCH_TITLE}
+            message={BRANCH_SESSION_MISMATCH_MESSAGE}
+          />
+        )}
         {/* 지점 정보 */}
         <form onSubmit={handleSave} className="bg-white rounded-2xl border border-gray-100 p-6">
           <h2 className="font-bold text-[#1C2B1E] mb-4">지점 정보</h2>
@@ -134,6 +165,7 @@ export default function CustomerSettingsPage() {
           >
             {saving ? '저장 중...' : saved ? '✓ 저장 완료' : '저장'}
           </button>
+          {saveError && <p className="text-sm text-red-600 mt-2">{saveError}</p>}
         </form>
 
         {/* 직원 계정 관리 */}

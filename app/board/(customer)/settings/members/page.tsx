@@ -7,6 +7,11 @@ import { createClient } from '@/lib/supabase'
 import { ROUTES } from '@/lib/routes'
 import type { BranchMember } from '@/lib/types'
 import AccountMismatchNotice from '@/components/board/AccountMismatchNotice'
+import {
+  verifyBranchSession,
+  BRANCH_SESSION_MISMATCH_TITLE,
+  BRANCH_SESSION_MISMATCH_MESSAGE,
+} from '@/lib/branch-session'
 
 export default function CustomerMembersPage() {
   const router = useRouter()
@@ -17,6 +22,7 @@ export default function CustomerMembersPage() {
   const [inviteMsg, setInviteMsg] = useState('')
   const [loading, setLoading] = useState(true)
   const [userEmail, setUserEmail] = useState<string | null>(null)
+  const [sessionMismatch, setSessionMismatch] = useState<{ show: boolean; email: string | null }>({ show: false, email: null })
 
   useEffect(() => { load() }, [])
 
@@ -60,6 +66,15 @@ export default function CustomerMembersPage() {
     setInviteMsg('')
 
     const supabase = createClient()
+    // ★초대 전에 세션이 이 원의 계정인지 확인한다(B-3). 같은 브라우저에서 ERP에 로그인해
+    //   관리자 세션이 되면 admin RLS로 통과해 관리자가 원 대신 초대하게 된다. 입력값은 유지.
+    const check = await verifyBranchSession(supabase, branchId)
+    if (!check.ok) {
+      setSessionMismatch({ show: true, email: check.email })
+      setInviting(false)
+      return
+    }
+    setSessionMismatch({ show: false, email: null })
     const expiresAt = new Date()
     expiresAt.setDate(expiresAt.getDate() + 7)
 
@@ -82,7 +97,15 @@ export default function CustomerMembersPage() {
   }
 
   async function deactivateMember(memberId: string) {
+    if (!branchId) return
     const supabase = createClient()
+    // ★다른 사람의 접근을 끊는 행위라 세션 확인이 먼저다(B-3)
+    const check = await verifyBranchSession(supabase, branchId)
+    if (!check.ok) {
+      setSessionMismatch({ show: true, email: check.email })
+      return
+    }
+    setSessionMismatch({ show: false, email: null })
     await supabase
       .from('branch_members')
       .update({ is_active: false })
@@ -110,6 +133,14 @@ export default function CustomerMembersPage() {
           />
         ) : (
         <>
+        {/* 세션 불일치 안내(B-3) — 고정 표시, 입력값은 유지 */}
+        {sessionMismatch.show && (
+          <AccountMismatchNotice
+            email={sessionMismatch.email}
+            title={BRANCH_SESSION_MISMATCH_TITLE}
+            message={BRANCH_SESSION_MISMATCH_MESSAGE}
+          />
+        )}
         {/* 초대 폼 */}
         <form onSubmit={handleInvite} className="bg-white rounded-2xl border border-gray-100 p-6">
           <h2 className="font-bold text-[#1C2B1E] mb-4">직원 초대</h2>
