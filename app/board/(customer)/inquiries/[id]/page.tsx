@@ -91,14 +91,21 @@ export default function CustomerInquiryDetailPage({ params }: { params: { id: st
         console.error('[CS] 발신자 이름 조회 실패:', e)
       }
 
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        // 안 읽음 카운트 리셋과 함께 "마지막으로 이 대화방을 연 시각"도 기록.
-        // 이 시각이 관리자 메시지 수정·삭제 가능 여부의 기준이 된다(권팀장 요청 7번).
-        await supabase
-          .from('inquiries')
-          .update({ unread_count_branch: 0, branch_last_read_at: new Date().toISOString() })
-          .eq('id', id)
+      // 안 읽음 카운트 리셋과 함께 "마지막으로 이 대화방을 연 시각"도 기록.
+      // 이 시각이 관리자 메시지 수정·삭제 가능 여부의 기준이 된다(권팀장 요청 7번).
+      // ★세션이 이 원의 계정이 아니면 읽음 처리를 건너뛴다(B-3) — 같은 브라우저에서 ERP에
+      //   로그인해 관리자 세션이 된 채 이 화면을 열면, 원은 읽지 않았는데 branch_last_read_at이
+      //   찍혀 관리자 메시지 수정·삭제가 잠긴다(7번 잠금 기준 오염). 조회는 막지 않고 안내만 띄운다.
+      if (inq) {
+        const check = await verifyBranchSession(supabase, (inq as unknown as Inquiry).branch_id)
+        if (check.ok) {
+          await supabase
+            .from('inquiries')
+            .update({ unread_count_branch: 0, branch_last_read_at: new Date().toISOString() })
+            .eq('id', id)
+        } else {
+          setSessionMismatch({ show: true, email: check.email })
+        }
       }
 
       setLoading(false)
