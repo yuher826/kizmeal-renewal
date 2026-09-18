@@ -9,6 +9,7 @@ import type { Inquiry, InquiryStatus } from '@/lib/types'
 import { CUSTOMER_STATUS_LABELS } from '@/lib/types'
 import InquiryCard from '@/components/board/InquiryCard'
 import AccountMismatchNotice from '@/components/board/AccountMismatchNotice'
+import { logChannelStatus } from '@/lib/realtime-debug'
 
 const TABS: { label: string; value: InquiryStatus | 'all' }[] = [
   { label: '전체', value: 'all' },
@@ -91,7 +92,7 @@ export default function CustomerInquiriesPage() {
     const channel = supabase2
       .channel('inquiries-list')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'inquiries' }, () => load())
-      .subscribe()
+      .subscribe(logChannelStatus('inquiries-list'))
 
     return () => { supabase2.removeChannel(channel) }
   }, [])

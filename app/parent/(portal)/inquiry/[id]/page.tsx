@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { KIZMEAL_LOGO_PATH } from '@/lib/brand'
 import { createClient } from '@/lib/supabase'
+import { logChannelStatus } from '@/lib/realtime-debug'
 
 const CAT_MAP: Record<string, { icon: string; label: string }> = {
   ALLERGY:   { icon: '🚨', label: '알레르기 관련' },
@@ -78,7 +79,7 @@ export default function ParentInquiryDetailPage() {
       }, (payload) => {
         setInquiry(prev => prev ? { ...prev, ...payload.new } : null)
       })
-      .subscribe()
+      .subscribe(logChannelStatus(`parent-inq-${id}`))
 
     return () => { supabase.removeChannel(channel) }
   }, [id])

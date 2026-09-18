@@ -10,6 +10,7 @@ import StatusBadge from '@/components/board/StatusBadge'
 import FileUpload from '@/components/board/FileUpload'
 import { useNotifier } from '@/lib/useNotifier'
 import NotifyToggleButton from '@/components/NotifyToggleButton'
+import { logChannelStatus } from '@/lib/realtime-debug'
 
 const STATUS_STEPS = [
   { key: 'pending', label: '접수' },
@@ -151,7 +152,7 @@ export default function CustomerInquiryDetailPage({ params }: { params: { id: st
         const deletedId = (payload.old as { id: string }).id
         setMessages(prev => prev.filter(m => m.id !== deletedId))
       })
-      .subscribe()
+      .subscribe(logChannelStatus(`chat-${id}`))
 
     return () => { supabase.removeChannel(channel) }
   }, [id, notify])

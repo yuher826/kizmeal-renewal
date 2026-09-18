@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
+import { logChannelStatus } from '@/lib/realtime-debug'
 
 const CAT_MAP: Record<string, { icon: string; label: string }> = {
   ALLERGY:   { icon: '🚨', label: '알레르기' },
@@ -71,7 +72,7 @@ export default function AdminParentInquiriesPage() {
     const channel = supabase
       .channel('admin-parent-inquiries')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'parent_inquiries' }, () => load())
-      .subscribe()
+      .subscribe(logChannelStatus('admin-parent-inquiries'))
     return () => { supabase.removeChannel(channel) }
   }, [load])
 

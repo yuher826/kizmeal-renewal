@@ -7,6 +7,7 @@ import { useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { toKoreanErrorMessage } from '@/lib/supabase-error'
 import { canHandleCs } from '@/lib/roles'
+import { logChannelStatus } from '@/lib/realtime-debug'
 
 const CAT_MAP: Record<string, { icon: string; label: string }> = {
   ALLERGY:   { icon: '🚨', label: '알레르기 관련' },
@@ -89,7 +90,7 @@ export default function AdminParentInquiryDetailPage() {
         const m = payload.new as Msg
         setMessages(prev => prev.find(x => x.id === m.id) ? prev : [...prev, m])
       })
-      .subscribe()
+      .subscribe(logChannelStatus(`admin-parent-inq-${id}`))
     return () => { supabase.removeChannel(channel) }
   }, [id])
 

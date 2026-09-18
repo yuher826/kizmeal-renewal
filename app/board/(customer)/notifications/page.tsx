@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { ROUTES } from '@/lib/routes'
+import { logChannelStatus } from '@/lib/realtime-debug'
 
 interface Notif {
   id: string
@@ -78,7 +79,7 @@ export default function NotificationsPage() {
         }, (payload) => {
           setNotifs(prev => [payload.new as Notif, ...prev])
         })
-        .subscribe()
+        .subscribe(logChannelStatus('notifications-page'))
     })
   }, [])
 

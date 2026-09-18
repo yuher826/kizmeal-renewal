@@ -18,6 +18,7 @@ import FileUpload from '@/components/board/FileUpload'
 import { useErpUser } from '@/components/erp/ErpUserProvider'
 import { canHandleCs } from '@/lib/roles'
 import { toKoreanErrorMessage } from '@/lib/supabase-error'
+import { logChannelStatus } from '@/lib/realtime-debug'
 
 // ── 이메일 스레드 유틸 ──────────────────────────────────────────
 const STORAGE_BASE = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/kizmeal-files`
@@ -1032,7 +1033,7 @@ export default function InquiryDetailPanel({ inquiryId, onInquiryChanged }: Prop
         setInquiry(prev => prev ? { ...prev, ...payload.new } : null)
         if (changed) refreshAssignedAdmin()
       })
-      .subscribe()
+      .subscribe(logChannelStatus(`erp-chat-${id}`))
 
     return () => { supabase.removeChannel(channel) }
   }, [id])

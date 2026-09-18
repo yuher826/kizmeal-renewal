@@ -14,6 +14,7 @@ import { getGroupStyle } from '@/lib/cs-group-styles'
 import { useNotifier } from '@/lib/useNotifier'
 import NotifyToggleButton from '@/components/NotifyToggleButton'
 import { useErpUser } from '@/components/erp/ErpUserProvider'
+import { logChannelStatus } from '@/lib/realtime-debug'
 
 const PAGE_SIZE = 20
 const UNGROUPED = '미분류'
@@ -221,7 +222,7 @@ function CsManagementInner() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'inquiries' }, () => {
         load()
       })
-      .subscribe()
+      .subscribe(logChannelStatus('erp-cs-list'))
 
     return () => {
       supabase.removeChannel(channel)
